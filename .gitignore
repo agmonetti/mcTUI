@@ -4,3 +4,4 @@ mcTUI
 
 # Carpetas de entorno de Go
 vendor/
+logs/
