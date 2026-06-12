@@ -113,6 +113,43 @@ func saveConfig(c ConfigData) {
 	os.WriteFile(path, data, 0644)
 }
 
+// --- LÓGICA DE ROADMAP EXTERNO ---
+func getRoadmapPath() string {
+	homeDir, _ := os.UserHomeDir()
+	return filepath.Join(homeDir, ".config", "mctui", "roadmap.json")
+}
+
+func loadRoadmap() []string {
+	path := getRoadmapPath()
+	data, err := os.ReadFile(path)
+
+	// Cambios por defecto si el archivo no existe
+	defaultChanges := []string{
+		"• Microsoft Auth",
+		"• Custom JVM Arguments",
+		"• Expanded UI Themes",
+	}
+
+	if err != nil {
+		// Creamos el archivo automáticamente para facilitarle la edición al usuario
+		os.MkdirAll(filepath.Dir(path), 0755)
+		wrapped := map[string][]string{"changes": defaultChanges}
+		jsonData, _ := json.MarshalIndent(wrapped, "", "  ")
+		os.WriteFile(path, jsonData, 0644)
+		return defaultChanges
+	}
+
+	var result map[string][]string
+	if err := json.Unmarshal(data, &result); err != nil {
+		return defaultChanges // Fallback si el JSON está mal formateado
+	}
+
+	if changes, ok := result["changes"]; ok && len(changes) > 0 {
+		return changes
+	}
+	return defaultChanges
+}
+
 // --- VERSION FETCHING & FILE CHECKS ---
 func fetchReleases() []string {
 	resp, err := http.Get("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json")
@@ -165,12 +202,13 @@ type model struct {
 	versionSelect string
 	modloader     string
 	versions      []string
+	roadmap       []string // NUEVO: Lista dinámica cargada desde el JSON
 
 	input textinput.Model
 	play  bool
 }
 
-func initialModel(versions []string, cfg ConfigData) model {
+func initialModel(versions []string, cfg ConfigData, roadmap []string) model {
 	ti := textinput.New()
 	ti.Placeholder = "Type your name..."
 	ti.Focus()
@@ -186,6 +224,7 @@ func initialModel(versions []string, cfg ConfigData) model {
 		versionSelect: cfg.Version,
 		modloader:     cfg.Modloader,
 		versions:      versions,
+		roadmap:       roadmap, // NUEVO: Asignación
 		input:         ti,
 		play:          false,
 	}
@@ -352,16 +391,14 @@ func (m model) View() string {
 		contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Render("[y/Enter] Sí") + "   " + lipgloss.NewStyle().Foreground(colorGray).Render("[n/Esc] Cancelar"))
 	}
 
+	// --- PANEL DERECHO: NOTICIAS DINÁMICAS ---
 	newsStr := strings.Builder{}
 	newsStr.WriteString(lipgloss.NewStyle().Foreground(colorMagenta).Bold(true).Render("─ Future Changes ─────────") + "\n\n")
 	
-	newsItems := []string{
-		"• Microsoft Auth",
-		"• Custom JVM Arguments",
-		"• Expanded UI Themes",
-	}
-	
-	for _, item := range newsItems {
+	// CORRECCIÓN: Leemos directamente del slice dinámico cargado por el modelo
+	for _, item := range m.roadmap {
+		// Si el usuario no le puso viñeta en el JSON, se la agregamos dinámicamente si queremos,
+		// o imprimimos el texto directo. Vamos con texto directo para máxima flexibilidad:
 		newsStr.WriteString(lipgloss.NewStyle().Foreground(colorWhite).Render(item) + "\n")
 	}
 	newsStr.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDark).Render("Stay tuned..."))
@@ -396,8 +433,10 @@ func (m model) View() string {
 func main() {
 	validReleases := fetchReleases()
 	cfg := loadConfig()
+	roadmap := loadRoadmap() // NUEVO: Carga del archivo dinámico
 
-	p := tea.NewProgram(initialModel(validReleases, cfg), tea.WithAltScreen())
+	// NUEVO: Pasamos el roadmap como tercer argumento
+	p := tea.NewProgram(initialModel(validReleases, cfg, roadmap), tea.WithAltScreen())
 
 	finalModel, err := p.Run()
 	if err != nil {
