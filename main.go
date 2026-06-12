@@ -31,21 +31,21 @@ var (
 		Height(12).
 		Padding(0, 1)
 
-	panelContenido = lipgloss.NewStyle().
+	panelContent = lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(colorCyan).
 		Width(54).
 		Height(12).
 		Padding(0, 1)
 
-	panelInferior = lipgloss.NewStyle().
+	panelFooter = lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(colorWhite).
 		Width(84).
 		Height(3).
 		Padding(0, 1)
 
-	tituloStyle = lipgloss.NewStyle().Foreground(colorYellow).Bold(true)
+	titleStyle  = lipgloss.NewStyle().Foreground(colorYellow).Bold(true)
 	itemStyle   = lipgloss.NewStyle().Foreground(colorWhite).PaddingLeft(1)
 	cursorStyle = lipgloss.NewStyle().Foreground(colorMagenta).Bold(true)
 )
@@ -56,37 +56,41 @@ type ConfigData struct {
 	Version  string `json:"version"`
 }
 
-func obtenerRutaConfig() string {
+func getConfigPath() string {
 	homeDir, _ := os.UserHomeDir()
 	return filepath.Join(homeDir, ".config", "mctui", "config.json")
 }
 
-func cargarConfig() ConfigData {
-	ruta := obtenerRutaConfig()
-	datos, err := os.ReadFile(ruta)
-	
+func loadConfig() ConfigData {
+	path := getConfigPath()
+	data, err := os.ReadFile(path)
+
 	defaultConfig := ConfigData{Username: "OfflinePlayer", Version: "1.20.4"}
 	if err != nil {
 		return defaultConfig
 	}
 
 	var config ConfigData
-	json.Unmarshal(datos, &config)
+	json.Unmarshal(data, &config)
 
-	if config.Username == "" { config.Username = defaultConfig.Username }
-	if config.Version == "" { config.Version = defaultConfig.Version }
+	if config.Username == "" {
+		config.Username = defaultConfig.Username
+	}
+	if config.Version == "" {
+		config.Version = defaultConfig.Version
+	}
 	return config
 }
 
-func guardarConfig(c ConfigData) {
-	ruta := obtenerRutaConfig()
-	os.MkdirAll(filepath.Dir(ruta), 0755)
-	datos, _ := json.MarshalIndent(c, "", "  ")
-	os.WriteFile(ruta, datos, 0644)
+func saveConfig(c ConfigData) {
+	path := getConfigPath()
+	os.MkdirAll(filepath.Dir(path), 0755)
+	data, _ := json.MarshalIndent(c, "", "  ")
+	os.WriteFile(path, data, 0644)
 }
 
 // --- VERSION FETCHING ---
-func obtenerReleases() []string {
+func fetchReleases() []string {
 	resp, err := http.Get("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json")
 	if err != nil {
 		return []string{"1.20.4"} // Fallback without internet initially
@@ -112,28 +116,28 @@ func obtenerReleases() []string {
 }
 
 // --- STATES AND MODEL ---
-type estado int
+type screenState int
 
 const (
-	pantallaMenu estado = iota
-	pantallaNombre
-	pantallaVersiones 
+	menuScreen    screenState = iota
+	nameScreen
+	versionsScreen
 )
 
 type model struct {
-	estado          estado
-	cursorMenu      int
-	cursorVersiones int
-	
-	username        string
-	versionSelect   string
-	versiones       []string
-	
-	input           textinput.Model
-	jugar           bool
+	state          screenState
+	cursorMenu     int
+	cursorVersions int
+
+	username      string
+	versionSelect string
+	versions      []string
+
+	input textinput.Model
+	play  bool
 }
 
-func modeloInicial(versiones []string, cfg ConfigData) model {
+func initialModel(versions []string, cfg ConfigData) model {
 	ti := textinput.New()
 	ti.Placeholder = "Type your name..."
 	ti.Focus()
@@ -143,13 +147,13 @@ func modeloInicial(versiones []string, cfg ConfigData) model {
 	ti.TextStyle = lipgloss.NewStyle().Foreground(colorWhite)
 
 	return model{
-		estado:        pantallaMenu,
+		state:         menuScreen,
 		cursorMenu:    0,
 		username:      cfg.Username,
 		versionSelect: cfg.Version,
-		versiones:     versiones,
+		versions:      versions,
 		input:         ti,
-		jugar:         false,
+		play:          false,
 	}
 }
 
@@ -164,63 +168,63 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
-			if m.estado == pantallaMenu {
+			if m.state == menuScreen {
 				return m, tea.Quit
 			}
-		
+
 		case "up", "k":
-			if m.estado == pantallaMenu && m.cursorMenu > 0 {
+			if m.state == menuScreen && m.cursorMenu > 0 {
 				m.cursorMenu--
-			} else if m.estado == pantallaVersiones && m.cursorVersiones > 0 {
-				m.cursorVersiones--
+			} else if m.state == versionsScreen && m.cursorVersions > 0 {
+				m.cursorVersions--
 			}
 
 		case "down", "j":
-			if m.estado == pantallaMenu && m.cursorMenu < 3 { 
+			if m.state == menuScreen && m.cursorMenu < 3 {
 				m.cursorMenu++
-			} else if m.estado == pantallaVersiones && m.cursorVersiones < len(m.versiones)-1 {
-				m.cursorVersiones++
+			} else if m.state == versionsScreen && m.cursorVersions < len(m.versions)-1 {
+				m.cursorVersions++
 			}
 
 		case "enter":
-			if m.estado == pantallaMenu {
-				if m.cursorMenu == 0 { 
-					m.jugar = true
+			if m.state == menuScreen {
+				if m.cursorMenu == 0 {
+					m.play = true
 					return m, tea.Quit
-				} else if m.cursorMenu == 1 { 
-					m.estado = pantallaNombre
+				} else if m.cursorMenu == 1 {
+					m.state = nameScreen
 					m.input.SetValue(m.username)
-				} else if m.cursorMenu == 2 { 
-					m.estado = pantallaVersiones
-					for i, v := range m.versiones {
+				} else if m.cursorMenu == 2 {
+					m.state = versionsScreen
+					for i, v := range m.versions {
 						if v == m.versionSelect {
-							m.cursorVersiones = i
+							m.cursorVersions = i
 							break
 						}
 					}
-				} else if m.cursorMenu == 3 { 
+				} else if m.cursorMenu == 3 {
 					return m, tea.Quit
 				}
-			} else if m.estado == pantallaNombre {
+			} else if m.state == nameScreen {
 				if m.input.Value() != "" {
 					m.username = m.input.Value()
-					guardarConfig(ConfigData{Username: m.username, Version: m.versionSelect})
+					saveConfig(ConfigData{Username: m.username, Version: m.versionSelect})
 				}
-				m.estado = pantallaMenu
-			} else if m.estado == pantallaVersiones {
-				m.versionSelect = m.versiones[m.cursorVersiones]
-				guardarConfig(ConfigData{Username: m.username, Version: m.versionSelect})
-				m.estado = pantallaMenu
+				m.state = menuScreen
+			} else if m.state == versionsScreen {
+				m.versionSelect = m.versions[m.cursorVersions]
+				saveConfig(ConfigData{Username: m.username, Version: m.versionSelect})
+				m.state = menuScreen
 			}
 
 		case "esc":
-			if m.estado == pantallaNombre || m.estado == pantallaVersiones {
-				m.estado = pantallaMenu
+			if m.state == nameScreen || m.state == versionsScreen {
+				m.state = menuScreen
 			}
 		}
 	}
 
-	if m.estado == pantallaNombre {
+	if m.state == nameScreen {
 		m.input, cmd = m.input.Update(msg)
 	}
 
@@ -229,98 +233,102 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) View() string {
 	menuStr := strings.Builder{}
-	menuStr.WriteString(tituloStyle.Render("╭ Options ╮") + "\n\n")
-	
-	opcionesMenu := []string{
+	menuStr.WriteString(titleStyle.Render("╭ Options ╮") + "\n\n")
+
+	menuOptions := []string{
 		fmt.Sprintf("Play (%s)", m.versionSelect),
 		"Change Name",
 		"Change Version",
 		"Quit",
 	}
 
-	for i, opcion := range opcionesMenu {
+	for i, option := range menuOptions {
 		if m.cursorMenu == i {
-			menuStr.WriteString(cursorStyle.Render(fmt.Sprintf("▶ %s", opcion)) + "\n")
+			menuStr.WriteString(cursorStyle.Render(fmt.Sprintf("▶ %s", option)) + "\n")
 		} else {
-			menuStr.WriteString(itemStyle.Render(fmt.Sprintf("  %s", opcion)) + "\n")
+			menuStr.WriteString(itemStyle.Render(fmt.Sprintf("  %s", option)) + "\n")
 		}
 	}
 
-	contenidoStr := strings.Builder{}
-	contenidoStr.WriteString(tituloStyle.Render("╭ mcTUI Launcher ╮") + "\n\n")
+	contentStr := strings.Builder{}
+	contentStr.WriteString(titleStyle.Render("╭ mcTUI Launcher ╮") + "\n\n")
 
-	if m.estado == pantallaMenu {
-		contenidoStr.WriteString(lipgloss.NewStyle().Foreground(colorCyan).Render("=== ACTIVE SESSION ===") + "\n\n")
-		contenidoStr.WriteString(fmt.Sprintf("User     : %s\n", m.username))
-		contenidoStr.WriteString(fmt.Sprintf("Version  : %s\n", m.versionSelect))
-		contenidoStr.WriteString("Auth     : Offline (Bypass)\n\n")
-		contenidoStr.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#555555")).Render("● System ready."))
-	
-	} else if m.estado == pantallaNombre {
-		contenidoStr.WriteString("New LAN username:\n\n")
-		contenidoStr.WriteString(m.input.View())
-	
-	} else if m.estado == pantallaVersiones {
-		contenidoStr.WriteString("Select a stable version:\n\n")
-		
-		inicio := m.cursorVersiones - 3
-		if inicio < 0 { inicio = 0 }
-		fin := inicio + 7
-		if fin > len(m.versiones) { 
-			fin = len(m.versiones)
-			inicio = fin - 7
-			if inicio < 0 { inicio = 0 }
+	if m.state == menuScreen {
+		contentStr.WriteString(lipgloss.NewStyle().Foreground(colorCyan).Render("=== ACTIVE SESSION ===") + "\n\n")
+		contentStr.WriteString(fmt.Sprintf("User     : %s\n", m.username))
+		contentStr.WriteString(fmt.Sprintf("Version  : %s\n", m.versionSelect))
+		contentStr.WriteString("Auth     : Offline (Bypass)\n\n")
+		contentStr.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#555555")).Render("● System ready."))
+
+	} else if m.state == nameScreen {
+		contentStr.WriteString("New LAN username:\n\n")
+		contentStr.WriteString(m.input.View())
+
+	} else if m.state == versionsScreen {
+		contentStr.WriteString("Select a stable version:\n\n")
+
+		start := m.cursorVersions - 3
+		if start < 0 {
+			start = 0
+		}
+		end := start + 7
+		if end > len(m.versions) {
+			end = len(m.versions)
+			start = end - 7
+			if start < 0 {
+				start = 0
+			}
 		}
 
-		for i := inicio; i < fin; i++ {
-			if i == m.cursorVersiones {
-				contenidoStr.WriteString(cursorStyle.Render(fmt.Sprintf("  ▶ %s", m.versiones[i])) + "\n")
+		for i := start; i < end; i++ {
+			if i == m.cursorVersions {
+				contentStr.WriteString(cursorStyle.Render(fmt.Sprintf("  ▶ %s", m.versions[i])) + "\n")
 			} else {
-				contenidoStr.WriteString(fmt.Sprintf("    %s", m.versiones[i]) + "\n")
+				contentStr.WriteString(fmt.Sprintf("    %s", m.versions[i]) + "\n")
 			}
 		}
 	}
 
 	footerStr := " [↑/↓] Navigate  [Enter] Select  [q] Quit"
-	if m.estado == pantallaNombre {
+	if m.state == nameScreen {
 		footerStr = " [Enter] Save  [Esc] Cancel"
-	} else if m.estado == pantallaVersiones {
+	} else if m.state == versionsScreen {
 		footerStr = " [↑/↓] Move list  [Enter] Choose  [Esc] Back"
 	}
 
-	panelSuperior := lipgloss.JoinHorizontal(lipgloss.Top,
+	topPanels := lipgloss.JoinHorizontal(lipgloss.Top,
 		panelMenu.Render(menuStr.String()),
-		panelContenido.Render(contenidoStr.String()),
+		panelContent.Render(contentStr.String()),
 	)
-	interfazCompleta := lipgloss.JoinVertical(lipgloss.Left, panelSuperior, panelInferior.Render(footerStr))
+	fullInterface := lipgloss.JoinVertical(lipgloss.Left, topPanels, panelFooter.Render(footerStr))
 
-	return "\n" + interfazCompleta
+	return "\n" + fullInterface
 }
 
 func main() {
 	fmt.Println("Connecting to Mojang to fetch versions...")
-	versionesValidas := obtenerReleases()
-	cfg := cargarConfig()
+	validReleases := fetchReleases()
+	cfg := loadConfig()
 
 	fmt.Print("\033[H\033[2J")
 
-	p := tea.NewProgram(modeloInicial(versionesValidas, cfg), tea.WithAltScreen())
-	
-	modeloFinal, err := p.Run()
+	p := tea.NewProgram(initialModel(validReleases, cfg), tea.WithAltScreen())
+
+	finalModel, err := p.Run()
 	if err != nil {
 		fmt.Printf("TUI Error: %v", err)
 		os.Exit(1)
 	}
 
-	if m, ok := modeloFinal.(model); ok && m.jugar {
-		fmt.Print("\033[H\033[2J") 
-		lanzarJuego(m.username, m.versionSelect)
+	if m, ok := finalModel.(model); ok && m.play {
+		fmt.Print("\033[H\033[2J")
+		launchGame(m.username, m.versionSelect)
 	}
 }
 
-// --- THE UPDATED ENGINE ---
-func lanzarJuego(username string, versionBuscada string) {
-	fmt.Printf("Starting engine for player: %s (Version: %s)\n", username, versionBuscada)
+// --- THE GAME LAUNCHING ENGINE ---
+func launchGame(username string, targetVersion string) {
+	fmt.Printf("Starting engine for player: %s (Version: %s)\n", username, targetVersion)
 	fmt.Println("1. Verifying Engine and Libraries...")
 
 	// CORRECTLY EXPANDED STRUCTURES
@@ -358,15 +366,15 @@ func lanzarJuego(username string, versionBuscada string) {
 	var manifest Manifest
 	json.Unmarshal(body, &manifest)
 
-	var urlEspecifica string
+	var specificURL string
 	for _, v := range manifest.Versions {
-		if v.ID == versionBuscada {
-			urlEspecifica = v.URL
+		if v.ID == targetVersion {
+			specificURL = v.URL
 			break
 		}
 	}
 
-	respVersion, _ := http.Get(urlEspecifica)
+	respVersion, _ := http.Get(specificURL)
 	bodyVersion, _ := io.ReadAll(respVersion.Body)
 	respVersion.Body.Close()
 
@@ -374,43 +382,51 @@ func lanzarJuego(username string, versionBuscada string) {
 	json.Unmarshal(bodyVersion, &data)
 
 	homeDir, _ := os.UserHomeDir()
-	
-	clientPath := filepath.Join(homeDir, ".minecraft", "versions", versionBuscada, "client.jar")
+
+	clientPath := filepath.Join(homeDir, ".minecraft", "versions", targetVersion, "client.jar")
 	if info, err := os.Stat(clientPath); err != nil || info.Size() == 0 {
 		os.MkdirAll(filepath.Dir(clientPath), 0755)
 		respClient, _ := http.Get(data.Downloads.Client.URL)
-		archivoClient, _ := os.Create(clientPath)
-		io.Copy(archivoClient, respClient.Body)
-		archivoClient.Close()
+		clientFile, _ := os.Create(clientPath)
+		io.Copy(clientFile, respClient.Body)
+		clientFile.Close()
 		respClient.Body.Close()
 	}
 
-	var rutasParaClasspath []string
-	rutaLibrerias := filepath.Join(homeDir, ".minecraft", "libraries")
+	var classpathEntries []string
+	librariesPath := filepath.Join(homeDir, ".minecraft", "libraries")
 	var wg sync.WaitGroup
 
-	descargar := func(url, destino string) {
+	download := func(url, destination string) {
 		defer wg.Done()
-		if url == "" { return }
-		os.MkdirAll(filepath.Dir(destino), 0755)
-		if info, err := os.Stat(destino); err == nil && info.Size() > 0 { return }
+		if url == "" {
+			return
+		}
+		os.MkdirAll(filepath.Dir(destination), 0755)
+		if info, err := os.Stat(destination); err == nil && info.Size() > 0 {
+			return
+		}
 		r, err := http.Get(url)
-		if err != nil { return }
+		if err != nil {
+			return
+		}
 		defer r.Body.Close()
-		a, err := os.Create(destino)
-		if err != nil { return }
-		defer a.Close()
-		io.Copy(a, r.Body)
+		f, err := os.Create(destination)
+		if err != nil {
+			return
+		}
+		defer f.Close()
+		io.Copy(f, r.Body)
 	}
 
 	for _, lib := range data.Libraries {
 		url := lib.Downloads.Artifact.URL
 		path := lib.Downloads.Artifact.Path
 		if url != "" && path != "" {
-			rutaCompleta := filepath.Join(rutaLibrerias, path)
-			rutasParaClasspath = append(rutasParaClasspath, rutaCompleta)
+			fullPath := filepath.Join(librariesPath, path)
+			classpathEntries = append(classpathEntries, fullPath)
 			wg.Add(1)
-			go descargar(url, rutaCompleta)
+			go download(url, fullPath)
 		}
 	}
 
@@ -419,9 +435,9 @@ func lanzarJuego(username string, versionBuscada string) {
 	if info, err := os.Stat(indexPath); err != nil || info.Size() == 0 {
 		os.MkdirAll(filepath.Dir(indexPath), 0755)
 		respIndex, _ := http.Get(data.AssetIndex.URL)
-		archivoIndex, _ := os.Create(indexPath)
-		io.Copy(archivoIndex, respIndex.Body)
-		archivoIndex.Close()
+		indexFile, _ := os.Create(indexPath)
+		io.Copy(indexFile, respIndex.Body)
+		indexFile.Close()
 		respIndex.Body.Close()
 	}
 
@@ -439,34 +455,34 @@ func lanzarJuego(username string, versionBuscada string) {
 		subDir := hash[:2]
 		url := "https://resources.download.minecraft.net/" + subDir + "/" + hash
 		dest := filepath.Join(homeDir, ".minecraft", "assets", "objects", subDir, hash)
-		
+
 		wg.Add(1)
 		sem <- struct{}{}
 		go func(u, d string) {
 			defer func() { <-sem }()
-			descargar(u, d)
+			download(u, d)
 		}(url, dest)
 	}
 
 	wg.Wait()
-	rutasParaClasspath = append(rutasParaClasspath, clientPath)
-	classpathFinal := strings.Join(rutasParaClasspath, ":")
+	classpathEntries = append(classpathEntries, clientPath)
+	finalClasspath := strings.Join(classpathEntries, ":")
 
 	sessionUUID := uuid.New().String()
 
 	fmt.Println("3. All set! Launching Minecraft...")
 
 	cmd := exec.Command("java",
-		"-Xmx2G", 
-		"-cp", classpathFinal, 
-		"net.minecraft.client.main.Main", 
+		"-Xmx2G",
+		"-cp", finalClasspath,
+		"net.minecraft.client.main.Main",
 		"--username", username,
-		"--version", versionBuscada,
+		"--version", targetVersion,
 		"--gameDir", filepath.Join(homeDir, ".minecraft"),
 		"--assetsDir", filepath.Join(homeDir, ".minecraft", "assets"),
 		"--assetIndex", data.AssetIndex.ID,
-		"--uuid", sessionUUID, 
-		"--accessToken", "0", 
+		"--uuid", sessionUUID,
+		"--accessToken", "0",
 		"--userType", "legacy",
 		"--versionType", "release",
 	)
