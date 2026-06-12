@@ -68,6 +68,34 @@ type model struct {
 	jugar    bool
 }
 
+// --- LÓGICA DE PERSISTENCIA ---
+func obtenerRutaConfig() string {
+	homeDir, _ := os.UserHomeDir()
+	return filepath.Join(homeDir, ".config", "mctui", "config.json")
+}
+
+func cargarConfig() string {
+	ruta := obtenerRutaConfig()
+	datos, err := os.ReadFile(ruta)
+	if err != nil {
+		return "JugadorOffline" // Fallback si el archivo no existe aún
+	}
+	var config map[string]string
+	json.Unmarshal(datos, &config)
+	if nombre, ok := config["username"]; ok && nombre != "" {
+		return nombre
+	}
+	return "JugadorOffline"
+}
+
+func guardarConfig(username string) {
+	ruta := obtenerRutaConfig()
+	os.MkdirAll(filepath.Dir(ruta), 0755)
+	config := map[string]string{"username": username}
+	datos, _ := json.MarshalIndent(config, "", "  ")
+	os.WriteFile(ruta, datos, 0644) // 0644: Permisos estándar de lectura/escritura
+}
+
 func modeloInicial() model {
 	ti := textinput.New()
 	ti.Placeholder = "Escribe tu nombre..."
@@ -77,10 +105,13 @@ func modeloInicial() model {
 	ti.PromptStyle = lipgloss.NewStyle().Foreground(colorCyan)
 	ti.TextStyle = lipgloss.NewStyle().Foreground(colorWhite)
 
+	// NUEVO: Cargamos el nombre desde ~/.config/mctui/config.json
+	nombreGuardado := cargarConfig()
+
 	return model{
 		estado:   pantallaMenu,
 		opciones: []string{"Jugar (1.20.4)", "Cambiar Nombre", "Salir"},
-		username: "JugadorOffline",
+		username: nombreGuardado, // Aplicamos el nombre cargado
 		input:    ti,
 		jugar:    false,
 	}
@@ -124,6 +155,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if m.estado == pantallaNombre {
 				if m.input.Value() != "" {
 					m.username = m.input.Value()
+					guardarConfig(m.username) // CORRECCIÓN: El guardado ocurre aquí, en la lógica.
 				}
 				m.estado = pantallaMenu
 			}
@@ -164,6 +196,7 @@ func (m model) View() string {
 		contenidoStr.WriteString("Autenticación   : Offline (Bypass)\n\n")
 		contenidoStr.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#555555")).Render("El motor de descarga inteligente está\nlisto. Presiona Jugar para iniciar."))
 	} else if m.estado == pantallaNombre {
+		// CORRECCIÓN: Restauramos el texto de la interfaz visual
 		contenidoStr.WriteString("Escribe tu nuevo nombre de usuario\npara el modo multijugador LAN:\n\n")
 		contenidoStr.WriteString(m.input.View())
 	}
