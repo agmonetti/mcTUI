@@ -1,0 +1,6 @@
+# Binarios compilados
+mcTUI
+*.exe
+
+# Carpetas de entorno de Go
+vendor/
