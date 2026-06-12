@@ -29,24 +29,31 @@ var (
 	colorRed     = lipgloss.Color("#FF4444")
 
 	panelMenu = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorMagenta).
 		Width(26).
-		Height(10).
-		Padding(0, 2)
+		Height(12).
+		Padding(0, 1)
 
 	panelContent = lipgloss.NewStyle().
-		Width(42).
-		Height(10).
-		Padding(0, 2)
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorCyan).
+		Width(40).
+		Height(12).
+		Padding(0, 1)
 
 	panelNews = lipgloss.NewStyle().
-		Width(30).
-		Height(10).
-		Padding(0, 2)
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorViolet).
+		Width(28).
+		Height(12).
+		Padding(0, 1)
 
 	panelFooter = lipgloss.NewStyle().
-		Width(98).
-		Height(3).
-		Padding(0, 2)
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorDark).
+		Width(100). 
+		Padding(0, 1)
 
 	titleStyle  = lipgloss.NewStyle().Foreground(colorCyan).Bold(true)
 	itemStyle   = lipgloss.NewStyle().Foreground(colorWhite).PaddingLeft(1)
@@ -274,10 +281,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	asciiHeader := getAsciiArt() + "\n\n"
+	asciiHeader := getAsciiArt() + "\n"
 
 	menuStr := strings.Builder{}
-	menuStr.WriteString(lipgloss.NewStyle().Foreground(colorViolet).Bold(true).Render("─ Options ────────────────") + "\n\n")
+	menuStr.WriteString(lipgloss.NewStyle().Foreground(colorMagenta).Bold(true).Render("Options") + "\n\n")
 
 	menuOptions := []string{
 		fmt.Sprintf("Play (%s)", m.versionSelect),
@@ -295,10 +302,10 @@ func (m model) View() string {
 	}
 
 	contentStr := strings.Builder{}
-	contentStr.WriteString(lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render("─ mcTUI Launcher ─────────────────────") + "\n\n")
+	contentStr.WriteString(lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render("mcTUI Launcher") + "\n\n")
 
 	if m.state == menuScreen {
-		contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("─ Active Session ─") + "\n\n")
+		contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Active Session") + "\n\n")
 		contentStr.WriteString(fmt.Sprintf("User     : %s\n", lipgloss.NewStyle().Foreground(colorWhite).Render(m.username)))
 		contentStr.WriteString(fmt.Sprintf("Version  : %s\n", lipgloss.NewStyle().Foreground(colorWhite).Render(m.versionSelect)))
 		contentStr.WriteString("Auth     : Offline (LAN Mode)\n\n")
@@ -338,12 +345,12 @@ func (m model) View() string {
 	}
 
 	newsStr := strings.Builder{}
-	newsStr.WriteString(lipgloss.NewStyle().Foreground(colorMagenta).Bold(true).Render("─ Future Changes ─────────") + "\n\n")
+	newsStr.WriteString(lipgloss.NewStyle().Foreground(colorViolet).Bold(true).Render("Future Changes") + "\n\n")
 	
 	newsItems := []string{
 		"• Modpack Integration",
 		"• Microsoft Auth",
-		"• Custom JVM Arguments",
+		"• Custom JVM Args",
 		"• Expanded UI Themes",
 	}
 	
@@ -352,21 +359,20 @@ func (m model) View() string {
 	}
 	newsStr.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDark).Render("Stay tuned..."))
 
-	controls := " [↑/↓] Navigate  [Enter] Select  [q] Quit"
+	controls := "[↑/↓] Navigate   [Enter] Select   [q] Quit"
 	if m.state == nameScreen {
-		controls = " [Enter] Save  [Esc] Cancel"
+		controls = "[Enter] Save   [Esc] Cancel"
 	} else if m.state == versionsScreen {
-		controls = " [↑/↓] Move list  [Enter] Choose  [Esc] Back"
+		controls = "[↑/↓] Move list   [Enter] Choose   [Esc] Back"
 	} else if m.state == confirmScreen {
-		controls = " [y] Accept  [n] Cancel"
+		controls = "[y] Accept   [n] Cancel"
 	}
 
-	separator := lipgloss.NewStyle().Foreground(colorDark).Render(strings.Repeat("─", 94))
 	statusPart := lipgloss.NewStyle().Foreground(colorGreen).Render("● Ready")
 	userPart := lipgloss.NewStyle().Foreground(colorGray).Render(fmt.Sprintf("[%s - %s]", m.username, m.versionSelect))
 	controlsPart := lipgloss.NewStyle().Foreground(colorDark).Render(controls)
 
-	footerContent := fmt.Sprintf("%s\n%s   %s   %s", separator, statusPart, userPart, controlsPart)
+	footerContent := fmt.Sprintf("%s    %s    %s", statusPart, userPart, controlsPart)
 
 	topPanels := lipgloss.JoinHorizontal(lipgloss.Top,
 		panelMenu.Render(menuStr.String()),
