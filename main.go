@@ -247,21 +247,21 @@ func (m model) View() string {
 	}
 
 	contenidoStr := strings.Builder{}
-	contenidoStr.WriteString(tituloStyle.Render("╭ Launcher TUI ╮") + "\n\n")
+	contenidoStr.WriteString(tituloStyle.Render("╭ mcTUI Launcher ╮") + "\n\n")
 
 	if m.estado == pantallaMenu {
-		contenidoStr.WriteString(lipgloss.NewStyle().Foreground(colorCyan).Render("=== INFORMACIÓN DE SESIÓN ===") + "\n\n")
-		contenidoStr.WriteString(fmt.Sprintf("Usuario Actual  : %s\n", m.username))
-		contenidoStr.WriteString(fmt.Sprintf("Versión Activa  : %s\n", m.versionSelect))
-		contenidoStr.WriteString("Autenticación   : Offline (Bypass)\n\n")
-		contenidoStr.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#555555")).Render("El motor de descarga inteligente está\nlisto. Presiona Jugar para iniciar."))
+		contenidoStr.WriteString(lipgloss.NewStyle().Foreground(colorCyan).Render("=== SESIÓN ACTIVA ===") + "\n\n")
+		contenidoStr.WriteString(fmt.Sprintf("Usuario  : %s\n", m.username))
+		contenidoStr.WriteString(fmt.Sprintf("Versión  : %s\n", m.versionSelect))
+		contenidoStr.WriteString("Auth     : Offline (Bypass)\n\n")
+		contenidoStr.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#555555")).Render("● Sistema listo."))
 	
 	} else if m.estado == pantallaNombre {
-		contenidoStr.WriteString("Escribe tu nuevo nombre de usuario\npara el modo multijugador LAN:\n\n")
+		contenidoStr.WriteString("Nuevo nombre de usuario LAN:\n\n")
 		contenidoStr.WriteString(m.input.View())
 	
 	} else if m.estado == pantallaVersiones {
-		contenidoStr.WriteString("Selecciona una versión (Estables):\n\n")
+		contenidoStr.WriteString("Selecciona una versión estable:\n\n")
 		
 		inicio := m.cursorVersiones - 3
 		if inicio < 0 { inicio = 0 }
@@ -281,11 +281,11 @@ func (m model) View() string {
 		}
 	}
 
-	footerStr := " [↑/↓] Navegar  [Enter] Seleccionar  [q] Salir  |  mcTUI v1.1"
+	footerStr := " [↑/↓] Navegar  [Enter] Seleccionar  [q] Salir"
 	if m.estado == pantallaNombre {
-		footerStr = " [Enter] Guardar  [Esc] Cancelar  |  Ingreso de texto..."
+		footerStr = " [Enter] Guardar  [Esc] Cancelar"
 	} else if m.estado == pantallaVersiones {
-		footerStr = " [↑/↓] Mover lista  [Enter] Elegir versión  [Esc] Volver"
+		footerStr = " [↑/↓] Mover lista  [Enter] Elegir  [Esc] Volver"
 	}
 
 	panelSuperior := lipgloss.JoinHorizontal(lipgloss.Top,
@@ -471,11 +471,19 @@ func lanzarJuego(username string, versionBuscada string) {
 		"--versionType", "release",
 	)
 
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	err := cmd.Run()
-	if err != nil {
-		fmt.Println("\n[!] Error:", err)
+	logFile, err := os.Create(filepath.Join(homeDir, ".minecraft", "mctui_latest.log"))
+	if err == nil {
+		cmd.Stdout = logFile
+		cmd.Stderr = logFile
+		// No usamos defer logFile.Close() aquí porque el proceso hijo lo mantendrá abierto
 	}
+
+	// NUEVO: Usamos Start() en lugar de Run()
+	// Start lanza el proceso en el kernel de Linux y devuelve el control a Go instantáneamente.
+	err = cmd.Start()
+	if err != nil {
+		fmt.Println("\n[!] Error al iniciar el proceso:", err)
+		return
+	}
+
 }
