@@ -3,7 +3,8 @@ mcTUI
 *.exe
 mctui
 mctui.exe
-
+mctui-windows-amd64.exe
+mctui-linux-amd64
 
 # Carpetas de entorno de Go
 vendor/
