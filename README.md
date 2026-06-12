@@ -11,6 +11,7 @@ An extremely lightweight, fast, and pure terminal (TUI) Minecraft (Java Edition)
 - **Smart Validation:** Checks local file size and existence (`os.Stat`) to guarantee near-instant startups in subsequent sessions.
 - **Secure LAN Multiplayer:** Generates dynamic v4 UUIDs in each session to avoid "duplicate name" conflicts on local servers.
 - **XDG Persistence:** Saves your configuration (username and last played version) following Linux standards in `~/.config/mctui/config.json`.
+- **Legitimacy First:** Verifies existing official Minecraft installations for proprietary binaries (`client.jar`) before taking action, acting as a local utility rather than a direct distributor.
 
 ## Requirements
 
@@ -60,6 +61,12 @@ mctui
 - [ ] Support for modloader injection (Fabric/Forge).
 - [ ] Automatic download and mapping of specific JREs per version.
 
-## Disclaimer
+## Disclaimer & Legal
 
-This project is an educational tool about concurrency in Go, consuming REST APIs, and subprocess execution. It works exclusively in natively designed Offline/LAN mode. **It does not encourage or facilitate piracy**. To play on public servers with `online-mode=true`, you must purchase the game officially at [minecraft.net](https://www.minecraft.net/).
+This project is strictly an educational tool demonstrating concurrency in Go, REST API consumption, TUI design, and OS subprocess management. 
+
+**mcTUI is designed to operate as a local utility over existing, officially acquired Minecraft installations.** It does not act as a primary distributor for proprietary Mojang binaries (such as `client.jar`). 
+
+The networking capabilities implemented rely entirely on the official, documented Minecraft protocol for Local Area Networks (LAN) and development environments. It connects exclusively to local servers explicitly configured with `online-mode=false`. **This project does not circumvent DRM, nor does it encourage or facilitate software piracy.** To play on standard, authenticated public servers, you must own a legitimate copy of the game via [minecraft.net](https://www.minecraft.net/). 
+
+*Not affiliated with Mojang AB or Microsoft.*

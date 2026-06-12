@@ -26,6 +26,7 @@ var (
 	colorWhite   = lipgloss.Color("#ffffff")
 	colorDark    = lipgloss.Color("#444444")
 	colorGray    = lipgloss.Color("#888888")
+	colorRed     = lipgloss.Color("#FF4444")
 
 	panelMenu = lipgloss.NewStyle().
 		Width(26).
@@ -108,7 +109,7 @@ func saveConfig(c ConfigData) {
 	os.WriteFile(path, data, 0644)
 }
 
-// --- VERSION FETCHING ---
+// --- VERSION FETCHING & FILE CHECKS ---
 func fetchReleases() []string {
 	resp, err := http.Get("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json")
 	if err != nil {
@@ -134,13 +135,21 @@ func fetchReleases() []string {
 	return releases
 }
 
+func clientJarExists(version string) bool {
+	homeDir, _ := os.UserHomeDir()
+	path := filepath.Join(homeDir, ".minecraft", "versions", version, "client.jar")
+	info, err := os.Stat(path)
+	return err == nil && info.Size() > 0
+}
+
 // --- STATES AND MODEL ---
 type screenState int
 
 const (
-	menuScreen    screenState = iota
+	menuScreen     screenState = iota
 	nameScreen
 	versionsScreen
+	confirmScreen // NEW: Confirmation screen for downloading client.jar
 )
 
 type model struct {
@@ -208,8 +217,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			if m.state == menuScreen {
 				if m.cursorMenu == 0 {
-					m.play = true
-					return m, tea.Quit
+					// Check if client.jar exists before playing
+					if clientJarExists(m.versionSelect) {
+						m.play = true
+						return m, tea.Quit
+					} else {
+						m.state = confirmScreen
+					}
 				} else if m.cursorMenu == 1 {
 					m.state = nameScreen
 					m.input.SetValue(m.username)
@@ -234,10 +248,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.versionSelect = m.versions[m.cursorVersions]
 				saveConfig(ConfigData{Username: m.username, Version: m.versionSelect})
 				m.state = menuScreen
+			} else if m.state == confirmScreen {
+				m.play = true
+				return m, tea.Quit
 			}
 
-		case "esc":
-			if m.state == nameScreen || m.state == versionsScreen {
+		case "y", "Y":
+			if m.state == confirmScreen {
+				m.play = true
+				return m, tea.Quit
+			}
+
+		case "n", "N", "esc":
+			if m.state == nameScreen || m.state == versionsScreen || m.state == confirmScreen {
 				m.state = menuScreen
 			}
 		}
@@ -278,7 +301,7 @@ func (m model) View() string {
 		contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("─ Active Session ─") + "\n\n")
 		contentStr.WriteString(fmt.Sprintf("User     : %s\n", lipgloss.NewStyle().Foreground(colorWhite).Render(m.username)))
 		contentStr.WriteString(fmt.Sprintf("Version  : %s\n", lipgloss.NewStyle().Foreground(colorWhite).Render(m.versionSelect)))
-		contentStr.WriteString("Auth     : Offline (Bypass)\n\n")
+		contentStr.WriteString("Auth     : Offline (LAN Mode)\n\n")
 
 	} else if m.state == nameScreen {
 		contentStr.WriteString("New LAN username:\n\n")
@@ -307,6 +330,11 @@ func (m model) View() string {
 				contentStr.WriteString(fmt.Sprintf("    %s", m.versions[i]) + "\n")
 			}
 		}
+	} else if m.state == confirmScreen {
+		contentStr.WriteString(lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("⚠ ARCHIVO FALTANTE") + "\n\n")
+		contentStr.WriteString(fmt.Sprintf("El archivo client.jar (%s) no se\nencuentra en tu sistema.\n\n", m.versionSelect))
+		contentStr.WriteString("¿Deseas descargarlo desde los\nservidores oficiales de Mojang?\n\n")
+		contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Render("[y/Enter] Sí") + "   " + lipgloss.NewStyle().Foreground(colorGray).Render("[n/Esc] Cancelar"))
 	}
 
 	newsStr := strings.Builder{}
@@ -329,6 +357,8 @@ func (m model) View() string {
 		controls = " [Enter] Save  [Esc] Cancel"
 	} else if m.state == versionsScreen {
 		controls = " [↑/↓] Move list  [Enter] Choose  [Esc] Back"
+	} else if m.state == confirmScreen {
+		controls = " [y] Accept  [n] Cancel"
 	}
 
 	separator := lipgloss.NewStyle().Foreground(colorDark).Render(strings.Repeat("─", 94))
@@ -350,11 +380,8 @@ func (m model) View() string {
 }
 
 func main() {
-	fmt.Println("Connecting to Mojang to fetch versions...")
 	validReleases := fetchReleases()
 	cfg := loadConfig()
-
-	fmt.Print("\033[H\033[2J")
 
 	p := tea.NewProgram(initialModel(validReleases, cfg), tea.WithAltScreen())
 
@@ -365,17 +392,23 @@ func main() {
 	}
 
 	if m, ok := finalModel.(model); ok && m.play {
-		fmt.Print("\033[H\033[2J")
 		launchGame(m.username, m.versionSelect)
 	}
 }
 
 // --- THE GAME LAUNCHING ENGINE ---
 func launchGame(username string, targetVersion string) {
-	fmt.Printf("Starting engine for player: %s (Version: %s)\n", username, targetVersion)
-	fmt.Println("1. Verifying Engine and Libraries...")
+	// EXPLICIT DISCLAIMER SECTION
+	fmt.Print("\033[H\033[2J") // Clear terminal
+	fmt.Println(strings.Repeat("=", 75))
+	fmt.Println(" MODO: Offline / LAN")
+	fmt.Println(" (El servidor debe tener 'online-mode=false' en server.properties)")
+	fmt.Println(strings.Repeat("=", 75))
+	fmt.Println()
+	
+	fmt.Printf("Iniciando motor para el jugador: %s (Versión: %s)\n", username, targetVersion)
+	fmt.Println("1. Verificando Motor y Librerías...")
 
-	// CORRECTLY EXPANDED STRUCTURES
 	type Version struct {
 		ID  string `json:"id"`
 		URL string `json:"url"`
@@ -535,15 +568,11 @@ func launchGame(username string, targetVersion string) {
 	if err == nil {
 		cmd.Stdout = logFile
 		cmd.Stderr = logFile
-		// We don't use defer logFile.Close() here because the child process will keep it open
 	}
 
-	// NEW: We use Start() instead of Run()
-	// Start launches the process in the Linux kernel and returns control to Go instantly.
 	err = cmd.Start()
 	if err != nil {
 		fmt.Println("\n[!] Error starting process:", err)
 		return
 	}
-
 }
