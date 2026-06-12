@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -76,16 +77,51 @@ func getAsciiArt() string {
 	return strings.Join(styledLines, "\n")
 }
 
+// --- PLATFORM AGNOSTIC PATHS ---
+func getMinecraftDir() string {
+	if runtime.GOOS == "windows" {
+		appData := os.Getenv("APPDATA")
+		if appData != "" {
+			return filepath.Join(appData, ".minecraft")
+		}
+		homeDir, _ := os.UserHomeDir()
+		return filepath.Join(homeDir, "AppData", "Roaming", ".minecraft")
+	}
+	homeDir, _ := os.UserHomeDir()
+	return filepath.Join(homeDir, ".minecraft")
+}
+
+func getConfigPath() string {
+	if runtime.GOOS == "windows" {
+		appData := os.Getenv("APPDATA")
+		if appData != "" {
+			return filepath.Join(appData, "mctui", "config.json")
+		}
+		homeDir, _ := os.UserHomeDir()
+		return filepath.Join(homeDir, "AppData", "Roaming", "mctui", "config.json")
+	}
+	homeDir, _ := os.UserHomeDir()
+	return filepath.Join(homeDir, ".config", "mctui", "config.json")
+}
+
+func getRoadmapPath() string {
+	if runtime.GOOS == "windows" {
+		appData := os.Getenv("APPDATA")
+		if appData != "" {
+			return filepath.Join(appData, "mctui", "roadmap.json")
+		}
+		homeDir, _ := os.UserHomeDir()
+		return filepath.Join(homeDir, "AppData", "Roaming", "mctui", "roadmap.json")
+	}
+	homeDir, _ := os.UserHomeDir()
+	return filepath.Join(homeDir, ".config", "mctui", "roadmap.json")
+}
+
 // --- PERSISTENCE ---
 type ConfigData struct {
 	Username  string `json:"username"`
 	Version   string `json:"version"`
 	Modloader string `json:"modloader"`
-}
-
-func getConfigPath() string {
-	homeDir, _ := os.UserHomeDir()
-	return filepath.Join(homeDir, ".config", "mctui", "config.json")
 }
 
 func loadConfig() ConfigData {
@@ -120,16 +156,10 @@ func saveConfig(c ConfigData) {
 }
 
 // --- EXTERNAL ROADMAP LOGIC ---
-func getRoadmapPath() string {
-	homeDir, _ := os.UserHomeDir()
-	return filepath.Join(homeDir, ".config", "mctui", "roadmap.json")
-}
-
 func loadRoadmap() []string {
 	path := getRoadmapPath()
 	data, err := os.ReadFile(path)
 
-	// Default changes if the file does not exist
 	defaultChanges := []string{
 		"• Microsoft Auth",
 		"• Custom JVM Arguments",
@@ -137,7 +167,6 @@ func loadRoadmap() []string {
 	}
 
 	if err != nil {
-		// Create the file automatically to make it easier for the user to edit
 		os.MkdirAll(filepath.Dir(path), 0755)
 		wrapped := map[string][]string{"changes": defaultChanges}
 		jsonData, _ := json.MarshalIndent(wrapped, "", "  ")
@@ -183,8 +212,7 @@ func fetchReleases() []string {
 }
 
 func clientJarExists(version string) bool {
-	homeDir, _ := os.UserHomeDir()
-	path := filepath.Join(homeDir, ".minecraft", "versions", version, "client.jar")
+	path := filepath.Join(getMinecraftDir(), "versions", version, "client.jar")
 	info, err := os.Stat(path)
 	return err == nil && info.Size() > 0
 }
@@ -208,7 +236,7 @@ type model struct {
 	versionSelect string
 	modloader     string
 	versions      []string
-	roadmap       []string // NEW: Dynamic list loaded from JSON
+	roadmap       []string
 
 	input textinput.Model
 	play  bool
@@ -233,7 +261,7 @@ func initialModel(versions []string, cfg ConfigData, roadmap []string) model {
 		versionSelect: cfg.Version,
 		modloader:     cfg.Modloader,
 		versions:      versions,
-		roadmap:       roadmap, // NEW: Assignment
+		roadmap:       roadmap,
 		input:         ti,
 		play:          false,
 	}
@@ -372,7 +400,19 @@ func (m model) View() string {
 			verString += fmt.Sprintf(" (%s)", m.modloader)
 		}
 		contentStr.WriteString(fmt.Sprintf("Version  : %s\n", lipgloss.NewStyle().Foreground(colorWhite).Render(verString)))
-		contentStr.WriteString("Auth     : Offline (LAN Mode)\n\n")
+		
+		// FORMATTING THE OS NAME
+		osName := runtime.GOOS
+		if osName == "darwin" {
+			osName = "macOS"
+		} else if osName == "windows" {
+			osName = "Windows"
+		} else if osName == "linux" {
+			osName = "Linux"
+		}
+		
+		contentStr.WriteString("Auth     : Offline (LAN Mode)\n")
+		contentStr.WriteString(fmt.Sprintf("OS       : %s\n\n", lipgloss.NewStyle().Foreground(colorWhite).Render(osName)))
 
 	} else if m.state == nameScreen {
 		contentStr.WriteString("New LAN username:\n\n")
@@ -404,14 +444,10 @@ func (m model) View() string {
 		contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Render("[y/Enter] Yes") + "   " + lipgloss.NewStyle().Foreground(colorGray).Render("[n/Esc] Cancel"))
 	}
 
-	// --- RIGHT PANEL: DYNAMIC NEWS ---
 	newsStr := strings.Builder{}
 	newsStr.WriteString(lipgloss.NewStyle().Foreground(colorMagenta).Bold(true).Render(" Future Changes") + "\n\n")
 	
-	// FIX: Read directly from the dynamic slice loaded by the model
 	for _, item := range m.roadmap {
-		// If the user didn't add a bullet in JSON, we could add it dynamically,
-		// or print the text directly. We go with direct text for maximum flexibility:
 		newsStr.WriteString(lipgloss.NewStyle().Foreground(colorWhite).Render(item) + "\n")
 	}
 	newsStr.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDark).Render("Stay tuned..."))
@@ -440,7 +476,6 @@ func (m model) View() string {
 	
 	fullInterface := lipgloss.JoinVertical(lipgloss.Center, asciiHeader, topPanels, panelFooter.Render(footerContent))
 
-	// Center on screen
 	if m.width > 0 && m.height > 0 {
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, fullInterface)
 	}
@@ -450,9 +485,8 @@ func (m model) View() string {
 func main() {
 	validReleases := fetchReleases()
 	cfg := loadConfig()
-	roadmap := loadRoadmap() // NEW: Dynamic file loading
+	roadmap := loadRoadmap()
 
-	// NEW: Pass roadmap as third argument
 	p := tea.NewProgram(initialModel(validReleases, cfg, roadmap), tea.WithAltScreen())
 
 	finalModel, err := p.Run()
@@ -468,7 +502,7 @@ func main() {
 
 // --- THE GAME LAUNCHING ENGINE ---
 func launchGame(username string, targetVersion string, modloader string) {
-	fmt.Print("\033[H\033[2J") // Clear console
+	fmt.Print("\033[H\033[2J")
 	fmt.Println(strings.Repeat("=", 75))
 	fmt.Println(" MODE: Offline / LAN")
 	fmt.Println(" (The server must have 'online-mode=false' in server.properties)")
@@ -527,8 +561,8 @@ func launchGame(username string, targetVersion string, modloader string) {
 	var data VersionData
 	json.Unmarshal(bodyVersion, &data)
 
-	homeDir, _ := os.UserHomeDir()
-	clientPath := filepath.Join(homeDir, ".minecraft", "versions", targetVersion, "client.jar")
+	mcDir := getMinecraftDir()
+	clientPath := filepath.Join(mcDir, "versions", targetVersion, "client.jar")
 	if info, err := os.Stat(clientPath); err != nil || info.Size() == 0 {
 		os.MkdirAll(filepath.Dir(clientPath), 0755)
 		respClient, _ := http.Get(data.Downloads.Client.URL)
@@ -539,7 +573,7 @@ func launchGame(username string, targetVersion string, modloader string) {
 	}
 
 	var classpathEntries []string
-	librariesPath := filepath.Join(homeDir, ".minecraft", "libraries")
+	librariesPath := filepath.Join(mcDir, "libraries")
 	var wg sync.WaitGroup
 
 	download := func(url, destination string) {
@@ -567,7 +601,6 @@ func launchGame(username string, targetVersion string, modloader string) {
 		}
 	}
 
-	// --- FABRIC INJECTION ---
 	mainClass := "net.minecraft.client.main.Main"
 
 	if modloader == "Fabric" {
@@ -636,7 +669,7 @@ func launchGame(username string, targetVersion string, modloader string) {
 	}
 
 	fmt.Println("2. Validating Assets...")
-	indexPath := filepath.Join(homeDir, ".minecraft", "assets", "indexes", data.AssetIndex.ID+".json")
+	indexPath := filepath.Join(mcDir, "assets", "indexes", data.AssetIndex.ID+".json")
 	if info, err := os.Stat(indexPath); err != nil || info.Size() == 0 {
 		os.MkdirAll(filepath.Dir(indexPath), 0755)
 		respIndex, _ := http.Get(data.AssetIndex.URL)
@@ -659,7 +692,7 @@ func launchGame(username string, targetVersion string, modloader string) {
 		hash := obj.Hash
 		subDir := hash[:2]
 		url := "https://resources.download.minecraft.net/" + subDir + "/" + hash
-		dest := filepath.Join(homeDir, ".minecraft", "assets", "objects", subDir, hash)
+		dest := filepath.Join(mcDir, "assets", "objects", subDir, hash)
 
 		wg.Add(1)
 		sem <- struct{}{}
@@ -671,7 +704,9 @@ func launchGame(username string, targetVersion string, modloader string) {
 
 	wg.Wait()
 	classpathEntries = append(classpathEntries, clientPath)
-	finalClasspath := strings.Join(classpathEntries, ":")
+	
+	// MULTIPLATAFORMA: filepath.ListSeparator inyecta automáticamente ":" en Linux y ";" en Windows
+	finalClasspath := strings.Join(classpathEntries, string(filepath.ListSeparator))
 
 	sessionUUID := uuid.New().String()
 
@@ -683,8 +718,8 @@ func launchGame(username string, targetVersion string, modloader string) {
 		mainClass,
 		"--username", username,
 		"--version", targetVersion,
-		"--gameDir", filepath.Join(homeDir, ".minecraft"),
-		"--assetsDir", filepath.Join(homeDir, ".minecraft", "assets"),
+		"--gameDir", mcDir,
+		"--assetsDir", filepath.Join(mcDir, "assets"),
 		"--assetIndex", data.AssetIndex.ID,
 		"--uuid", sessionUUID,
 		"--accessToken", "0",
@@ -692,7 +727,7 @@ func launchGame(username string, targetVersion string, modloader string) {
 		"--versionType", "release",
 	)
 
-	logFile, err := os.Create(filepath.Join(homeDir, ".minecraft", "mctui_latest.log"))
+	logFile, err := os.Create(filepath.Join(mcDir, "mctui_latest.log"))
 	if err == nil {
 		cmd.Stdout = logFile
 		cmd.Stderr = logFile
