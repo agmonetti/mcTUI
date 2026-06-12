@@ -119,7 +119,7 @@ func saveConfig(c ConfigData) {
 	os.WriteFile(path, data, 0644)
 }
 
-// --- LÓGICA DE ROADMAP EXTERNO ---
+// --- EXTERNAL ROADMAP LOGIC ---
 func getRoadmapPath() string {
 	homeDir, _ := os.UserHomeDir()
 	return filepath.Join(homeDir, ".config", "mctui", "roadmap.json")
@@ -129,7 +129,7 @@ func loadRoadmap() []string {
 	path := getRoadmapPath()
 	data, err := os.ReadFile(path)
 
-	// Cambios por defecto si el archivo no existe
+	// Default changes if the file does not exist
 	defaultChanges := []string{
 		"• Microsoft Auth",
 		"• Custom JVM Arguments",
@@ -137,7 +137,7 @@ func loadRoadmap() []string {
 	}
 
 	if err != nil {
-		// Creamos el archivo automáticamente para facilitarle la edición al usuario
+		// Create the file automatically to make it easier for the user to edit
 		os.MkdirAll(filepath.Dir(path), 0755)
 		wrapped := map[string][]string{"changes": defaultChanges}
 		jsonData, _ := json.MarshalIndent(wrapped, "", "  ")
@@ -147,7 +147,7 @@ func loadRoadmap() []string {
 
 	var result map[string][]string
 	if err := json.Unmarshal(data, &result); err != nil {
-		return defaultChanges // Fallback si el JSON está mal formateado
+		return defaultChanges // Fallback if JSON is malformed
 	}
 
 	if changes, ok := result["changes"]; ok && len(changes) > 0 {
@@ -208,7 +208,7 @@ type model struct {
 	versionSelect string
 	modloader     string
 	versions      []string
-	roadmap       []string // NUEVO: Lista dinámica cargada desde el JSON
+	roadmap       []string // NEW: Dynamic list loaded from JSON
 
 	input textinput.Model
 	play  bool
@@ -233,7 +233,7 @@ func initialModel(versions []string, cfg ConfigData, roadmap []string) model {
 		versionSelect: cfg.Version,
 		modloader:     cfg.Modloader,
 		versions:      versions,
-		roadmap:       roadmap, // NUEVO: Asignación
+		roadmap:       roadmap, // NEW: Assignment
 		input:         ti,
 		play:          false,
 	}
@@ -398,20 +398,20 @@ func (m model) View() string {
 			}
 		}
 	} else if m.state == confirmScreen {
-		contentStr.WriteString(lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("⚠ ARCHIVO FALTANTE") + "\n\n")
-		contentStr.WriteString(fmt.Sprintf("El archivo client.jar (%s) no se\nencuentra en tu sistema.\n\n", m.versionSelect))
-		contentStr.WriteString("¿Deseas descargarlo desde los\nservidores de Mojang?\n\n")
-		contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Render("[y/Enter] Sí") + "   " + lipgloss.NewStyle().Foreground(colorGray).Render("[n/Esc] Cancelar"))
+		contentStr.WriteString(lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("⚠ MISSING FILE") + "\n\n")
+		contentStr.WriteString(fmt.Sprintf("The client.jar file (%s) is not\nfound on your system.\n\n", m.versionSelect))
+		contentStr.WriteString("Would you like to download it from\nthe Mojang servers?\n\n")
+		contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Render("[y/Enter] Yes") + "   " + lipgloss.NewStyle().Foreground(colorGray).Render("[n/Esc] Cancel"))
 	}
 
-	// --- PANEL DERECHO: NOTICIAS DINÁMICAS ---
+	// --- RIGHT PANEL: DYNAMIC NEWS ---
 	newsStr := strings.Builder{}
 	newsStr.WriteString(lipgloss.NewStyle().Foreground(colorMagenta).Bold(true).Render(" Future Changes") + "\n\n")
 	
-	// CORRECCIÓN: Leemos directamente del slice dinámico cargado por el modelo
+	// FIX: Read directly from the dynamic slice loaded by the model
 	for _, item := range m.roadmap {
-		// Si el usuario no le puso viñeta en el JSON, se la agregamos dinámicamente si queremos,
-		// o imprimimos el texto directo. Vamos con texto directo para máxima flexibilidad:
+		// If the user didn't add a bullet in JSON, we could add it dynamically,
+		// or print the text directly. We go with direct text for maximum flexibility:
 		newsStr.WriteString(lipgloss.NewStyle().Foreground(colorWhite).Render(item) + "\n")
 	}
 	newsStr.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDark).Render("Stay tuned..."))
@@ -440,7 +440,7 @@ func (m model) View() string {
 	
 	fullInterface := lipgloss.JoinVertical(lipgloss.Center, asciiHeader, topPanels, panelFooter.Render(footerContent))
 
-	// Centrar en pantalla
+	// Center on screen
 	if m.width > 0 && m.height > 0 {
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, fullInterface)
 	}
@@ -450,9 +450,9 @@ func (m model) View() string {
 func main() {
 	validReleases := fetchReleases()
 	cfg := loadConfig()
-	roadmap := loadRoadmap() // NUEVO: Carga del archivo dinámico
+	roadmap := loadRoadmap() // NEW: Dynamic file loading
 
-	// NUEVO: Pasamos el roadmap como tercer argumento
+	// NEW: Pass roadmap as third argument
 	p := tea.NewProgram(initialModel(validReleases, cfg, roadmap), tea.WithAltScreen())
 
 	finalModel, err := p.Run()
@@ -468,15 +468,15 @@ func main() {
 
 // --- THE GAME LAUNCHING ENGINE ---
 func launchGame(username string, targetVersion string, modloader string) {
-	fmt.Print("\033[H\033[2J") // Limpiar consola
+	fmt.Print("\033[H\033[2J") // Clear console
 	fmt.Println(strings.Repeat("=", 75))
-	fmt.Println(" MODO: Offline / LAN")
-	fmt.Println(" (El servidor debe tener 'online-mode=false' en server.properties)")
+	fmt.Println(" MODE: Offline / LAN")
+	fmt.Println(" (The server must have 'online-mode=false' in server.properties)")
 	fmt.Println(strings.Repeat("=", 75))
 	fmt.Println()
 	
-	fmt.Printf("Iniciando motor para el jugador: %s (Versión: %s - Modloader: %s)\n", username, targetVersion, modloader)
-	fmt.Println("1. Verificando Motor y Librerías Vanilla...")
+	fmt.Printf("Starting engine for player: %s (Version: %s - Modloader: %s)\n", username, targetVersion, modloader)
+	fmt.Println("1. Verifying Vanilla Engine and Libraries...")
 
 	type Version struct {
 		ID  string `json:"id"`
@@ -567,11 +567,11 @@ func launchGame(username string, targetVersion string, modloader string) {
 		}
 	}
 
-	// --- INYECCIÓN DE FABRIC ---
+	// --- FABRIC INJECTION ---
 	mainClass := "net.minecraft.client.main.Main"
 
 	if modloader == "Fabric" {
-		fmt.Println("-> Detectada inyección Fabric. Interceptando manifiesto...")
+		fmt.Println("-> Fabric injection detected. Intercepting manifest...")
 		
 		loaderURL := fmt.Sprintf("https://meta.fabricmc.net/v2/versions/loader/%s", targetVersion)
 		loaderResp, err := http.Get(loaderURL)
@@ -587,7 +587,7 @@ func launchGame(username string, targetVersion string, modloader string) {
 			
 			if len(loaderData) > 0 {
 				latestLoader := loaderData[0].Loader.Version
-				fmt.Printf("-> Descargando librerías puente de Fabric v%s...\n", latestLoader)
+				fmt.Printf("-> Downloading Fabric bridge libraries v%s...\n", latestLoader)
 				
 				profileURL := fmt.Sprintf("https://meta.fabricmc.net/v2/versions/loader/%s/%s/profile/json", targetVersion, latestLoader)
 				profileResp, _ := http.Get(profileURL)
@@ -630,12 +630,12 @@ func launchGame(username string, targetVersion string, modloader string) {
 					}
 				}
 			} else {
-				fmt.Println("[!] Fabric no tiene un loader compatible para esta versión. Cayendo a Vanilla.")
+				fmt.Println("[!] Fabric does not have a compatible loader for this version. Falling back to Vanilla.")
 			}
 		}
 	}
 
-	fmt.Println("2. Validando Assets...")
+	fmt.Println("2. Validating Assets...")
 	indexPath := filepath.Join(homeDir, ".minecraft", "assets", "indexes", data.AssetIndex.ID+".json")
 	if info, err := os.Stat(indexPath); err != nil || info.Size() == 0 {
 		os.MkdirAll(filepath.Dir(indexPath), 0755)
