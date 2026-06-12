@@ -17,7 +17,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// --- ESTILOS VISUALES (ESTILO SPOTATUI) ---
+// --- ESTILOS VISUALES ---
 var (
 	colorMagenta = lipgloss.Color("#ff00ff")
 	colorCyan    = lipgloss.Color("#00ffff")
@@ -27,14 +27,14 @@ var (
 	panelMenu = lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(colorMagenta).
-		Width(25).
+		Width(26).
 		Height(12).
 		Padding(0, 1)
 
 	panelContenido = lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(colorCyan).
-		Width(55).
+		Width(54).
 		Height(12).
 		Padding(0, 1)
 
@@ -50,53 +50,90 @@ var (
 	cursorStyle = lipgloss.NewStyle().Foreground(colorMagenta).Bold(true)
 )
 
-// --- ESTADOS DE LA TUI ---
-type estado int
-
-const (
-	pantallaMenu estado = iota
-	pantallaNombre
-)
-
-// --- EL MODELO ---
-type model struct {
-	estado   estado
-	opciones []string
-	cursor   int
-	username string
-	input    textinput.Model
-	jugar    bool
+// --- PERSISTENCIA ---
+type ConfigData struct {
+	Username string `json:"username"`
+	Version  string `json:"version"`
 }
 
-// --- LÓGICA DE PERSISTENCIA ---
 func obtenerRutaConfig() string {
 	homeDir, _ := os.UserHomeDir()
 	return filepath.Join(homeDir, ".config", "mctui", "config.json")
 }
 
-func cargarConfig() string {
+func cargarConfig() ConfigData {
 	ruta := obtenerRutaConfig()
 	datos, err := os.ReadFile(ruta)
+	
+	defaultConfig := ConfigData{Username: "JugadorOffline", Version: "1.20.4"}
 	if err != nil {
-		return "JugadorOffline" // Fallback si el archivo no existe aún
+		return defaultConfig
 	}
-	var config map[string]string
+
+	var config ConfigData
 	json.Unmarshal(datos, &config)
-	if nombre, ok := config["username"]; ok && nombre != "" {
-		return nombre
-	}
-	return "JugadorOffline"
+
+	if config.Username == "" { config.Username = defaultConfig.Username }
+	if config.Version == "" { config.Version = defaultConfig.Version }
+	return config
 }
 
-func guardarConfig(username string) {
+func guardarConfig(c ConfigData) {
 	ruta := obtenerRutaConfig()
 	os.MkdirAll(filepath.Dir(ruta), 0755)
-	config := map[string]string{"username": username}
-	datos, _ := json.MarshalIndent(config, "", "  ")
-	os.WriteFile(ruta, datos, 0644) // 0644: Permisos estándar de lectura/escritura
+	datos, _ := json.MarshalIndent(c, "", "  ")
+	os.WriteFile(ruta, datos, 0644)
 }
 
-func modeloInicial() model {
+// --- OBTENCIÓN DE VERSIONES ---
+func obtenerReleases() []string {
+	resp, err := http.Get("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json")
+	if err != nil {
+		return []string{"1.20.4"} // Fallback sin internet inicial
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	var manifest struct {
+		Versions []struct {
+			ID   string `json:"id"`
+			Type string `json:"type"`
+		} `json:"versions"`
+	}
+	json.Unmarshal(body, &manifest)
+
+	var releases []string
+	for _, v := range manifest.Versions {
+		if v.Type == "release" {
+			releases = append(releases, v.ID)
+		}
+	}
+	return releases
+}
+
+// --- ESTADOS Y MODELO ---
+type estado int
+
+const (
+	pantallaMenu estado = iota
+	pantallaNombre
+	pantallaVersiones 
+)
+
+type model struct {
+	estado          estado
+	cursorMenu      int
+	cursorVersiones int
+	
+	username        string
+	versionSelect   string
+	versiones       []string
+	
+	input           textinput.Model
+	jugar           bool
+}
+
+func modeloInicial(versiones []string, cfg ConfigData) model {
 	ti := textinput.New()
 	ti.Placeholder = "Escribe tu nombre..."
 	ti.Focus()
@@ -105,24 +142,21 @@ func modeloInicial() model {
 	ti.PromptStyle = lipgloss.NewStyle().Foreground(colorCyan)
 	ti.TextStyle = lipgloss.NewStyle().Foreground(colorWhite)
 
-	// NUEVO: Cargamos el nombre desde ~/.config/mctui/config.json
-	nombreGuardado := cargarConfig()
-
 	return model{
-		estado:   pantallaMenu,
-		opciones: []string{"Jugar (1.20.4)", "Cambiar Nombre", "Salir"},
-		username: nombreGuardado, // Aplicamos el nombre cargado
-		input:    ti,
-		jugar:    false,
+		estado:        pantallaMenu,
+		cursorMenu:    0,
+		username:      cfg.Username,
+		versionSelect: cfg.Version,
+		versiones:     versiones,
+		input:         ti,
+		jugar:         false,
 	}
 }
 
-// 1. INIT
 func (m model) Init() tea.Cmd {
 	return textinput.Blink
 }
 
-// 2. UPDATE
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
@@ -133,34 +167,54 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.estado == pantallaMenu {
 				return m, tea.Quit
 			}
+		
 		case "up", "k":
-			if m.estado == pantallaMenu && m.cursor > 0 {
-				m.cursor--
+			if m.estado == pantallaMenu && m.cursorMenu > 0 {
+				m.cursorMenu--
+			} else if m.estado == pantallaVersiones && m.cursorVersiones > 0 {
+				m.cursorVersiones--
 			}
+
 		case "down", "j":
-			if m.estado == pantallaMenu && m.cursor < len(m.opciones)-1 {
-				m.cursor++
+			if m.estado == pantallaMenu && m.cursorMenu < 3 { 
+				m.cursorMenu++
+			} else if m.estado == pantallaVersiones && m.cursorVersiones < len(m.versiones)-1 {
+				m.cursorVersiones++
 			}
+
 		case "enter":
 			if m.estado == pantallaMenu {
-				if m.cursor == 0 {
+				if m.cursorMenu == 0 { 
 					m.jugar = true
 					return m, tea.Quit
-				} else if m.cursor == 1 {
+				} else if m.cursorMenu == 1 { 
 					m.estado = pantallaNombre
 					m.input.SetValue(m.username)
-				} else if m.cursor == 2 {
+				} else if m.cursorMenu == 2 { 
+					m.estado = pantallaVersiones
+					for i, v := range m.versiones {
+						if v == m.versionSelect {
+							m.cursorVersiones = i
+							break
+						}
+					}
+				} else if m.cursorMenu == 3 { 
 					return m, tea.Quit
 				}
 			} else if m.estado == pantallaNombre {
 				if m.input.Value() != "" {
 					m.username = m.input.Value()
-					guardarConfig(m.username) // CORRECCIÓN: El guardado ocurre aquí, en la lógica.
+					guardarConfig(ConfigData{Username: m.username, Version: m.versionSelect})
 				}
 				m.estado = pantallaMenu
+			} else if m.estado == pantallaVersiones {
+				m.versionSelect = m.versiones[m.cursorVersiones]
+				guardarConfig(ConfigData{Username: m.username, Version: m.versionSelect})
+				m.estado = pantallaMenu
 			}
+
 		case "esc":
-			if m.estado == pantallaNombre {
+			if m.estado == pantallaNombre || m.estado == pantallaVersiones {
 				m.estado = pantallaMenu
 			}
 		}
@@ -173,13 +227,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// 3. VIEW
 func (m model) View() string {
 	menuStr := strings.Builder{}
 	menuStr.WriteString(tituloStyle.Render("╭ Opciones ╮") + "\n\n")
 	
-	for i, opcion := range m.opciones {
-		if m.cursor == i {
+	opcionesMenu := []string{
+		fmt.Sprintf("Jugar (%s)", m.versionSelect),
+		"Cambiar Nombre",
+		"Cambiar Versión",
+		"Salir",
+	}
+
+	for i, opcion := range opcionesMenu {
+		if m.cursorMenu == i {
 			menuStr.WriteString(cursorStyle.Render(fmt.Sprintf("▶ %s", opcion)) + "\n")
 		} else {
 			menuStr.WriteString(itemStyle.Render(fmt.Sprintf("  %s", opcion)) + "\n")
@@ -192,36 +252,59 @@ func (m model) View() string {
 	if m.estado == pantallaMenu {
 		contenidoStr.WriteString(lipgloss.NewStyle().Foreground(colorCyan).Render("=== INFORMACIÓN DE SESIÓN ===") + "\n\n")
 		contenidoStr.WriteString(fmt.Sprintf("Usuario Actual  : %s\n", m.username))
-		contenidoStr.WriteString("Versión Activa  : 1.20.4\n")
+		contenidoStr.WriteString(fmt.Sprintf("Versión Activa  : %s\n", m.versionSelect))
 		contenidoStr.WriteString("Autenticación   : Offline (Bypass)\n\n")
 		contenidoStr.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#555555")).Render("El motor de descarga inteligente está\nlisto. Presiona Jugar para iniciar."))
+	
 	} else if m.estado == pantallaNombre {
-		// CORRECCIÓN: Restauramos el texto de la interfaz visual
 		contenidoStr.WriteString("Escribe tu nuevo nombre de usuario\npara el modo multijugador LAN:\n\n")
 		contenidoStr.WriteString(m.input.View())
+	
+	} else if m.estado == pantallaVersiones {
+		contenidoStr.WriteString("Selecciona una versión (Estables):\n\n")
+		
+		inicio := m.cursorVersiones - 3
+		if inicio < 0 { inicio = 0 }
+		fin := inicio + 7
+		if fin > len(m.versiones) { 
+			fin = len(m.versiones)
+			inicio = fin - 7
+			if inicio < 0 { inicio = 0 }
+		}
+
+		for i := inicio; i < fin; i++ {
+			if i == m.cursorVersiones {
+				contenidoStr.WriteString(cursorStyle.Render(fmt.Sprintf("  ▶ %s", m.versiones[i])) + "\n")
+			} else {
+				contenidoStr.WriteString(fmt.Sprintf("    %s", m.versiones[i]) + "\n")
+			}
+		}
 	}
 
-	footerStr := " [↑/↓] Navegar  [Enter] Seleccionar  [q] Salir  |  mcTUI v1.0"
+	footerStr := " [↑/↓] Navegar  [Enter] Seleccionar  [q] Salir  |  mcTUI v1.1"
 	if m.estado == pantallaNombre {
-		footerStr = " [Enter] Guardar nombre  [Esc] Cancelar  |  Ingreso de texto..."
+		footerStr = " [Enter] Guardar  [Esc] Cancelar  |  Ingreso de texto..."
+	} else if m.estado == pantallaVersiones {
+		footerStr = " [↑/↓] Mover lista  [Enter] Elegir versión  [Esc] Volver"
 	}
 
 	panelSuperior := lipgloss.JoinHorizontal(lipgloss.Top,
 		panelMenu.Render(menuStr.String()),
 		panelContenido.Render(contenidoStr.String()),
 	)
-
-	interfazCompleta := lipgloss.JoinVertical(lipgloss.Left,
-		panelSuperior,
-		panelInferior.Render(footerStr),
-	)
+	interfazCompleta := lipgloss.JoinVertical(lipgloss.Left, panelSuperior, panelInferior.Render(footerStr))
 
 	return "\n" + interfazCompleta
 }
 
-// --- FUNCIÓN PRINCIPAL ---
 func main() {
-	p := tea.NewProgram(modeloInicial(), tea.WithAltScreen())
+	fmt.Println("Conectando con Mojang para obtener versiones...")
+	versionesValidas := obtenerReleases()
+	cfg := cargarConfig()
+
+	fmt.Print("\033[H\033[2J")
+
+	p := tea.NewProgram(modeloInicial(versionesValidas, cfg), tea.WithAltScreen())
 	
 	modeloFinal, err := p.Run()
 	if err != nil {
@@ -231,16 +314,16 @@ func main() {
 
 	if m, ok := modeloFinal.(model); ok && m.jugar {
 		fmt.Print("\033[H\033[2J") 
-		lanzarJuego(m.username)
+		lanzarJuego(m.username, m.versionSelect)
 	}
 }
 
-// --- EL MOTOR ---
-func lanzarJuego(username string) {
-	fmt.Printf("Iniciando motor para el jugador: %s\n", username)
+// --- EL MOTOR ACTUALIZADO ---
+func lanzarJuego(username string, versionBuscada string) {
+	fmt.Printf("Iniciando motor para el jugador: %s (Versión: %s)\n", username, versionBuscada)
 	fmt.Println("1. Verificando Motor y Librerías...")
 
-	// Structs corregidos: Cada etiqueta JSON en su propia línea
+	// ESTRUCTURAS CORRECTAMENTE EXPANDIDAS
 	type Version struct {
 		ID  string `json:"id"`
 		URL string `json:"url"`
@@ -275,7 +358,6 @@ func lanzarJuego(username string) {
 	var manifest Manifest
 	json.Unmarshal(body, &manifest)
 
-	versionBuscada := "1.20.4"
 	var urlEspecifica string
 	for _, v := range manifest.Versions {
 		if v.ID == versionBuscada {
