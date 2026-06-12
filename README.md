@@ -36,45 +36,53 @@ git clone [https://github.com/agmonetti/mcTUI.git](https://github.com/agmonetti/
 
 
 
-## Manual Installation & Compilation
+---
+
+## Windows Installation & Usage
+
+For Windows users who do not wish to compile from source, pre-built binaries are provided.
+
+1. Download the latest `mctui-windows-amd64.exe` from the [Releases](https://www.google.com/search?q=https://github.com/agmonetti/mcTUI/releases) page.
+2. Ensure you have the correct Java version installed (e.g., Eclipse Temurin). **Crucial:** You must check the option to add Java to your system's `PATH` variable during installation.
+3. Open a **PowerShell** window in the directory where you downloaded the executable.
+4. Run the launcher using the following command:
+
+```powershell
+.\mctui-windows-amd64.exe
+
+```
+
+---
+
+## Manual Installation & Compilation (Linux/macOS)
 
 1. Clone the repository:
+
 ```bash
 git clone [https://github.com/agmonetti/mcTUI.git](https://github.com/agmonetti/mcTUI.git)
 cd mcTUI
 
 ```
 
-
 2. Download Go dependencies:
+
 ```bash
 go mod tidy
 
 ```
 
-
 3. Compile the optimized binary:
+
 ```bash
 go build -ldflags="-s -w" -o mctui main.go
 
 ```
 
-
 4. Install on your system:
+
 ```bash
 mkdir -p ~/.local/bin
 mv mctui ~/.local/bin/
-
-```
-
-
-
-### Windows
-
-To generate a `.exe` file for Windows directly from your Linux terminal:
-
-```bash
-GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o mctui.exe main.go
 
 ```
 
@@ -89,8 +97,7 @@ mctui
 
 > **Note:** Use `↑/↓` arrows to navigate, `Enter` to select/toggle, and `Esc/q` to quit or go back.
 
-
-## Disclaimer 
+## Disclaimer
 
 This project is strictly an educational tool demonstrating concurrency in Go, REST API consumption, TUI design, and OS subprocess management.
 

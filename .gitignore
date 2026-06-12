@@ -1,6 +1,9 @@
 # Binarios compilados
 mcTUI
 *.exe
+mctui
+mctui.exe
+
 
 # Carpetas de entorno de Go
 vendor/
