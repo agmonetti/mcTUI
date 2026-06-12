@@ -1,65 +1,65 @@
 # mcTUI
 
-Un launcher de Minecraft (Java Edition) extremadamente ligero, rápido y puramente de terminal (TUI). Escrito en Go, diseñado para entornos minimalistas y usuarios que prefieren la consola.
+An extremely lightweight, fast, and pure terminal (TUI) Minecraft (Java Edition) launcher. Written in Go, designed for minimalist environments and users who prefer the console.
 
 ---
 
-## Características
+## Features
 
-- **Interfaz TUI:** Navegación por teclado fluida gracias a [Bubble Tea](https://github.com/charmbracelet/bubbletea).
-- **Descargas Concurrentes:** Exprime tu ancho de banda utilizando *Goroutines* para descargar cientos de assets y librerías en paralelo.
-- **Validación Inteligente:** Comprueba el peso y existencia de los archivos locales (`os.Stat`) para garantizar arranques casi instantáneos en sesiones posteriores.
-- **Multijugador LAN Seguro:** Generación de UUIDs v4 dinámicos en cada sesión para evitar conflictos de "nombre duplicado" en servidores locales.
-- **Persistencia XDG:** Guarda tus configuraciones (usuario y última versión) respetando el estándar de Linux en `~/.config/mctui/config.json`.
+- **TUI Interface:** Smooth keyboard navigation using [Bubble Tea](https://github.com/charmbracelet/bubbletea).
+- **Concurrent Downloads:** Maximize your bandwidth using *Goroutines* to download hundreds of assets and libraries in parallel.
+- **Smart Validation:** Checks local file size and existence (`os.Stat`) to guarantee near-instant startups in subsequent sessions.
+- **Secure LAN Multiplayer:** Generates dynamic v4 UUIDs in each session to avoid "duplicate name" conflicts on local servers.
+- **XDG Persistence:** Saves your configuration (username and last played version) following Linux standards in `~/.config/mctui/config.json`.
 
-## Requisitos
+## Requirements
 
-- Sistema Operativo: Linux (Testeado en Arch Linux) / macOS.
-- Entorno de ejecución de Java:
-  - `jre17-openjdk` (Para Minecraft 1.17 a 1.20.4)
-  - `jre21-openjdk` (Para Minecraft 1.20.5+)
+- Operating System: Linux (Tested on Arch Linux) / macOS.
+- Java Runtime Environment:
+  - `jre17-openjdk` (For Minecraft 1.17 to 1.20.4)
+  - `jre21-openjdk` (For Minecraft 1.20.5+)
 
-## Instalación y Compilación
+## Installation and Compilation
 
-1. Clona el repositorio:
+1. Clone the repository:
    ```bash
    git clone https://github.com/agmonetti/mcTUI.git
    cd mcTUI
    ```
 
-2. Descarga las dependencias de Go:
+2. Download Go dependencies:
    ```bash
    go mod tidy
    ```
 
-3. Compila el binario optimizado (sin info de debug para menor tamaño):
+3. Compile the optimized binary (without debug info for smaller size):
    ```bash
    go build -ldflags="-s -w" -o mctui main.go
    ```
 
-4. Instala en tu sistema:
+4. Install on your system:
    ```bash
    mkdir -p ~/.local/bin
    mv mctui ~/.local/bin/
    ```
-   *(Asegúrate de que `~/.local/bin` esté en tu variable de entorno `$PATH`)*
+   *(Make sure `~/.local/bin` is in your `$PATH` environment variable)*
 
-## Uso
+## Usage
 
-Simplemente ejecuta el binario desde cualquier emulador de terminal:
+Simply run the binary from any terminal emulator:
 
 ```bash
 mctui
 ```
 
-> **Nota:** Usa las flechas `↑/↓` para navegar, `Enter` para seleccionar y `Esc/q` para salir o volver atrás.
+> **Note:** Use `↑/↓` arrows to navigate, `Enter` to select, and `Esc/q` to quit or go back.
 
-## Próximas versiones
+## Upcoming Features
 
-- [ ] Implementar parseo dinámico de `mainClass` y `minecraftArguments` para soportar versiones Legacy (<= 1.12).
-- [ ] Soporte para inyección de modloaders (Fabric/Forge).
-- [ ] Descarga automática y mapeo de JREs específicos por versión.
+- [ ] Implement dynamic parsing of `mainClass` and `minecraftArguments` to support Legacy versions (<= 1.12).
+- [ ] Support for modloader injection (Fabric/Forge).
+- [ ] Automatic download and mapping of specific JREs per version.
 
 ## Disclaimer
 
-Este proyecto es una herramienta educativa sobre concurrencia en Go, consumo de APIs REST y ejecución de subprocesos. Funciona exclusivamente en modo Offline/LAN de diseño nativo. **No fomenta ni facilita la piratería**. Para jugar en servidores públicos con `online-mode=true`, debes adquirir el juego oficialmente en [minecraft.net](https://www.minecraft.net/).
+This project is an educational tool about concurrency in Go, consuming REST APIs, and subprocess execution. It works exclusively in natively designed Offline/LAN mode. **It does not encourage or facilitate piracy**. To play on public servers with `online-mode=true`, you must purchase the game officially at [minecraft.net](https://www.minecraft.net/).

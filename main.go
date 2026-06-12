@@ -17,7 +17,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// --- ESTILOS VISUALES ---
+// --- VISUAL STYLES ---
 var (
 	colorMagenta = lipgloss.Color("#ff00ff")
 	colorCyan    = lipgloss.Color("#00ffff")
@@ -50,7 +50,7 @@ var (
 	cursorStyle = lipgloss.NewStyle().Foreground(colorMagenta).Bold(true)
 )
 
-// --- PERSISTENCIA ---
+// --- PERSISTENCE ---
 type ConfigData struct {
 	Username string `json:"username"`
 	Version  string `json:"version"`
@@ -65,7 +65,7 @@ func cargarConfig() ConfigData {
 	ruta := obtenerRutaConfig()
 	datos, err := os.ReadFile(ruta)
 	
-	defaultConfig := ConfigData{Username: "JugadorOffline", Version: "1.20.4"}
+	defaultConfig := ConfigData{Username: "OfflinePlayer", Version: "1.20.4"}
 	if err != nil {
 		return defaultConfig
 	}
@@ -85,11 +85,11 @@ func guardarConfig(c ConfigData) {
 	os.WriteFile(ruta, datos, 0644)
 }
 
-// --- OBTENCIÓN DE VERSIONES ---
+// --- VERSION FETCHING ---
 func obtenerReleases() []string {
 	resp, err := http.Get("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json")
 	if err != nil {
-		return []string{"1.20.4"} // Fallback sin internet inicial
+		return []string{"1.20.4"} // Fallback without internet initially
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
@@ -111,7 +111,7 @@ func obtenerReleases() []string {
 	return releases
 }
 
-// --- ESTADOS Y MODELO ---
+// --- STATES AND MODEL ---
 type estado int
 
 const (
@@ -135,7 +135,7 @@ type model struct {
 
 func modeloInicial(versiones []string, cfg ConfigData) model {
 	ti := textinput.New()
-	ti.Placeholder = "Escribe tu nombre..."
+	ti.Placeholder = "Type your name..."
 	ti.Focus()
 	ti.CharLimit = 16
 	ti.Width = 30
@@ -229,13 +229,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) View() string {
 	menuStr := strings.Builder{}
-	menuStr.WriteString(tituloStyle.Render("╭ Opciones ╮") + "\n\n")
+	menuStr.WriteString(tituloStyle.Render("╭ Options ╮") + "\n\n")
 	
 	opcionesMenu := []string{
-		fmt.Sprintf("Jugar (%s)", m.versionSelect),
-		"Cambiar Nombre",
-		"Cambiar Versión",
-		"Salir",
+		fmt.Sprintf("Play (%s)", m.versionSelect),
+		"Change Name",
+		"Change Version",
+		"Quit",
 	}
 
 	for i, opcion := range opcionesMenu {
@@ -250,18 +250,18 @@ func (m model) View() string {
 	contenidoStr.WriteString(tituloStyle.Render("╭ mcTUI Launcher ╮") + "\n\n")
 
 	if m.estado == pantallaMenu {
-		contenidoStr.WriteString(lipgloss.NewStyle().Foreground(colorCyan).Render("=== SESIÓN ACTIVA ===") + "\n\n")
-		contenidoStr.WriteString(fmt.Sprintf("Usuario  : %s\n", m.username))
-		contenidoStr.WriteString(fmt.Sprintf("Versión  : %s\n", m.versionSelect))
+		contenidoStr.WriteString(lipgloss.NewStyle().Foreground(colorCyan).Render("=== ACTIVE SESSION ===") + "\n\n")
+		contenidoStr.WriteString(fmt.Sprintf("User     : %s\n", m.username))
+		contenidoStr.WriteString(fmt.Sprintf("Version  : %s\n", m.versionSelect))
 		contenidoStr.WriteString("Auth     : Offline (Bypass)\n\n")
-		contenidoStr.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#555555")).Render("● Sistema listo."))
+		contenidoStr.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#555555")).Render("● System ready."))
 	
 	} else if m.estado == pantallaNombre {
-		contenidoStr.WriteString("Nuevo nombre de usuario LAN:\n\n")
+		contenidoStr.WriteString("New LAN username:\n\n")
 		contenidoStr.WriteString(m.input.View())
 	
 	} else if m.estado == pantallaVersiones {
-		contenidoStr.WriteString("Selecciona una versión estable:\n\n")
+		contenidoStr.WriteString("Select a stable version:\n\n")
 		
 		inicio := m.cursorVersiones - 3
 		if inicio < 0 { inicio = 0 }
@@ -281,11 +281,11 @@ func (m model) View() string {
 		}
 	}
 
-	footerStr := " [↑/↓] Navegar  [Enter] Seleccionar  [q] Salir"
+	footerStr := " [↑/↓] Navigate  [Enter] Select  [q] Quit"
 	if m.estado == pantallaNombre {
-		footerStr = " [Enter] Guardar  [Esc] Cancelar"
+		footerStr = " [Enter] Save  [Esc] Cancel"
 	} else if m.estado == pantallaVersiones {
-		footerStr = " [↑/↓] Mover lista  [Enter] Elegir  [Esc] Volver"
+		footerStr = " [↑/↓] Move list  [Enter] Choose  [Esc] Back"
 	}
 
 	panelSuperior := lipgloss.JoinHorizontal(lipgloss.Top,
@@ -298,7 +298,7 @@ func (m model) View() string {
 }
 
 func main() {
-	fmt.Println("Conectando con Mojang para obtener versiones...")
+	fmt.Println("Connecting to Mojang to fetch versions...")
 	versionesValidas := obtenerReleases()
 	cfg := cargarConfig()
 
@@ -308,7 +308,7 @@ func main() {
 	
 	modeloFinal, err := p.Run()
 	if err != nil {
-		fmt.Printf("Error en la TUI: %v", err)
+		fmt.Printf("TUI Error: %v", err)
 		os.Exit(1)
 	}
 
@@ -318,12 +318,12 @@ func main() {
 	}
 }
 
-// --- EL MOTOR ACTUALIZADO ---
+// --- THE UPDATED ENGINE ---
 func lanzarJuego(username string, versionBuscada string) {
-	fmt.Printf("Iniciando motor para el jugador: %s (Versión: %s)\n", username, versionBuscada)
-	fmt.Println("1. Verificando Motor y Librerías...")
+	fmt.Printf("Starting engine for player: %s (Version: %s)\n", username, versionBuscada)
+	fmt.Println("1. Verifying Engine and Libraries...")
 
-	// ESTRUCTURAS CORRECTAMENTE EXPANDIDAS
+	// CORRECTLY EXPANDED STRUCTURES
 	type Version struct {
 		ID  string `json:"id"`
 		URL string `json:"url"`
@@ -414,7 +414,7 @@ func lanzarJuego(username string, versionBuscada string) {
 		}
 	}
 
-	fmt.Println("2. Validando Assets...")
+	fmt.Println("2. Validating Assets...")
 	indexPath := filepath.Join(homeDir, ".minecraft", "assets", "indexes", data.AssetIndex.ID+".json")
 	if info, err := os.Stat(indexPath); err != nil || info.Size() == 0 {
 		os.MkdirAll(filepath.Dir(indexPath), 0755)
@@ -454,7 +454,7 @@ func lanzarJuego(username string, versionBuscada string) {
 
 	sessionUUID := uuid.New().String()
 
-	fmt.Println("3. ¡Todo listo! Lanzando Minecraft...")
+	fmt.Println("3. All set! Launching Minecraft...")
 
 	cmd := exec.Command("java",
 		"-Xmx2G", 
@@ -475,14 +475,14 @@ func lanzarJuego(username string, versionBuscada string) {
 	if err == nil {
 		cmd.Stdout = logFile
 		cmd.Stderr = logFile
-		// No usamos defer logFile.Close() aquí porque el proceso hijo lo mantendrá abierto
+		// We don't use defer logFile.Close() here because the child process will keep it open
 	}
 
-	// NUEVO: Usamos Start() en lugar de Run()
-	// Start lanza el proceso en el kernel de Linux y devuelve el control a Go instantáneamente.
+	// NEW: We use Start() instead of Run()
+	// Start launches the process in the Linux kernel and returns control to Go instantly.
 	err = cmd.Start()
 	if err != nil {
-		fmt.Println("\n[!] Error al iniciar el proceso:", err)
+		fmt.Println("\n[!] Error starting process:", err)
 		return
 	}
 
