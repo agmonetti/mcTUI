@@ -29,24 +29,30 @@ var (
 	colorRed     = lipgloss.Color("#FF4444")
 
 	panelMenu = lipgloss.NewStyle().
-		Width(30).
-		Height(11).
-		Padding(0, 2)
+		Width(32).
+		Height(14).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorViolet).
+		Padding(0, 1)
 
 	panelContent = lipgloss.NewStyle().
-		Width(42).
-		Height(11).
-		Padding(0, 2)
+		Width(48).
+		Height(14).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorCyan).
+		Padding(0, 1)
 
 	panelNews = lipgloss.NewStyle().
-		Width(30).
-		Height(11).
-		Padding(0, 2)
+		Width(40).
+		Height(14).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorMagenta).
+		Padding(0, 1)
 
 	panelFooter = lipgloss.NewStyle().
-		Width(102).
+		Width(120).
 		Height(3).
-		Padding(0, 2)
+		Padding(1, 0)
 
 	titleStyle  = lipgloss.NewStyle().Foreground(colorCyan).Bold(true)
 	itemStyle   = lipgloss.NewStyle().Foreground(colorWhite).PaddingLeft(1)
@@ -206,6 +212,9 @@ type model struct {
 
 	input textinput.Model
 	play  bool
+
+	width  int
+	height int
 }
 
 func initialModel(versions []string, cfg ConfigData, roadmap []string) model {
@@ -238,6 +247,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
@@ -329,13 +342,13 @@ func (m model) View() string {
 	asciiHeader := getAsciiArt() + "\n\n"
 
 	menuStr := strings.Builder{}
-	menuStr.WriteString(lipgloss.NewStyle().Foreground(colorViolet).Bold(true).Render("─ Options ────────────────────") + "\n\n")
+	menuStr.WriteString(lipgloss.NewStyle().Foreground(colorViolet).Bold(true).Render(" Options") + "\n\n")
 
 	menuOptions := []string{
 		fmt.Sprintf("Play (%s)", m.versionSelect),
 		"Change Name",
 		"Change Version",
-		fmt.Sprintf("Toggle Modloader : [ %s ]", lipgloss.NewStyle().Foreground(colorCyan).Render(m.modloader)),
+		fmt.Sprintf("Modloader: %s", lipgloss.NewStyle().Foreground(colorCyan).Render(m.modloader)),
 		"Quit",
 	}
 
@@ -348,10 +361,10 @@ func (m model) View() string {
 	}
 
 	contentStr := strings.Builder{}
-	contentStr.WriteString(lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render("─ mcTUI Launcher ─────────────────────") + "\n\n")
+	contentStr.WriteString(lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render(" mcTUI Launcher") + "\n\n")
 
 	if m.state == menuScreen {
-		contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("─ Active Session ─") + "\n\n")
+		contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(" Active Session") + "\n\n")
 		contentStr.WriteString(fmt.Sprintf("User     : %s\n", lipgloss.NewStyle().Foreground(colorWhite).Render(m.username)))
 		
 		verString := m.versionSelect
@@ -393,7 +406,7 @@ func (m model) View() string {
 
 	// --- PANEL DERECHO: NOTICIAS DINÁMICAS ---
 	newsStr := strings.Builder{}
-	newsStr.WriteString(lipgloss.NewStyle().Foreground(colorMagenta).Bold(true).Render("─ Future Changes ─────────") + "\n\n")
+	newsStr.WriteString(lipgloss.NewStyle().Foreground(colorMagenta).Bold(true).Render(" Future Changes") + "\n\n")
 	
 	// CORRECCIÓN: Leemos directamente del slice dinámico cargado por el modelo
 	for _, item := range m.roadmap {
@@ -412,7 +425,7 @@ func (m model) View() string {
 		controls = " [y] Accept  [n] Cancel"
 	}
 
-	separator := lipgloss.NewStyle().Foreground(colorDark).Render(strings.Repeat("─", 94))
+	separator := lipgloss.NewStyle().Foreground(colorDark).Render(strings.Repeat("─", 120))
 	statusPart := lipgloss.NewStyle().Foreground(colorGreen).Render("● Ready")
 	userPart := lipgloss.NewStyle().Foreground(colorGray).Render(fmt.Sprintf("[%s - %s]", m.username, m.versionSelect))
 	controlsPart := lipgloss.NewStyle().Foreground(colorDark).Render(controls)
@@ -425,8 +438,12 @@ func (m model) View() string {
 		panelNews.Render(newsStr.String()),
 	)
 	
-	fullInterface := lipgloss.JoinVertical(lipgloss.Left, asciiHeader, topPanels, panelFooter.Render(footerContent))
+	fullInterface := lipgloss.JoinVertical(lipgloss.Center, asciiHeader, topPanels, panelFooter.Render(footerContent))
 
+	// Centrar en pantalla
+	if m.width > 0 && m.height > 0 {
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, fullInterface)
+	}
 	return "\n" + fullInterface
 }
 
