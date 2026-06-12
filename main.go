@@ -29,31 +29,24 @@ var (
 	colorRed     = lipgloss.Color("#FF4444")
 
 	panelMenu = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colorMagenta).
-		Width(26).
-		Height(12).
-		Padding(0, 1)
+		Width(30).
+		Height(11).
+		Padding(0, 2)
 
 	panelContent = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colorCyan).
-		Width(40).
-		Height(12).
-		Padding(0, 1)
+		Width(42).
+		Height(11).
+		Padding(0, 2)
 
 	panelNews = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colorViolet).
-		Width(28).
-		Height(12).
-		Padding(0, 1)
+		Width(30).
+		Height(11).
+		Padding(0, 2)
 
 	panelFooter = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colorDark).
-		Width(100). 
-		Padding(0, 1)
+		Width(102).
+		Height(3).
+		Padding(0, 2)
 
 	titleStyle  = lipgloss.NewStyle().Foreground(colorCyan).Bold(true)
 	itemStyle   = lipgloss.NewStyle().Foreground(colorWhite).PaddingLeft(1)
@@ -79,8 +72,9 @@ func getAsciiArt() string {
 
 // --- PERSISTENCE ---
 type ConfigData struct {
-	Username string `json:"username"`
-	Version  string `json:"version"`
+	Username  string `json:"username"`
+	Version   string `json:"version"`
+	Modloader string `json:"modloader"`
 }
 
 func getConfigPath() string {
@@ -92,7 +86,7 @@ func loadConfig() ConfigData {
 	path := getConfigPath()
 	data, err := os.ReadFile(path)
 
-	defaultConfig := ConfigData{Username: "OfflinePlayer", Version: "1.20.4"}
+	defaultConfig := ConfigData{Username: "OfflinePlayer", Version: "1.20.4", Modloader: "Vanilla"}
 	if err != nil {
 		return defaultConfig
 	}
@@ -105,6 +99,9 @@ func loadConfig() ConfigData {
 	}
 	if config.Version == "" {
 		config.Version = defaultConfig.Version
+	}
+	if config.Modloader == "" {
+		config.Modloader = defaultConfig.Modloader
 	}
 	return config
 }
@@ -120,7 +117,7 @@ func saveConfig(c ConfigData) {
 func fetchReleases() []string {
 	resp, err := http.Get("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json")
 	if err != nil {
-		return []string{"1.20.4"} // Fallback without internet initially
+		return []string{"1.20.4"}
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
@@ -153,10 +150,10 @@ func clientJarExists(version string) bool {
 type screenState int
 
 const (
-	menuScreen     screenState = iota
+	menuScreen screenState = iota
 	nameScreen
 	versionsScreen
-	confirmScreen // NEW: Confirmation screen for downloading client.jar
+	confirmScreen
 )
 
 type model struct {
@@ -166,6 +163,7 @@ type model struct {
 
 	username      string
 	versionSelect string
+	modloader     string
 	versions      []string
 
 	input textinput.Model
@@ -186,6 +184,7 @@ func initialModel(versions []string, cfg ConfigData) model {
 		cursorMenu:    0,
 		username:      cfg.Username,
 		versionSelect: cfg.Version,
+		modloader:     cfg.Modloader,
 		versions:      versions,
 		input:         ti,
 		play:          false,
@@ -215,7 +214,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "down", "j":
-			if m.state == menuScreen && m.cursorMenu < 3 {
+			if m.state == menuScreen && m.cursorMenu < 4 {
 				m.cursorMenu++
 			} else if m.state == versionsScreen && m.cursorVersions < len(m.versions)-1 {
 				m.cursorVersions++
@@ -224,7 +223,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			if m.state == menuScreen {
 				if m.cursorMenu == 0 {
-					// Check if client.jar exists before playing
 					if clientJarExists(m.versionSelect) {
 						m.play = true
 						return m, tea.Quit
@@ -243,17 +241,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 				} else if m.cursorMenu == 3 {
+					// Toggle Modloader (Vanilla <-> Fabric)
+					if m.modloader == "Vanilla" {
+						m.modloader = "Fabric"
+					} else {
+						m.modloader = "Vanilla"
+					}
+					saveConfig(ConfigData{Username: m.username, Version: m.versionSelect, Modloader: m.modloader})
+				} else if m.cursorMenu == 4 {
 					return m, tea.Quit
 				}
 			} else if m.state == nameScreen {
 				if m.input.Value() != "" {
 					m.username = m.input.Value()
-					saveConfig(ConfigData{Username: m.username, Version: m.versionSelect})
+					saveConfig(ConfigData{Username: m.username, Version: m.versionSelect, Modloader: m.modloader})
 				}
 				m.state = menuScreen
 			} else if m.state == versionsScreen {
 				m.versionSelect = m.versions[m.cursorVersions]
-				saveConfig(ConfigData{Username: m.username, Version: m.versionSelect})
+				saveConfig(ConfigData{Username: m.username, Version: m.versionSelect, Modloader: m.modloader})
 				m.state = menuScreen
 			} else if m.state == confirmScreen {
 				m.play = true
@@ -281,15 +287,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	asciiHeader := getAsciiArt() + "\n"
+	asciiHeader := getAsciiArt() + "\n\n"
 
 	menuStr := strings.Builder{}
-	menuStr.WriteString(lipgloss.NewStyle().Foreground(colorMagenta).Bold(true).Render("Options") + "\n\n")
+	menuStr.WriteString(lipgloss.NewStyle().Foreground(colorViolet).Bold(true).Render("─ Options ────────────────────") + "\n\n")
 
 	menuOptions := []string{
 		fmt.Sprintf("Play (%s)", m.versionSelect),
 		"Change Name",
 		"Change Version",
+		fmt.Sprintf("Toggle Modloader : [ %s ]", lipgloss.NewStyle().Foreground(colorCyan).Render(m.modloader)),
 		"Quit",
 	}
 
@@ -302,12 +309,17 @@ func (m model) View() string {
 	}
 
 	contentStr := strings.Builder{}
-	contentStr.WriteString(lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render("mcTUI Launcher") + "\n\n")
+	contentStr.WriteString(lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render("─ mcTUI Launcher ─────────────────────") + "\n\n")
 
 	if m.state == menuScreen {
-		contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Active Session") + "\n\n")
+		contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("─ Active Session ─") + "\n\n")
 		contentStr.WriteString(fmt.Sprintf("User     : %s\n", lipgloss.NewStyle().Foreground(colorWhite).Render(m.username)))
-		contentStr.WriteString(fmt.Sprintf("Version  : %s\n", lipgloss.NewStyle().Foreground(colorWhite).Render(m.versionSelect)))
+		
+		verString := m.versionSelect
+		if m.modloader != "Vanilla" {
+			verString += fmt.Sprintf(" (%s)", m.modloader)
+		}
+		contentStr.WriteString(fmt.Sprintf("Version  : %s\n", lipgloss.NewStyle().Foreground(colorWhite).Render(verString)))
 		contentStr.WriteString("Auth     : Offline (LAN Mode)\n\n")
 
 	} else if m.state == nameScreen {
@@ -318,16 +330,12 @@ func (m model) View() string {
 		contentStr.WriteString("Select a stable version:\n\n")
 
 		start := m.cursorVersions - 3
-		if start < 0 {
-			start = 0
-		}
-		end := start + 7
+		if start < 0 { start = 0 }
+		end := start + 6
 		if end > len(m.versions) {
 			end = len(m.versions)
-			start = end - 7
-			if start < 0 {
-				start = 0
-			}
+			start = end - 6
+			if start < 0 { start = 0 }
 		}
 
 		for i := start; i < end; i++ {
@@ -340,17 +348,16 @@ func (m model) View() string {
 	} else if m.state == confirmScreen {
 		contentStr.WriteString(lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("⚠ ARCHIVO FALTANTE") + "\n\n")
 		contentStr.WriteString(fmt.Sprintf("El archivo client.jar (%s) no se\nencuentra en tu sistema.\n\n", m.versionSelect))
-		contentStr.WriteString("¿Deseas descargarlo desde los\nservidores oficiales de Mojang?\n\n")
+		contentStr.WriteString("¿Deseas descargarlo desde los\nservidores de Mojang?\n\n")
 		contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Render("[y/Enter] Sí") + "   " + lipgloss.NewStyle().Foreground(colorGray).Render("[n/Esc] Cancelar"))
 	}
 
 	newsStr := strings.Builder{}
-	newsStr.WriteString(lipgloss.NewStyle().Foreground(colorViolet).Bold(true).Render("Future Changes") + "\n\n")
+	newsStr.WriteString(lipgloss.NewStyle().Foreground(colorMagenta).Bold(true).Render("─ Future Changes ─────────") + "\n\n")
 	
 	newsItems := []string{
-		"• Modpack Integration",
 		"• Microsoft Auth",
-		"• Custom JVM Args",
+		"• Custom JVM Arguments",
 		"• Expanded UI Themes",
 	}
 	
@@ -359,20 +366,21 @@ func (m model) View() string {
 	}
 	newsStr.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDark).Render("Stay tuned..."))
 
-	controls := "[↑/↓] Navigate   [Enter] Select   [q] Quit"
+	controls := " [↑/↓] Navigate  [Enter] Select  [q] Quit"
 	if m.state == nameScreen {
-		controls = "[Enter] Save   [Esc] Cancel"
+		controls = " [Enter] Save  [Esc] Cancel"
 	} else if m.state == versionsScreen {
-		controls = "[↑/↓] Move list   [Enter] Choose   [Esc] Back"
+		controls = " [↑/↓] Move list  [Enter] Choose  [Esc] Back"
 	} else if m.state == confirmScreen {
-		controls = "[y] Accept   [n] Cancel"
+		controls = " [y] Accept  [n] Cancel"
 	}
 
+	separator := lipgloss.NewStyle().Foreground(colorDark).Render(strings.Repeat("─", 94))
 	statusPart := lipgloss.NewStyle().Foreground(colorGreen).Render("● Ready")
 	userPart := lipgloss.NewStyle().Foreground(colorGray).Render(fmt.Sprintf("[%s - %s]", m.username, m.versionSelect))
 	controlsPart := lipgloss.NewStyle().Foreground(colorDark).Render(controls)
 
-	footerContent := fmt.Sprintf("%s    %s    %s", statusPart, userPart, controlsPart)
+	footerContent := fmt.Sprintf("%s\n%s   %s   %s", separator, statusPart, userPart, controlsPart)
 
 	topPanels := lipgloss.JoinHorizontal(lipgloss.Top,
 		panelMenu.Render(menuStr.String()),
@@ -398,22 +406,21 @@ func main() {
 	}
 
 	if m, ok := finalModel.(model); ok && m.play {
-		launchGame(m.username, m.versionSelect)
+		launchGame(m.username, m.versionSelect, m.modloader)
 	}
 }
 
 // --- THE GAME LAUNCHING ENGINE ---
-func launchGame(username string, targetVersion string) {
-	// EXPLICIT DISCLAIMER SECTION
-	fmt.Print("\033[H\033[2J") // Clear terminal
+func launchGame(username string, targetVersion string, modloader string) {
+	fmt.Print("\033[H\033[2J") // Limpiar consola
 	fmt.Println(strings.Repeat("=", 75))
 	fmt.Println(" MODO: Offline / LAN")
 	fmt.Println(" (El servidor debe tener 'online-mode=false' en server.properties)")
 	fmt.Println(strings.Repeat("=", 75))
 	fmt.Println()
 	
-	fmt.Printf("Iniciando motor para el jugador: %s (Versión: %s)\n", username, targetVersion)
-	fmt.Println("1. Verificando Motor y Librerías...")
+	fmt.Printf("Iniciando motor para el jugador: %s (Versión: %s - Modloader: %s)\n", username, targetVersion, modloader)
+	fmt.Println("1. Verificando Motor y Librerías Vanilla...")
 
 	type Version struct {
 		ID  string `json:"id"`
@@ -465,7 +472,6 @@ func launchGame(username string, targetVersion string) {
 	json.Unmarshal(bodyVersion, &data)
 
 	homeDir, _ := os.UserHomeDir()
-
 	clientPath := filepath.Join(homeDir, ".minecraft", "versions", targetVersion, "client.jar")
 	if info, err := os.Stat(clientPath); err != nil || info.Size() == 0 {
 		os.MkdirAll(filepath.Dir(clientPath), 0755)
@@ -482,22 +488,14 @@ func launchGame(username string, targetVersion string) {
 
 	download := func(url, destination string) {
 		defer wg.Done()
-		if url == "" {
-			return
-		}
+		if url == "" { return }
 		os.MkdirAll(filepath.Dir(destination), 0755)
-		if info, err := os.Stat(destination); err == nil && info.Size() > 0 {
-			return
-		}
+		if info, err := os.Stat(destination); err == nil && info.Size() > 0 { return }
 		r, err := http.Get(url)
-		if err != nil {
-			return
-		}
+		if err != nil { return }
 		defer r.Body.Close()
 		f, err := os.Create(destination)
-		if err != nil {
-			return
-		}
+		if err != nil { return }
 		defer f.Close()
 		io.Copy(f, r.Body)
 	}
@@ -513,7 +511,75 @@ func launchGame(username string, targetVersion string) {
 		}
 	}
 
-	fmt.Println("2. Validating Assets...")
+	// --- INYECCIÓN DE FABRIC ---
+	mainClass := "net.minecraft.client.main.Main"
+
+	if modloader == "Fabric" {
+		fmt.Println("-> Detectada inyección Fabric. Interceptando manifiesto...")
+		
+		loaderURL := fmt.Sprintf("https://meta.fabricmc.net/v2/versions/loader/%s", targetVersion)
+		loaderResp, err := http.Get(loaderURL)
+		if err == nil {
+			defer loaderResp.Body.Close()
+			loaderBody, _ := io.ReadAll(loaderResp.Body)
+			var loaderData []struct {
+				Loader struct {
+					Version string `json:"version"`
+				} `json:"loader"`
+			}
+			json.Unmarshal(loaderBody, &loaderData)
+			
+			if len(loaderData) > 0 {
+				latestLoader := loaderData[0].Loader.Version
+				fmt.Printf("-> Descargando librerías puente de Fabric v%s...\n", latestLoader)
+				
+				profileURL := fmt.Sprintf("https://meta.fabricmc.net/v2/versions/loader/%s/%s/profile/json", targetVersion, latestLoader)
+				profileResp, _ := http.Get(profileURL)
+				defer profileResp.Body.Close()
+				profileBody, _ := io.ReadAll(profileResp.Body)
+
+				var profile struct {
+					MainClass string `json:"mainClass"`
+					Libraries []struct {
+						Name string `json:"name"`
+						URL  string `json:"url"`
+					} `json:"libraries"`
+				}
+				json.Unmarshal(profileBody, &profile)
+				
+				mainClass = profile.MainClass
+
+				for _, lib := range profile.Libraries {
+					parts := strings.Split(lib.Name, ":")
+					if len(parts) >= 3 {
+						group := strings.ReplaceAll(parts[0], ".", "/")
+						artifact := parts[1]
+						version := parts[2]
+						path := fmt.Sprintf("%s/%s/%s/%s-%s.jar", group, artifact, version, artifact, version)
+						
+						baseURL := lib.URL
+						if baseURL == "" {
+							baseURL = "https://maven.fabricmc.net/"
+						}
+						if !strings.HasSuffix(baseURL, "/") {
+							baseURL += "/"
+						}
+						
+						fullURL := baseURL + path
+						fullDest := filepath.Join(librariesPath, path)
+						
+						classpathEntries = append(classpathEntries, fullDest)
+						wg.Add(1)
+						go download(fullURL, fullDest)
+					}
+				}
+			} else {
+				fmt.Println("[!] Fabric no tiene un loader compatible para esta versión. Cayendo a Vanilla.")
+			}
+		}
+	}
+
+	fmt.Println("2. Validando Assets...")
 	indexPath := filepath.Join(homeDir, ".minecraft", "assets", "indexes", data.AssetIndex.ID+".json")
 	if info, err := os.Stat(indexPath); err != nil || info.Size() == 0 {
 		os.MkdirAll(filepath.Dir(indexPath), 0755)
@@ -558,7 +624,7 @@ func launchGame(username string, targetVersion string) {
 	cmd := exec.Command("java",
 		"-Xmx2G",
 		"-cp", finalClasspath,
-		"net.minecraft.client.main.Main",
+		mainClass,
 		"--username", username,
 		"--version", targetVersion,
 		"--gameDir", filepath.Join(homeDir, ".minecraft"),
