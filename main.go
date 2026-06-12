@@ -28,17 +28,22 @@ var (
 	colorGray    = lipgloss.Color("#888888")
 
 	panelMenu = lipgloss.NewStyle().
-		Width(28).
+		Width(26).
 		Height(10).
 		Padding(0, 2)
 
 	panelContent = lipgloss.NewStyle().
-		Width(52).
+		Width(42).
+		Height(10).
+		Padding(0, 2)
+
+	panelNews = lipgloss.NewStyle().
+		Width(30).
 		Height(10).
 		Padding(0, 2)
 
 	panelFooter = lipgloss.NewStyle().
-		Width(84).
+		Width(98).
 		Height(3).
 		Padding(0, 2)
 
@@ -304,6 +309,21 @@ func (m model) View() string {
 		}
 	}
 
+	newsStr := strings.Builder{}
+	newsStr.WriteString(lipgloss.NewStyle().Foreground(colorMagenta).Bold(true).Render("─ Future Changes ─────────") + "\n\n")
+	
+	newsItems := []string{
+		"• Modpack Integration",
+		"• Microsoft Auth",
+		"• Custom JVM Arguments",
+		"• Expanded UI Themes",
+	}
+	
+	for _, item := range newsItems {
+		newsStr.WriteString(lipgloss.NewStyle().Foreground(colorWhite).Render(item) + "\n")
+	}
+	newsStr.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDark).Render("Stay tuned..."))
+
 	controls := " [↑/↓] Navigate  [Enter] Select  [q] Quit"
 	if m.state == nameScreen {
 		controls = " [Enter] Save  [Esc] Cancel"
@@ -311,7 +331,7 @@ func (m model) View() string {
 		controls = " [↑/↓] Move list  [Enter] Choose  [Esc] Back"
 	}
 
-	separator := lipgloss.NewStyle().Foreground(colorDark).Render(strings.Repeat("─", 80))
+	separator := lipgloss.NewStyle().Foreground(colorDark).Render(strings.Repeat("─", 94))
 	statusPart := lipgloss.NewStyle().Foreground(colorGreen).Render("● Ready")
 	userPart := lipgloss.NewStyle().Foreground(colorGray).Render(fmt.Sprintf("[%s - %s]", m.username, m.versionSelect))
 	controlsPart := lipgloss.NewStyle().Foreground(colorDark).Render(controls)
@@ -321,6 +341,7 @@ func (m model) View() string {
 	topPanels := lipgloss.JoinHorizontal(lipgloss.Top,
 		panelMenu.Render(menuStr.String()),
 		panelContent.Render(contentStr.String()),
+		panelNews.Render(newsStr.String()),
 	)
 	
 	fullInterface := lipgloss.JoinVertical(lipgloss.Left, asciiHeader, topPanels, panelFooter.Render(footerContent))
