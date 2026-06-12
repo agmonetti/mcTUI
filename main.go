@@ -19,36 +19,50 @@ import (
 
 // --- VISUAL STYLES ---
 var (
-	colorMagenta = lipgloss.Color("#ff00ff")
-	colorCyan    = lipgloss.Color("#00ffff")
-	colorYellow  = lipgloss.Color("#ffff00")
+	colorMagenta = lipgloss.Color("#FF2E93")
+	colorCyan    = lipgloss.Color("#00E5FF")
+	colorViolet  = lipgloss.Color("#BD00FF")
+	colorGreen   = lipgloss.Color("#00FA9A")
 	colorWhite   = lipgloss.Color("#ffffff")
+	colorDark    = lipgloss.Color("#444444")
+	colorGray    = lipgloss.Color("#888888")
 
 	panelMenu = lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
-		BorderForeground(colorMagenta).
-		Width(26).
-		Height(12).
-		Padding(0, 1)
+		Width(28).
+		Height(10).
+		Padding(0, 2)
 
 	panelContent = lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
-		BorderForeground(colorCyan).
-		Width(54).
-		Height(12).
-		Padding(0, 1)
+		Width(52).
+		Height(10).
+		Padding(0, 2)
 
 	panelFooter = lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
-		BorderForeground(colorWhite).
 		Width(84).
 		Height(3).
-		Padding(0, 1)
+		Padding(0, 2)
 
-	titleStyle  = lipgloss.NewStyle().Foreground(colorYellow).Bold(true)
+	titleStyle  = lipgloss.NewStyle().Foreground(colorCyan).Bold(true)
 	itemStyle   = lipgloss.NewStyle().Foreground(colorWhite).PaddingLeft(1)
 	cursorStyle = lipgloss.NewStyle().Foreground(colorMagenta).Bold(true)
 )
+
+func getAsciiArt() string {
+	lines := []string{
+		`  __  __      _______ _    _ _____ `,
+		` |  \/  |    |__   __| |  | |_   _|`,
+		` | \  / | ___   | |  | |  | | | |  `,
+		` | |\/| |/ __|  | |  | |  | | | |  `,
+		` | |  | | (__   | |  | |__| |_| |_ `,
+		` |_|  |_|\___|  |_|   \____/|_____|`,
+	}
+	colors := []lipgloss.Color{colorCyan, colorCyan, lipgloss.Color("#00BFFF"), colorViolet, colorMagenta, colorMagenta}
+	var styledLines []string
+	for i, line := range lines {
+		styledLines = append(styledLines, lipgloss.NewStyle().Foreground(colors[i]).Bold(true).Render(line))
+	}
+	return strings.Join(styledLines, "\n")
+}
 
 // --- PERSISTENCE ---
 type ConfigData struct {
@@ -232,8 +246,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
+	asciiHeader := getAsciiArt() + "\n\n"
+
 	menuStr := strings.Builder{}
-	menuStr.WriteString(titleStyle.Render("╭ Options ╮") + "\n\n")
+	menuStr.WriteString(lipgloss.NewStyle().Foreground(colorViolet).Bold(true).Render("─ Options ────────────────") + "\n\n")
 
 	menuOptions := []string{
 		fmt.Sprintf("Play (%s)", m.versionSelect),
@@ -251,14 +267,13 @@ func (m model) View() string {
 	}
 
 	contentStr := strings.Builder{}
-	contentStr.WriteString(titleStyle.Render("╭ mcTUI Launcher ╮") + "\n\n")
+	contentStr.WriteString(lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render("─ mcTUI Launcher ─────────────────────") + "\n\n")
 
 	if m.state == menuScreen {
-		contentStr.WriteString(lipgloss.NewStyle().Foreground(colorCyan).Render("=== ACTIVE SESSION ===") + "\n\n")
-		contentStr.WriteString(fmt.Sprintf("User     : %s\n", m.username))
-		contentStr.WriteString(fmt.Sprintf("Version  : %s\n", m.versionSelect))
+		contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("─ Active Session ─") + "\n\n")
+		contentStr.WriteString(fmt.Sprintf("User     : %s\n", lipgloss.NewStyle().Foreground(colorWhite).Render(m.username)))
+		contentStr.WriteString(fmt.Sprintf("Version  : %s\n", lipgloss.NewStyle().Foreground(colorWhite).Render(m.versionSelect)))
 		contentStr.WriteString("Auth     : Offline (Bypass)\n\n")
-		contentStr.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#555555")).Render("● System ready."))
 
 	} else if m.state == nameScreen {
 		contentStr.WriteString("New LAN username:\n\n")
@@ -289,18 +304,26 @@ func (m model) View() string {
 		}
 	}
 
-	footerStr := " [↑/↓] Navigate  [Enter] Select  [q] Quit"
+	controls := " [↑/↓] Navigate  [Enter] Select  [q] Quit"
 	if m.state == nameScreen {
-		footerStr = " [Enter] Save  [Esc] Cancel"
+		controls = " [Enter] Save  [Esc] Cancel"
 	} else if m.state == versionsScreen {
-		footerStr = " [↑/↓] Move list  [Enter] Choose  [Esc] Back"
+		controls = " [↑/↓] Move list  [Enter] Choose  [Esc] Back"
 	}
+
+	separator := lipgloss.NewStyle().Foreground(colorDark).Render(strings.Repeat("─", 80))
+	statusPart := lipgloss.NewStyle().Foreground(colorGreen).Render("● Ready")
+	userPart := lipgloss.NewStyle().Foreground(colorGray).Render(fmt.Sprintf("[%s - %s]", m.username, m.versionSelect))
+	controlsPart := lipgloss.NewStyle().Foreground(colorDark).Render(controls)
+
+	footerContent := fmt.Sprintf("%s\n%s   %s   %s", separator, statusPart, userPart, controlsPart)
 
 	topPanels := lipgloss.JoinHorizontal(lipgloss.Top,
 		panelMenu.Render(menuStr.String()),
 		panelContent.Render(contentStr.String()),
 	)
-	fullInterface := lipgloss.JoinVertical(lipgloss.Left, topPanels, panelFooter.Render(footerStr))
+	
+	fullInterface := lipgloss.JoinVertical(lipgloss.Left, asciiHeader, topPanels, panelFooter.Render(footerContent))
 
 	return "\n" + fullInterface
 }
