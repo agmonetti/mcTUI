@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -120,12 +121,7 @@ func getConfigPath() string {
 	return getAppDataDir("mctui", "config.json")
 }
 
-func getRoadmapPath() string {
-	if runtime.GOOS == "windows" {
-		return getAppDataDir("mctui", "roadmap.json")
-	}
-	return getAppDataDir("mctui", "roadmap.json")
-}
+
 
 // --- PERSISTENCE ---
 type ConfigData struct {
@@ -165,34 +161,44 @@ func saveConfig(c ConfigData) {
 	os.WriteFile(path, data, 0644)
 }
 
-// --- EXTERNAL ROADMAP LOGIC ---
-func loadRoadmap() []string {
-	path := getRoadmapPath()
-	data, err := os.ReadFile(path)
+const roadmapURL = "https://raw.githubusercontent.com/agmonetti/mcTUI/main/roadmap.json"
 
-	defaultChanges := []string{
-		"• Microsoft Auth",
-		"• Custom JVM Arguments",
-		"• Expanded UI Themes",
+// embeddedRoadmap is the fallback shown when the remote roadmap can't be
+// fetched (offline, GitHub down, etc). Update this whenever you cut a
+// release, so offline users still see something reasonably current.
+var embeddedRoadmap = []string{
+	"• Microsoft Auth",
+	"• Custom JVM Arguments",
+	"• Expanded UI Themes",
+}
+
+var roadmapClient = &http.Client{Timeout: 2 * time.Second}
+
+func loadRoadmap() []string {
+	resp, err := roadmapClient.Get(roadmapURL)
+	if err != nil || resp == nil {
+		return embeddedRoadmap
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return embeddedRoadmap
 	}
 
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		os.MkdirAll(filepath.Dir(path), 0755)
-		wrapped := map[string][]string{"changes": defaultChanges}
-		jsonData, _ := json.MarshalIndent(wrapped, "", "  ")
-		os.WriteFile(path, jsonData, 0644)
-		return defaultChanges
+		return embeddedRoadmap
 	}
 
 	var result map[string][]string
-	if err := json.Unmarshal(data, &result); err != nil {
-		return defaultChanges // Fallback if JSON is malformed
+	if json.Unmarshal(body, &result) != nil {
+		return embeddedRoadmap
 	}
 
 	if changes, ok := result["changes"]; ok && len(changes) > 0 {
 		return changes
 	}
-	return defaultChanges
+	return embeddedRoadmap
 }
 
 // --- VERSION FETCHING & FILE CHECKS ---
@@ -686,9 +692,15 @@ func scanJavaInstallations() []javaCandidate {
 		dirs = globDirs("/usr/lib/jvm/*")
 	case "darwin":
 		dirs = globDirs("/Library/Java/JavaVirtualMachines/*/Contents/Home")
+
 	case "windows":
 		dirs = globDirs(`C:\Program Files\Java\*`)
 		dirs = append(dirs, globDirs(`C:\Program Files\Eclipse Adoptium\*`)...)
+		dirs = append(dirs, globDirs(`C:\Program Files\Microsoft\*`)...)
+		if userProfile := os.Getenv("USERPROFILE"); userProfile != "" {
+			dirs = append(dirs, globDirs(filepath.Join(userProfile, ".jdks", "*"))...)
+		}
+
 	}
 
 	var candidates []javaCandidate
