@@ -642,16 +642,21 @@ func findJavaBinary(requiredMajor int) (javaCandidate, bool) {
 		return pathJava, true
 	}
 
-	// PATH default doesn't qualify (or is unknown) - scan known
-	// installation directories for an alternative.
+	// PATH default doesn't qualify - try Mojang's own bundled runtimes first,
+	// since they're purpose-matched to specific MC versions.
+	for _, candidate := range scanEmbeddedRuntimes() {
+		if candidate.major >= requiredMajor {
+			return candidate, true
+		}
+	}
+
+	// Fall back to generic system-wide JRE/JDK installations.
 	for _, candidate := range scanJavaInstallations() {
 		if candidate.major >= requiredMajor {
 			return candidate, true
 		}
 	}
 
-	// Nothing found that qualifies; return the PATH default so the
-	// caller can report a clear "needs Java X" error.
 	return pathJava, false
 }
 
@@ -693,6 +698,52 @@ func checkJavaVersionAt(binaryPath string) int {
 	}
 	return major
 }
+
+// scanEmbeddedRuntimes looks for JREs bundled by the official Mojang/Microsoft
+// launcher under <mcDir>/runtime/. These are often newer than the user's
+// system Java and require no extra installation — if the user has ever
+// played via the official launcher, a compatible JRE is frequently already
+// sitting here.
+//
+// Structure: <mcDir>/runtime/<component>/<os-dir>/<component>/bin/java(.exe)
+// e.g. .minecraft/runtime/java-runtime-delta/windows-x64/java-runtime-delta/bin/javaw.exe
+//
+// We glob both variable segments (<component> and <os-dir>) rather than
+// hardcoding them, since they vary by platform/architecture and by which
+// Minecraft versions were ever installed.
+func scanEmbeddedRuntimes() []javaCandidate {
+	runtimeRoot := filepath.Join(getMinecraftDir(), "runtime")
+
+	binName := "java"
+	if runtime.GOOS == "windows" {
+		binName = "java.exe"
+	}
+
+	// Pattern: runtime/*/*/*/bin/java(.exe)
+	// segments: <component>/<os-dir>/<component again>/bin/<binary>
+	pattern := filepath.Join(runtimeRoot, "*", "*", "*", "bin", binName)
+	binPaths := globDirs(pattern)
+
+	var candidates []javaCandidate
+	for _, binPath := range binPaths {
+		if _, err := os.Stat(binPath); err != nil {
+			continue
+		}
+		major := checkJavaVersionAt(binPath)
+		if major > 0 {
+			candidates = append(candidates, javaCandidate{path: binPath, major: major})
+		}
+	}
+
+	// Sort descending by major version (same as scanJavaInstallations).
+	for i := 1; i < len(candidates); i++ {
+		for j := i; j > 0 && candidates[j-1].major < candidates[j].major; j-- {
+			candidates[j-1], candidates[j] = candidates[j], candidates[j-1]
+		}
+	}
+	return candidates
+}
+
 
 // scanJavaInstallations looks in OS-conventional locations for installed
 // JREs/JDKs and returns them sorted by major version, descending.
