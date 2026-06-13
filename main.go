@@ -801,6 +801,26 @@ func globDirs(pattern string) []string {
 	return matches
 }
 
+// printLogTail prints the last n lines of the file at path. Used to
+// surface JVM crash output (e.g. UnsupportedClassVersionError,
+// UnsatisfiedLinkError) without requiring the user to find the log
+// themselves.
+func printLogTail(path string, n int) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		fmt.Println("(could not read log file:", err, ")")
+		return
+	}
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	start := len(lines) - n
+	if start < 0 {
+		start = 0
+	}
+	for _, line := range lines[start:] {
+		fmt.Println(line)
+	}
+}
+
 // --- THE GAME LAUNCHING ENGINE ---
 //
 // IMPORTANT (FIX #2 - panic on offline launches):
@@ -1134,6 +1154,34 @@ func launchGame(username string, targetVersion string, modloader string) {
 	if err != nil {
 		fmt.Println("\n[!] Error starting process:", err)
 		return
+	}
+	
+	fmt.Println("   Minecraft is starting in the background...")
+	
+	// Watch for early crashes (process exits within a few seconds of
+	// starting). If that happens, surface the tail of the JVM log instead
+	// of leaving the user with no clue what went wrong.
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+	
+	select {
+	case waitErr := <-done:
+		logFile.Close() // flush before reading
+		fmt.Println()
+		if waitErr != nil {
+			fmt.Println("[!] Minecraft exited early with an error.")
+		} else {
+			fmt.Println("[!] Minecraft exited almost immediately.")
+		}
+		fmt.Println("[!] Last lines of the log:")
+		fmt.Println(strings.Repeat("-", 60))
+		printLogTail(filepath.Join(mcDir, "mctui_latest.log"), 25)
+		fmt.Println(strings.Repeat("-", 60))
+	
+	case <-time.After(8 * time.Second):
+		fmt.Println("   Looks stable. Enjoy!")
 	}
 }
 
