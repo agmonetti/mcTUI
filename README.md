@@ -26,6 +26,13 @@ git clone [https://github.com/agmonetti/mcTUI.git](https://github.com/agmonetti/
 * **Secure LAN Multiplayer:** Generates dynamic v4 UUIDs in each session to avoid "duplicate name" conflicts on local servers.
 * **XDG Persistence:** Saves your configuration (username, modloader state, and last played version) following Linux and Windows OS standards.
 * **Legitimacy First:** Verifies existing official Minecraft installations for proprietary binaries (`client.jar`) before taking action, acting as a local utility rather than a direct distributor.
+* **Smart Java Detection:** Automatically detects the Java version required
+  by each Minecraft version and locates a compatible JRE on your system
+  (PATH, common install directories, or IDE-managed JDKs), even if it's not
+  your system default.
+* **Live Roadmap:** The "Future Changes" panel fetches its content from this
+  repository, so you always see the latest plans without updating mcTUI.
+
 
 ## Requirements
 

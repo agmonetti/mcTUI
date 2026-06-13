@@ -1,7 +1,10 @@
 {
   "changes": [
-    "• Microsoft Auth",
-	"• Implement dynamic parsing of mainClass and minecraftArguments to support Legacy versions (<= 1.12).",
-	"• Automatic download and mapping of specific JREs per version."
+    "• Automatic Java version detection & selection",
+    "• Multi-JRE support (Linux, macOS, Windows + IDE installs)",
+    "• Remote roadmap (this panel updates without reinstalling)",
+    "• Forge / NeoForge modloader support (planned)",
+    "• Custom JVM arguments (planned)",
+    "• Microsoft Auth (planned)"
   ]
 }

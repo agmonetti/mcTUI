@@ -337,6 +337,11 @@ func (m model) Init() tea.Cmd {
 	return textinput.Blink
 }
 
+// menuOptionsCount must match len(menuOptions) in View(). Centralized here
+// so Update()'s cursor bounds check doesn't drift from the menu's actual
+// length if options are added/removed.
+const menuOptionsCount = 5
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
@@ -360,7 +365,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "down", "j":
-			if m.state == menuScreen && m.cursorMenu < 4 {
+			if m.state == menuScreen && m.cursorMenu < menuOptionsCount-1 {
 				m.cursorMenu++
 			} else if m.state == versionsScreen && m.cursorVersions < len(m.versions)-1 {
 				m.cursorVersions++
@@ -557,7 +562,14 @@ func (m model) View() string {
 	}
 
 	separator := lipgloss.NewStyle().Foreground(colorDark).Render(strings.Repeat("─", 120))
-	statusPart := lipgloss.NewStyle().Foreground(colorGreen).Render("● Ready")
+
+	var statusPart string
+	if installationReady(m.versionSelect, m.modloader) {
+		statusPart = lipgloss.NewStyle().Foreground(colorGreen).Render("● Ready")
+	} else {
+		statusPart = lipgloss.NewStyle().Foreground(colorRed).Render("● Needs setup")
+	}
+
 	userPart := lipgloss.NewStyle().Foreground(colorGray).Render(fmt.Sprintf("[%s - %s]", m.username, m.versionSelect))
 	controlsPart := lipgloss.NewStyle().Foreground(colorDark).Render(controls)
 
