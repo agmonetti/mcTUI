@@ -9,9 +9,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
-	"strconv"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -230,6 +230,26 @@ func clientJarExists(version string) bool {
 	return err == nil && info.Size() > 0
 }
 
+// requiredJavaVersion reads the cached version.json for a given Minecraft
+// version (if present) and returns its javaVersion.majorVersion, or 0 if
+// the file doesn't exist, can't be parsed, or doesn't specify one.
+func requiredJavaVersion(version string) int {
+	path := filepath.Join(getMinecraftDir(), "versions", version, "version.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+	var v struct {
+		JavaVersion struct {
+			MajorVersion int `json:"majorVersion"`
+		} `json:"javaVersion"`
+	}
+	if json.Unmarshal(data, &v) != nil {
+		return 0
+	}
+	return v.JavaVersion.MajorVersion
+}
+
 // fabricProfilePath returns where we cache the resolved Fabric launch profile
 // (mainClass + libraries) for a given Minecraft version, so that a previously
 // launched Fabric setup can be detected without hitting the network again.
@@ -279,11 +299,12 @@ type model struct {
 	input textinput.Model
 	play  bool
 
-	width  int
-	height int
+	width     int
+	height    int
+	javaMajor int // major version of the default "java" in PATH; 0 = not found
 }
 
-func initialModel(versions []string, cfg ConfigData, roadmap []string) model {
+func initialModel(versions []string, cfg ConfigData, roadmap []string, javaMajor int) model {
 	ti := textinput.New()
 	ti.Placeholder = "Type your name..."
 	ti.Focus()
@@ -302,6 +323,7 @@ func initialModel(versions []string, cfg ConfigData, roadmap []string) model {
 		roadmap:       roadmap,
 		input:         ti,
 		play:          false,
+		javaMajor:     javaMajor,
 	}
 }
 
@@ -456,7 +478,15 @@ func (m model) View() string {
 		}
 
 		contentStr.WriteString("Auth     : Offline (LAN Mode)\n")
-		contentStr.WriteString(fmt.Sprintf("OS       : %s\n\n", lipgloss.NewStyle().Foreground(colorWhite).Render(osName)))
+		contentStr.WriteString(fmt.Sprintf("OS       : %s\n", lipgloss.NewStyle().Foreground(colorWhite).Render(osName)))
+
+		required := requiredJavaVersion(m.versionSelect)
+		javaLine := formatJavaInfo(m.javaMajor, required)
+		javaStyle := lipgloss.NewStyle().Foreground(colorWhite)
+		if required > 0 && m.javaMajor < required {
+			javaStyle = lipgloss.NewStyle().Foreground(colorRed)
+		}
+		contentStr.WriteString(fmt.Sprintf("Java     : %s\n\n", javaStyle.Render(javaLine)))
 
 		if installationReady(m.versionSelect, m.modloader) {
 			contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Render("● Ready (offline-capable)"))
@@ -544,9 +574,10 @@ func (m model) View() string {
 func main() {
 	validReleases := fetchReleases()
 	cfg := loadConfig()
+	javaMajor := checkJavaVersionAt("java")
 	roadmap := loadRoadmap()
 
-	p := tea.NewProgram(initialModel(validReleases, cfg, roadmap), tea.WithAltScreen())
+	p := tea.NewProgram(initialModel(validReleases, cfg, roadmap, javaMajor), tea.WithAltScreen())
 
 	finalModel, err := p.Run()
 	if err != nil {
@@ -557,6 +588,142 @@ func main() {
 	if m, ok := finalModel.(model); ok && m.play {
 		launchGame(m.username, m.versionSelect, m.modloader)
 	}
+}
+
+// formatJavaInfo builds the "Java : ..." line for Active Session,
+// cross-checking the installed default against the selected version's
+// requirement when known.
+func formatJavaInfo(installedMajor int, requiredMajor int) string {
+	if installedMajor == 0 {
+		return "not found"
+	}
+	if requiredMajor == 0 {
+		return fmt.Sprintf("%d (default)", installedMajor)
+	}
+	if installedMajor >= requiredMajor {
+		return fmt.Sprintf("%d (default, OK)", installedMajor)
+	}
+	return fmt.Sprintf("%d (default) — needs %d+ ⚠", installedMajor, requiredMajor)
+}
+
+// javaCandidate represents a discovered Java installation.
+type javaCandidate struct {
+	path  string // path to the "java" binary
+	major int    // detected major version
+}
+
+// findJavaBinary returns the path to a "java" binary that satisfies
+// requiredMajor (0 = no requirement, any java works), preferring the
+// PATH default if it already qualifies. If no installed JRE satisfies
+// the requirement, it returns the PATH default anyway (so the caller can
+// fail with a clear message) along with ok=false.
+func findJavaBinary(requiredMajor int) (javaCandidate, bool) {
+	pathJava := javaCandidate{path: "java", major: checkJavaVersionAt("java")}
+
+	if requiredMajor == 0 || (pathJava.major > 0 && pathJava.major >= requiredMajor) {
+		return pathJava, true
+	}
+
+	// PATH default doesn't qualify (or is unknown) - scan known
+	// installation directories for an alternative.
+	for _, candidate := range scanJavaInstallations() {
+		if candidate.major >= requiredMajor {
+			return candidate, true
+		}
+	}
+
+	// Nothing found that qualifies; return the PATH default so the
+	// caller can report a clear "needs Java X" error.
+	return pathJava, false
+}
+
+// checkJavaVersionAt runs "<binaryPath> -version" and parses the major
+// version (handling both old "1.8.0_xxx" and new "21.0.x" / "25" formats).
+// Returns 0 if it couldn't be determined (e.g. binary not found).
+func checkJavaVersionAt(binaryPath string) int {
+	cmd := exec.Command(binaryPath, "-version")
+	var out strings.Builder
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	if err := cmd.Run(); err != nil {
+		return 0
+	}
+
+	output := out.String()
+	start := strings.Index(output, "\"")
+	if start == -1 {
+		return 0
+	}
+	end := strings.Index(output[start+1:], "\"")
+	if end == -1 {
+		return 0
+	}
+	versionStr := output[start+1 : start+1+end]
+
+	parts := strings.Split(versionStr, ".")
+	if len(parts) == 0 {
+		return 0
+	}
+	major, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0
+	}
+	if major == 1 && len(parts) > 1 {
+		if minor, err := strconv.Atoi(parts[1]); err == nil {
+			return minor
+		}
+	}
+	return major
+}
+
+// scanJavaInstallations looks in OS-conventional locations for installed
+// JREs/JDKs and returns them sorted by major version, descending.
+func scanJavaInstallations() []javaCandidate {
+	var dirs []string
+
+	switch runtime.GOOS {
+	case "linux":
+		dirs = globDirs("/usr/lib/jvm/*")
+	case "darwin":
+		dirs = globDirs("/Library/Java/JavaVirtualMachines/*/Contents/Home")
+	case "windows":
+		dirs = globDirs(`C:\Program Files\Java\*`)
+		dirs = append(dirs, globDirs(`C:\Program Files\Eclipse Adoptium\*`)...)
+	}
+
+	var candidates []javaCandidate
+	for _, dir := range dirs {
+		binName := "java"
+		if runtime.GOOS == "windows" {
+			binName = "java.exe"
+		}
+		binPath := filepath.Join(dir, "bin", binName)
+		if _, err := os.Stat(binPath); err != nil {
+			continue
+		}
+		major := checkJavaVersionAt(binPath)
+		if major > 0 {
+			candidates = append(candidates, javaCandidate{path: binPath, major: major})
+		}
+	}
+
+	// Sort descending by major version (simple insertion sort, small N).
+	for i := 1; i < len(candidates); i++ {
+		for j := i; j > 0 && candidates[j-1].major < candidates[j].major; j-- {
+			candidates[j-1], candidates[j] = candidates[j], candidates[j-1]
+		}
+	}
+	return candidates
+}
+
+// globDirs is a small wrapper around filepath.Glob that returns an empty
+// slice instead of an error.
+func globDirs(pattern string) []string {
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return nil
+	}
+	return matches
 }
 
 // --- THE GAME LAUNCHING ENGINE ---
@@ -613,7 +780,6 @@ func launchGame(username string, targetVersion string, modloader string) {
 			} `json:"downloads"`
 		} `json:"libraries"`
 	}
-
 
 	mcDir := getMinecraftDir()
 	clientPath := filepath.Join(mcDir, "versions", targetVersion, "client.jar")
@@ -849,21 +1015,26 @@ func launchGame(username string, targetVersion string, modloader string) {
 			assetIndexID = strings.TrimSuffix(base, ".json")
 		}
 	}
+
+	javaBinary := "java"
 	if haveVersionData && data.JavaVersion.MajorVersion > 0 {
-		installedJava := checkJavaVersion()
-		if installedJava > 0 && installedJava < data.JavaVersion.MajorVersion {
+		candidate, ok := findJavaBinary(data.JavaVersion.MajorVersion)
+		if !ok {
 			fmt.Println()
-			fmt.Printf("[!] This version requires Java %d or newer, but found Java %d.\n", data.JavaVersion.MajorVersion, installedJava)
-			fmt.Println("[!] Install a newer JRE and make sure it's first in your PATH.")
-			fmt.Println("[!] On Arch: pacman -S jdk-openjdk (or jreXX-openjdk for the specific version)")
+			fmt.Printf("[!] This version requires Java %d or newer, but no compatible\n", data.JavaVersion.MajorVersion)
+			fmt.Println("[!] JRE was found (checked PATH and common install locations).")
+			fmt.Println("[!] Install a newer JRE, e.g.:")
+			fmt.Println("[!]   Arch:    pacman -S jdk-openjdk")
+			fmt.Println("[!]   Debian:  apt install openjdk-21-jre  (or newer)")
 			return
 		}
-		if installedJava == 0 {
-			fmt.Println("[!] Warning: could not determine installed Java version. Proceeding anyway...")
+		javaBinary = candidate.path
+		if candidate.path != "java" {
+			fmt.Printf("   Using Java %d from %s (system default did not meet requirement)\n", candidate.major, candidate.path)
 		}
 	}
 
-	cmd := exec.Command("java",
+	cmd := exec.Command(javaBinary,
 		"-Xmx2G",
 		"-cp", finalClasspath,
 		mainClass,
@@ -900,55 +1071,6 @@ type fabricProfile struct {
 	MainClass        string
 	ClasspathEntries []string
 }
-
-
-// checkJavaVersion runs "java -version" and parses the major version number
-// (handling both old "1.8.0_xxx" and new "21.0.x" / "25" formats). It
-// returns the detected major version, or 0 if it couldn't be determined
-// (e.g. java is not installed) — callers should treat 0 as "unknown,
-// proceed anyway" rather than blocking the launch.
-func checkJavaVersion() int {
-	cmd := exec.Command("java", "-version")
-	var out strings.Builder
-	cmd.Stdout = &out
-	cmd.Stderr = &out // java -version prints to stderr
-	if err := cmd.Run(); err != nil {
-		return 0
-	}
-
-	output := out.String()
-	// Look for a quoted version string, e.g. "21.0.3" or "1.8.0_392"
-	start := strings.Index(output, "\"")
-	if start == -1 {
-		return 0
-	}
-	end := strings.Index(output[start+1:], "\"")
-	if end == -1 {
-		return 0
-	}
-	versionStr := output[start+1 : start+1+end]
-
-	parts := strings.Split(versionStr, ".")
-	if len(parts) == 0 {
-		return 0
-	}
-
-	major, err := strconv.Atoi(parts[0])
-	if err != nil {
-		return 0
-	}
-
-	// Old versioning scheme: "1.8" means Java 8, "1.7" means Java 7, etc.
-	if major == 1 && len(parts) > 1 {
-		minor, err := strconv.Atoi(parts[1])
-		if err == nil {
-			return minor
-		}
-	}
-
-	return major
-}
-
 
 // resolveFabricProfile tries to obtain the Fabric launch profile for the
 // given Minecraft version. It first checks for a cached profile on disk
