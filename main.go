@@ -128,13 +128,14 @@ type ConfigData struct {
 	Username  string `json:"username"`
 	Version   string `json:"version"`
 	Modloader string `json:"modloader"`
+	MemoryMB  int    `json:"memory_mb"`
 }
 
 func loadConfig() ConfigData {
 	path := getConfigPath()
 	data, err := os.ReadFile(path)
 
-	defaultConfig := ConfigData{Username: "OfflinePlayer", Version: "1.20.4", Modloader: "Vanilla"}
+	defaultConfig := ConfigData{Username: "Player", Version: "1.20.4", Modloader: "Vanilla",MemoryMB: 2048}
 	if err != nil {
 		return defaultConfig
 	}
@@ -151,6 +152,11 @@ func loadConfig() ConfigData {
 	if config.Modloader == "" {
 		config.Modloader = defaultConfig.Modloader
 	}
+	
+	if config.MemoryMB == 0 {
+		config.MemoryMB = defaultConfig.MemoryMB
+	}
+	
 	return config
 }
 
@@ -298,6 +304,7 @@ type model struct {
 
 	username      string
 	versionSelect string
+	memoryMB 	  int
 	modloader     string
 	versions      []string
 	roadmap       []string
@@ -325,6 +332,7 @@ func initialModel(versions []string, cfg ConfigData, roadmap []string, javaMajor
 		username:      cfg.Username,
 		versionSelect: cfg.Version,
 		modloader:     cfg.Modloader,
+		memoryMB:      cfg.MemoryMB,
 		versions:      versions,
 		roadmap:       roadmap,
 		input:         ti,
@@ -340,7 +348,7 @@ func (m model) Init() tea.Cmd {
 // menuOptionsCount must match len(menuOptions) in View(). Centralized here
 // so Update()'s cursor bounds check doesn't drift from the menu's actual
 // length if options are added/removed.
-const menuOptionsCount = 5
+const menuOptionsCount = 6
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
@@ -404,19 +412,33 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					} else {
 						m.modloader = "Vanilla"
 					}
-					saveConfig(ConfigData{Username: m.username, Version: m.versionSelect, Modloader: m.modloader})
+					saveConfig(ConfigData{Username: m.username, Version: m.versionSelect, Modloader: m.modloader, MemoryMB: m.memoryMB})
 				} else if m.cursorMenu == 4 {
+					// Cycle memory: 1024 -> 2048 -> 4096 -> 6144 -> 8192 -> 1024...
+					steps := []int{1024, 2048, 4096, 6144, 8192}
+					for i, v := range steps {
+						if v == m.memoryMB {
+							m.memoryMB = steps[(i+1)%len(steps)]
+							break
+						}
+					}
+					// If current value is not in steps (e.g., custom value), default to 2048
+					if m.memoryMB != 1024 && m.memoryMB != 2048 && m.memoryMB != 4096 && m.memoryMB != 6144 && m.memoryMB != 8192 {
+						m.memoryMB = 2048
+					}
+					saveConfig(ConfigData{Username: m.username, Version: m.versionSelect, Modloader: m.modloader, MemoryMB: m.memoryMB})
+				} else if m.cursorMenu == 5 {
 					return m, tea.Quit
 				}
 			} else if m.state == nameScreen {
 				if m.input.Value() != "" {
 					m.username = m.input.Value()
-					saveConfig(ConfigData{Username: m.username, Version: m.versionSelect, Modloader: m.modloader})
+					saveConfig(ConfigData{Username: m.username, Version: m.versionSelect, Modloader: m.modloader, MemoryMB: m.memoryMB})
 				}
 				m.state = menuScreen
 			} else if m.state == versionsScreen {
 				m.versionSelect = m.versions[m.cursorVersions]
-				saveConfig(ConfigData{Username: m.username, Version: m.versionSelect, Modloader: m.modloader})
+				saveConfig(ConfigData{Username: m.username, Version: m.versionSelect, Modloader: m.modloader, MemoryMB: m.memoryMB})
 				m.state = menuScreen
 			} else if m.state == confirmScreen {
 				m.play = true
@@ -454,6 +476,7 @@ func (m model) View() string {
 		"Change Name",
 		"Change Version",
 		fmt.Sprintf("Modloader: %s", lipgloss.NewStyle().Foreground(colorCyan).Render(m.modloader)),
+		fmt.Sprintf("Memory: %d MB", m.memoryMB),
 		"Quit",
 	}
 
@@ -469,40 +492,50 @@ func (m model) View() string {
 	contentStr.WriteString(lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render(" mcTUI Launcher") + "\n\n")
 
 	if m.state == menuScreen {
-		contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(" Active Session") + "\n\n")
-		contentStr.WriteString(fmt.Sprintf("User     : %s\n", lipgloss.NewStyle().Foreground(colorWhite).Render(m.username)))
-
-		verString := m.versionSelect
-		if m.modloader != "Vanilla" {
-			verString += fmt.Sprintf(" (%s)", m.modloader)
-		}
-		contentStr.WriteString(fmt.Sprintf("Version  : %s\n", lipgloss.NewStyle().Foreground(colorWhite).Render(verString)))
-
-		// FORMATTING THE OS NAME
-		osName := runtime.GOOS
-		if osName == "darwin" {
-			osName = "macOS"
-		} else if osName == "windows" {
-			osName = "Windows"
-		} else if osName == "linux" {
-			osName = "Linux"
-		}
-
-		contentStr.WriteString("Auth     : Offline (LAN Mode)\n")
-		contentStr.WriteString(fmt.Sprintf("OS       : %s\n", lipgloss.NewStyle().Foreground(colorWhite).Render(osName)))
-
-		required := requiredJavaVersion(m.versionSelect)
-		javaLine := formatJavaInfo(m.javaMajor, required)
-		javaStyle := lipgloss.NewStyle().Foreground(colorWhite)
-		if required > 0 && m.javaMajor < required {
-			javaStyle = lipgloss.NewStyle().Foreground(colorRed)
-		}
-		contentStr.WriteString(fmt.Sprintf("Java     : %s\n\n", javaStyle.Render(javaLine)))
-
-		if installationReady(m.versionSelect, m.modloader) {
-			contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Render("● Ready (offline-capable)"))
+		if m.cursorMenu == 4 {
+			contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(" Memory Configuration") + "\n\n")
+			contentStr.WriteString(fmt.Sprintf("Current Allocation : %s MB\n\n", lipgloss.NewStyle().Foreground(colorWhite).Render(fmt.Sprintf("%d", m.memoryMB))))
+			contentStr.WriteString("Recommended RAM:\n")
+			contentStr.WriteString("  Vanilla 1.20.x    →  1-2 GB (1024-2048 MB)\n")
+			contentStr.WriteString("  Fabric/light mods →  2-4 GB (2048-4096 MB)\n")
+			contentStr.WriteString("  Heavy modpacks    →  4-8 GB (4096-8192 MB)\n\n")
+			contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Press [Enter] to cycle values."))
 		} else {
-			contentStr.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("● Not installed — will need network"))
+			contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(" Active Session") + "\n\n")
+			contentStr.WriteString(fmt.Sprintf("User     : %s\n", lipgloss.NewStyle().Foreground(colorWhite).Render(m.username)))
+
+			verString := m.versionSelect
+			if m.modloader != "Vanilla" {
+				verString += fmt.Sprintf(" (%s)", m.modloader)
+			}
+			contentStr.WriteString(fmt.Sprintf("Version  : %s\n", lipgloss.NewStyle().Foreground(colorWhite).Render(verString)))
+
+			// FORMATTING THE OS NAME
+			osName := runtime.GOOS
+			if osName == "darwin" {
+				osName = "macOS"
+			} else if osName == "windows" {
+				osName = "Windows"
+			} else if osName == "linux" {
+				osName = "Linux"
+			}
+
+			contentStr.WriteString("Auth     : Offline (LAN Mode)\n")
+			contentStr.WriteString(fmt.Sprintf("OS       : %s\n", lipgloss.NewStyle().Foreground(colorWhite).Render(osName)))
+
+			required := requiredJavaVersion(m.versionSelect)
+			javaLine := formatJavaInfo(m.javaMajor, required)
+			javaStyle := lipgloss.NewStyle().Foreground(colorWhite)
+			if required > 0 && m.javaMajor < required {
+				javaStyle = lipgloss.NewStyle().Foreground(colorRed)
+			}
+			contentStr.WriteString(fmt.Sprintf("Java     : %s\n\n", javaStyle.Render(javaLine)))
+
+			if installationReady(m.versionSelect, m.modloader) {
+				contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Render("● Ready (offline-capable)"))
+			} else {
+				contentStr.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("● Not installed — will need network"))
+			}
 		}
 
 	} else if m.state == nameScreen {
@@ -604,7 +637,7 @@ func main() {
 	}
 
 	if m, ok := finalModel.(model); ok && m.play {
-		launchGame(m.username, m.versionSelect, m.modloader)
+		launchGame(m.username, m.versionSelect, m.modloader, m.memoryMB)
 	}
 }
 
@@ -834,7 +867,7 @@ func printLogTail(path string, n int) {
 // entirely and launch directly. If the manifest fetch fails BUT the local
 // client.jar + asset index already exist, we fall back to using the cached
 // asset index instead of aborting.
-func launchGame(username string, targetVersion string, modloader string) {
+func launchGame(username string, targetVersion string, modloader string, memoryMB int) {
 	fmt.Print("\033[H\033[2J")
 	fmt.Println(strings.Repeat("=", 75))
 	fmt.Println(" MODE: Offline / LAN")
@@ -1130,7 +1163,7 @@ func launchGame(username string, targetVersion string, modloader string) {
 	}
 
 	cmd := exec.Command(javaBinary,
-		"-Xmx2G",
+		fmt.Sprintf("-Xmx%dM", memoryMB),
 		"-cp", finalClasspath,
 		mainClass,
 		"--username", username,
