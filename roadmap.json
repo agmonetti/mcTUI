@@ -1,0 +1,7 @@
+{
+  "changes": [
+    "• Microsoft Auth",
+	"• Implement dynamic parsing of mainClass and minecraftArguments to support Legacy versions (<= 1.12).",
+	"• Automatic download and mapping of specific JREs per version."
+  ]
+}
