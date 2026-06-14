@@ -1,6 +1,10 @@
 package main
 
 import (
+	"bufio"
+	"compress/gzip"
+	"crypto/sha1"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -294,6 +298,7 @@ const (
 	menuScreen screenState = iota
 	nameScreen
 	versionsScreen
+	worldsScreen
 	confirmScreen
 )
 
@@ -301,12 +306,14 @@ type model struct {
 	state          screenState
 	cursorMenu     int
 	cursorVersions int
+	cursorWorlds   int
 
 	username      string
 	versionSelect string
 	memoryMB 	  int
 	modloader     string
 	versions      []string
+	worlds        []worldInfo
 	roadmap       []string
 
 	input textinput.Model
@@ -348,7 +355,7 @@ func (m model) Init() tea.Cmd {
 // menuOptionsCount must match len(menuOptions) in View(). Centralized here
 // so Update()'s cursor bounds check doesn't drift from the menu's actual
 // length if options are added/removed.
-const menuOptionsCount = 6
+const menuOptionsCount = 7
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
@@ -370,6 +377,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursorMenu--
 			} else if m.state == versionsScreen && m.cursorVersions > 0 {
 				m.cursorVersions--
+			} else if m.state == worldsScreen && m.cursorWorlds > 0 {
+				m.cursorWorlds--
 			}
 
 		case "down", "j":
@@ -377,6 +386,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursorMenu++
 			} else if m.state == versionsScreen && m.cursorVersions < len(m.versions)-1 {
 				m.cursorVersions++
+			} else if m.state == worldsScreen && m.cursorWorlds < len(m.worlds)-1 {
+				m.cursorWorlds++
 			}
 
 		case "enter":
@@ -406,6 +417,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 				} else if m.cursorMenu == 3 {
+					m.worlds = listWorlds()
+					m.state = worldsScreen
+					m.cursorWorlds = 0
+				} else if m.cursorMenu == 4 {
 					// Toggle Modloader (Vanilla <-> Fabric)
 					if m.modloader == "Vanilla" {
 						m.modloader = "Fabric"
@@ -413,7 +428,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.modloader = "Vanilla"
 					}
 					saveConfig(ConfigData{Username: m.username, Version: m.versionSelect, Modloader: m.modloader, MemoryMB: m.memoryMB})
-				} else if m.cursorMenu == 4 {
+				} else if m.cursorMenu == 5 {
 					// Cycle memory: 1024 -> 2048 -> 4096 -> 6144 -> 8192 -> 1024...
 					steps := []int{1024, 2048, 4096, 6144, 8192}
 					for i, v := range steps {
@@ -427,7 +442,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.memoryMB = 2048
 					}
 					saveConfig(ConfigData{Username: m.username, Version: m.versionSelect, Modloader: m.modloader, MemoryMB: m.memoryMB})
-				} else if m.cursorMenu == 5 {
+				} else if m.cursorMenu == 6 {
 					return m, tea.Quit
 				}
 			} else if m.state == nameScreen {
@@ -436,11 +451,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					saveConfig(ConfigData{Username: m.username, Version: m.versionSelect, Modloader: m.modloader, MemoryMB: m.memoryMB})
 				}
 				m.state = menuScreen
-			} else if m.state == versionsScreen {
-				m.versionSelect = m.versions[m.cursorVersions]
-				saveConfig(ConfigData{Username: m.username, Version: m.versionSelect, Modloader: m.modloader, MemoryMB: m.memoryMB})
-				m.state = menuScreen
-			} else if m.state == confirmScreen {
+				} else if m.state == versionsScreen {
+					m.versionSelect = m.versions[m.cursorVersions]
+					saveConfig(ConfigData{Username: m.username, Version: m.versionSelect, Modloader: m.modloader, MemoryMB: m.memoryMB})
+					m.state = menuScreen
+				} else if m.state == worldsScreen {
+					if len(m.worlds) > 0 {
+						target := m.worlds[m.cursorWorlds].Version
+						// Find if the exact version exists in our stable list
+						found := false
+						for _, v := range m.versions {
+							if v == target {
+								found = true
+								break
+							}
+						}
+						if found {
+							m.versionSelect = target
+							saveConfig(ConfigData{Username: m.username, Version: m.versionSelect, Modloader: m.modloader, MemoryMB: m.memoryMB})
+						}
+					}
+					m.state = menuScreen
+				} else if m.state == confirmScreen {
 				m.play = true
 				return m, tea.Quit
 			}
@@ -452,7 +484,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "n", "N", "esc":
-			if m.state == nameScreen || m.state == versionsScreen || m.state == confirmScreen {
+			if m.state == nameScreen || m.state == versionsScreen || m.state == worldsScreen || m.state == confirmScreen {
 				m.state = menuScreen
 			}
 		}
@@ -475,6 +507,7 @@ func (m model) View() string {
 		fmt.Sprintf("Play (%s)", m.versionSelect),
 		"Change Name",
 		"Change Version",
+		"Worlds",
 		fmt.Sprintf("Modloader: %s", lipgloss.NewStyle().Foreground(colorCyan).Render(m.modloader)),
 		fmt.Sprintf("Memory: %d MB", m.memoryMB),
 		"Quit",
@@ -492,7 +525,7 @@ func (m model) View() string {
 	contentStr.WriteString(lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render(" mcTUI Launcher") + "\n\n")
 
 	if m.state == menuScreen {
-		if m.cursorMenu == 4 {
+		if m.cursorMenu == 5 {
 			contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(" Memory Configuration") + "\n\n")
 			contentStr.WriteString(fmt.Sprintf("Current Allocation : %s MB\n\n", lipgloss.NewStyle().Foreground(colorWhite).Render(fmt.Sprintf("%d", m.memoryMB))))
 			contentStr.WriteString("Recommended RAM:\n")
@@ -500,6 +533,13 @@ func (m model) View() string {
 			contentStr.WriteString("  Fabric/light mods →  2-4 GB (2048-4096 MB)\n")
 			contentStr.WriteString("  Heavy modpacks    →  4-8 GB (4096-8192 MB)\n\n")
 			contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Press [Enter] to cycle values."))
+		} else if m.cursorMenu == 3 {
+			contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(" Local Worlds") + "\n\n")
+			contentStr.WriteString("View and manage your saved singleplayer worlds.\n\n")
+			contentStr.WriteString("Selecting a world will automatically change\n")
+			contentStr.WriteString("your launcher version to match the world's\n")
+			contentStr.WriteString("last played version to prevent corruption.\n\n")
+			contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Press [Enter] to browse saves."))
 		} else {
 			contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(" Active Session") + "\n\n")
 			contentStr.WriteString(fmt.Sprintf("User     : %s\n", lipgloss.NewStyle().Foreground(colorWhite).Render(m.username)))
@@ -565,6 +605,40 @@ func (m model) View() string {
 				contentStr.WriteString(fmt.Sprintf("    %s", m.versions[i]) + "\n")
 			}
 		}
+	} else if m.state == worldsScreen {
+		contentStr.WriteString("Select a world to load:\n\n")
+
+		if len(m.worlds) == 0 {
+			contentStr.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("No worlds found in ~/.minecraft/saves"))
+		} else {
+			start := m.cursorWorlds - 3
+			if start < 0 {
+				start = 0
+			}
+			end := start + 6
+			if end > len(m.worlds) {
+				end = len(m.worlds)
+				start = end - 6
+				if start < 0 {
+					start = 0
+				}
+			}
+
+			for i := start; i < end; i++ {
+				w := m.worlds[i]
+				
+				verStyle := lipgloss.NewStyle().Foreground(colorRed)
+				if w.Version == m.versionSelect {
+					verStyle = lipgloss.NewStyle().Foreground(colorGreen)
+				}
+
+				if i == m.cursorWorlds {
+					contentStr.WriteString(cursorStyle.Render("  ▶ "+w.LevelName+" ") + verStyle.Render("("+w.Version+")") + "\n")
+				} else {
+					contentStr.WriteString(itemStyle.Render("    "+w.LevelName+" ") + verStyle.Render("("+w.Version+")") + "\n")
+				}
+			}
+		}
 	} else if m.state == confirmScreen {
 		contentStr.WriteString(lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("⚠ MISSING FILES") + "\n\n")
 
@@ -588,9 +662,11 @@ func (m model) View() string {
 	controls := " [↑/↓] Navigate  [Enter] Select  [q] Quit"
 	if m.state == nameScreen {
 		controls = " [Enter] Save  [Esc] Cancel"
-	} else if m.state == versionsScreen {
-		controls = " [↑/↓] Move list  [Enter] Choose  [Esc] Back"
-	} else if m.state == confirmScreen {
+		} else if m.state == versionsScreen {
+			controls = " [↑/↓] Move list  [Enter] Choose  [Esc] Back"
+		} else if m.state == worldsScreen {
+			controls = " [↑/↓] Move list  [Enter] Select  [Esc] Back"
+		} else if m.state == confirmScreen {
 		controls = " [y] Accept  [n] Cancel"
 	}
 
@@ -897,6 +973,7 @@ func launchGame(username string, targetVersion string, modloader string, memoryM
 		Downloads struct {
 			Client struct {
 				URL string `json:"url"`
+				SHA1 string `json:"sha1"`
 			} `json:"client"`
 		} `json:"downloads"`
 		Libraries []struct {
@@ -904,6 +981,7 @@ func launchGame(username string, targetVersion string, modloader string, memoryM
 				Artifact struct {
 					Path string `json:"path"`
 					URL  string `json:"url"`
+					SHA1 string `json:"sha1"`
 				} `json:"artifact"`
 			} `json:"downloads"`
 		} `json:"libraries"`
@@ -982,29 +1060,6 @@ func launchGame(username string, targetVersion string, modloader string, memoryM
 		return
 	}
 
-	// Download client.jar if missing and we have a URL for it.
-	if !haveClient {
-		if !haveVersionData || data.Downloads.Client.URL == "" {
-			fmt.Println("\n[!] Cannot download client.jar: no version data available.")
-			return
-		}
-		os.MkdirAll(filepath.Dir(clientPath), 0755)
-		respClient, cErr := http.Get(data.Downloads.Client.URL)
-		if cErr != nil || respClient == nil {
-			fmt.Println("\n[!] Error downloading client.jar:", cErr)
-			return
-		}
-		clientFile, fErr := os.Create(clientPath)
-		if fErr != nil {
-			fmt.Println("\n[!] Error creating client.jar file:", fErr)
-			respClient.Body.Close()
-			return
-		}
-		io.Copy(clientFile, respClient.Body)
-		clientFile.Close()
-		respClient.Body.Close()
-	}
-
 	var classpathEntries []string
 	librariesPath := filepath.Join(mcDir, "libraries")
 	var wg sync.WaitGroup
@@ -1014,7 +1069,16 @@ func launchGame(username string, targetVersion string, modloader string, memoryM
 	// and assets (each phase uses its own buffered semaphore below).
 	const maxConcurrentDownloads = 20
 
-	download := func(url, destination string) {
+	// download fetches url into destination. If expectedSHA1 is non-empty,
+	// the downloaded content is verified against it; on mismatch, the
+	// partial/corrupt file is removed so a future run will retry instead of
+	// treating it as already-installed.
+	//
+	// If destination already exists with size > 0, download skips the
+	// fetch entirely (existing behavior) — hash verification only applies
+	// to freshly downloaded content, to avoid re-hashing potentially large
+	// files (assets, client.jar) on every launch.
+	download := func(url, destination, expectedSHA1 string) {
 		defer wg.Done()
 		if url == "" {
 			return
@@ -1028,12 +1092,43 @@ func launchGame(username string, targetVersion string, modloader string, memoryM
 			return
 		}
 		defer r.Body.Close()
+
 		f, err := os.Create(destination)
 		if err != nil {
 			return
 		}
-		defer f.Close()
-		io.Copy(f, r.Body)
+
+		if expectedSHA1 == "" {
+			io.Copy(f, r.Body)
+			f.Close()
+			return
+		}
+
+		// Compute the hash while writing, so we don't need a second pass.
+		h := sha1.New()
+		_, copyErr := io.Copy(io.MultiWriter(f, h), r.Body)
+		f.Close()
+
+		if copyErr != nil {
+			os.Remove(destination)
+			return
+		}
+
+		if fmt.Sprintf("%x", h.Sum(nil)) != expectedSHA1 {
+			fmt.Printf("   [!] Checksum mismatch for %s, removing.\n", filepath.Base(destination))
+			os.Remove(destination)
+		}
+	}
+
+	// Download client.jar if missing and we have a URL for it.
+	if !haveClient {
+		if !haveVersionData || data.Downloads.Client.URL == "" {
+			fmt.Println("\n[!] Cannot download client.jar: no version data available.")
+			return
+		}
+		wg.Add(1)
+		download(data.Downloads.Client.URL, clientPath, data.Downloads.Client.SHA1)
+		wg.Wait() // wait specifically for the client jar before proceeding
 	}
 
 	if haveVersionData {
@@ -1046,10 +1141,10 @@ func launchGame(username string, targetVersion string, modloader string, memoryM
 				classpathEntries = append(classpathEntries, fullPath)
 				wg.Add(1)
 				libSem <- struct{}{}
-				go func(u, d string) {
+				go func(u, d, sha1 string) {
 					defer func() { <-libSem }()
-					download(u, d)
-				}(url, fullPath)
+					download(u, d, sha1)
+				}(url, fullPath, lib.Downloads.Artifact.SHA1)
 			}
 		}
 	} else {
@@ -1118,10 +1213,10 @@ func launchGame(username string, targetVersion string, modloader string, memoryM
 
 			wg.Add(1)
 			assetSem <- struct{}{}
-			go func(u, d string) {
+			go func(u, d, h string) {
 				defer func() { <-assetSem }()
-				download(u, d)
-			}(url, dest)
+				download(u, d, h)
+			}(url, dest, obj.Hash)
 		}
 	}
 
@@ -1212,9 +1307,12 @@ func launchGame(username string, targetVersion string, modloader string, memoryM
 		fmt.Println(strings.Repeat("-", 60))
 		printLogTail(filepath.Join(mcDir, "mctui_latest.log"), 25)
 		fmt.Println(strings.Repeat("-", 60))
-	
+
 	case <-time.After(8 * time.Second):
-		fmt.Println("   Looks stable. Enjoy!")
+		fmt.Println()
+		fmt.Println("   Minecraft is running.")
+		fmt.Println("   You can close this window — the game will keep running")
+		fmt.Println("   in the background as a separate process.")
 	}
 }
 
@@ -1237,7 +1335,7 @@ type fabricProfile struct {
 //
 // FIX (#5): library downloads triggered here are capped via a semaphore,
 // same as vanilla libraries and assets.
-func resolveFabricProfile(targetVersion, mcDir, librariesPath string, wg *sync.WaitGroup, download func(url, dest string), maxConcurrent int) (fabricProfile, bool) {
+func resolveFabricProfile(targetVersion, mcDir, librariesPath string, wg *sync.WaitGroup, download func(url, dest, expectedSHA1 string), maxConcurrent int) (fabricProfile, bool) {
 	cachePath := fabricProfilePath(targetVersion)
 
 	// Try cached profile first (enables fully offline Fabric launches).
@@ -1321,7 +1419,7 @@ func resolveFabricProfile(targetVersion, mcDir, librariesPath string, wg *sync.W
 		fabricSem <- struct{}{}
 		go func(u, d string) {
 			defer func() { <-fabricSem }()
-			download(u, d)
+			download(u, d, "")
 		}(fullURL, fullDest)
 	}
 
@@ -1332,4 +1430,252 @@ func resolveFabricProfile(targetVersion, mcDir, librariesPath string, wg *sync.W
 	}
 
 	return result, true
+}
+
+// --- WORLD LISTING (NBT level.dat parsing) ---
+
+type worldInfo struct {
+	FolderName string
+	LevelName  string
+	Version    string
+	LastPlayed int64
+}
+
+func listWorlds() []worldInfo {
+	savesDir := filepath.Join(getMinecraftDir(), "saves")
+	entries, err := os.ReadDir(savesDir)
+	if err != nil {
+		return nil
+	}
+
+	var worlds []worldInfo
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		levelPath := filepath.Join(savesDir, entry.Name(), "level.dat")
+		info, ok := parseLevelDat(levelPath)
+		if !ok {
+			continue
+		}
+		info.FolderName = entry.Name()
+		worlds = append(worlds, info)
+	}
+
+	for i := 1; i < len(worlds); i++ {
+		for j := i; j > 0 && worlds[j-1].LastPlayed < worlds[j].LastPlayed; j-- {
+			worlds[j-1], worlds[j] = worlds[j], worlds[j-1]
+		}
+	}
+	return worlds
+}
+
+const (
+	nbtEnd       = 0
+	nbtByte      = 1
+	nbtShort     = 2
+	nbtInt       = 3
+	nbtLong      = 4
+	nbtFloat     = 5
+	nbtDouble    = 6
+	nbtByteArray = 7
+	nbtString    = 8
+	nbtList      = 9
+	nbtCompound  = 10
+	nbtIntArray  = 11
+	nbtLongArray = 12
+)
+
+func parseLevelDat(path string) (worldInfo, bool) {
+	f, err := os.Open(path)
+	if err != nil {
+		return worldInfo{}, false
+	}
+	defer f.Close()
+
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return worldInfo{}, false
+	}
+	defer gz.Close()
+
+	r := bufio.NewReader(gz)
+
+	rootType, err := r.ReadByte()
+	if err != nil || rootType != nbtCompound {
+		return worldInfo{}, false
+	}
+	if _, ok := readNBTString(r); !ok {
+		return worldInfo{}, false
+	}
+
+	info := worldInfo{}
+	walkCompound(r, []string{}, &info)
+	if info.LevelName == "" {
+		return worldInfo{}, false
+	}
+	return info, true
+}
+
+func walkCompound(r *bufio.Reader, path []string, info *worldInfo) {
+	for {
+		tagType, err := r.ReadByte()
+		if err != nil || tagType == nbtEnd {
+			return
+		}
+		name, ok := readNBTString(r)
+		if !ok {
+			return
+		}
+
+		switch tagType {
+		case nbtCompound:
+			if len(path) == 0 && name == "Data" {
+				walkCompound(r, []string{"Data"}, info)
+			} else if isPath(path, "Data") && name == "Version" {
+				walkCompound(r, []string{"Data", "Version"}, info)
+			} else {
+				walkCompound(r, nil, info) // unrelated compound, don't track path
+			}
+
+		case nbtString:
+			s, ok := readNBTString(r)
+			if !ok {
+				return
+			}
+			if isPath(path, "Data") && name == "LevelName" {
+				info.LevelName = s
+			} else if isPath(path, "Data", "Version") && name == "Name" {
+				info.Version = s
+			}
+
+		case nbtLong:
+			val, ok := readNBTLong(r)
+			if !ok {
+				return
+			}
+			if isPath(path, "Data") && name == "LastPlayed" {
+				info.LastPlayed = val
+			}
+
+		default:
+			if !skipPayload(r, tagType) {
+				return
+			}
+		}
+	}
+}
+
+func isPath(path []string, want ...string) bool {
+	if len(path) != len(want) {
+		return false
+	}
+	for i := range path {
+		if path[i] != want[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func readNBTString(r *bufio.Reader) (string, bool) {
+	var lenBuf [2]byte
+	if _, err := io.ReadFull(r, lenBuf[:]); err != nil {
+		return "", false
+	}
+	n := int(lenBuf[0])<<8 | int(lenBuf[1])
+	buf := make([]byte, n)
+	if _, err := io.ReadFull(r, buf); err != nil {
+		return "", false
+	}
+	return string(buf), true
+}
+
+func readNBTLong(r *bufio.Reader) (int64, bool) {
+	var buf [8]byte
+	if _, err := io.ReadFull(r, buf[:]); err != nil {
+		return 0, false
+	}
+	return int64(binary.BigEndian.Uint64(buf[:])), true
+}
+
+func skipPayload(r *bufio.Reader, tagType byte) bool {
+	switch tagType {
+	case nbtByte:
+		_, err := r.ReadByte()
+		return err == nil
+	case nbtShort:
+		_, err := r.Discard(2)
+		return err == nil
+	case nbtInt, nbtFloat:
+		_, err := r.Discard(4)
+		return err == nil
+	case nbtLong, nbtDouble:
+		_, err := r.Discard(8)
+		return err == nil
+	case nbtByteArray:
+		n, ok := readNBTInt(r)
+		if !ok {
+			return false
+		}
+		_, err := r.Discard(int(n))
+		return err == nil
+	case nbtString:
+		_, ok := readNBTString(r)
+		return ok
+	case nbtIntArray:
+		n, ok := readNBTInt(r)
+		if !ok {
+			return false
+		}
+		_, err := r.Discard(int(n) * 4)
+		return err == nil
+	case nbtLongArray:
+		n, ok := readNBTInt(r)
+		if !ok {
+			return false
+		}
+		_, err := r.Discard(int(n) * 8)
+		return err == nil
+	case nbtList:
+		elemType, err := r.ReadByte()
+		if err != nil {
+			return false
+		}
+		n, ok := readNBTInt(r)
+		if !ok {
+			return false
+		}
+		for i := int32(0); i < n; i++ {
+			if elemType == nbtCompound {
+				for {
+					t, err := r.ReadByte()
+					if err != nil {
+						return false
+					}
+					if t == nbtEnd {
+						break
+					}
+					if _, ok := readNBTString(r); !ok {
+						return false
+					}
+					if !skipPayload(r, t) {
+						return false
+					}
+				}
+			} else if !skipPayload(r, elemType) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+func readNBTInt(r *bufio.Reader) (int32, bool) {
+	var buf [4]byte
+	if _, err := io.ReadFull(r, buf[:]); err != nil {
+		return 0, false
+	}
+	return int32(binary.BigEndian.Uint32(buf[:])), true
 }
