@@ -1,9 +1,9 @@
 {
   "changes": [
+    "• JRE download links on Java mismatch",
+    "• Responsive layout for narrow terminals",
     "• Local worlds browser with smart version select",
     "• Configurable memory allocation (1-8 GB)",
-    "• Download integrity checks (SHA1)",
-    "• Crash log preview on early exit",
     "• Forge / NeoForge modloader support (planned)",
     "• Custom JVM arguments (planned)",
     "• Microsoft Auth (planned)"

@@ -17,10 +17,10 @@ const url = "https://raw.githubusercontent.com/agmonetti/mcTUI/main/roadmap.json
 // whenever you cut a release, so offline users still see something
 // reasonably current.
 var embedded = []string{
+	"• JRE download links on Java mismatch",
+	"• Responsive layout for narrow terminals",
 	"• Local worlds browser",
-	"• Configurable memory allocation",
 	"• Forge / NeoForge support (planned)",
-	"• Microsoft Auth (planned)",
 }
 
 var client = &http.Client{Timeout: 2 * time.Second}
