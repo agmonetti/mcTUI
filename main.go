@@ -626,16 +626,22 @@ func (m model) View() string {
 
 			for i := start; i < end; i++ {
 				w := m.worlds[i]
-				
+
 				verStyle := lipgloss.NewStyle().Foreground(colorRed)
 				if w.Version == m.versionSelect {
 					verStyle = lipgloss.NewStyle().Foreground(colorGreen)
 				}
 
+				versionPart := verStyle.Render(" (" + w.Version + ")")
+				timePart := ""
+				if lastPlayed := formatRelativeTime(w.LastPlayed); lastPlayed != "" {
+					timePart = " " + lipgloss.NewStyle().Foreground(colorGray).Render("· "+lastPlayed)
+				}
+
 				if i == m.cursorWorlds {
-					contentStr.WriteString(cursorStyle.Render("  ▶ "+w.LevelName+" ") + verStyle.Render("("+w.Version+")") + "\n")
+					contentStr.WriteString(cursorStyle.Render("  ▶ "+w.LevelName) + versionPart + timePart + "\n")
 				} else {
-					contentStr.WriteString(itemStyle.Render("    "+w.LevelName+" ") + verStyle.Render("("+w.Version+")") + "\n")
+					contentStr.WriteString(itemStyle.Render("    "+w.LevelName) + versionPart + timePart + "\n")
 				}
 			}
 		}
@@ -1678,4 +1684,25 @@ func readNBTInt(r *bufio.Reader) (int32, bool) {
 		return 0, false
 	}
 	return int32(binary.BigEndian.Uint32(buf[:])), true
+}
+
+func formatRelativeTime(ms int64) string {
+	if ms == 0 {
+		return ""
+	}
+	t := time.Unix(0, ms*int64(time.Millisecond))
+	d := time.Since(t)
+
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	case d < 30*24*time.Hour:
+		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+	default:
+		return t.Format("Jan 2, 2006")
+	}
 }
