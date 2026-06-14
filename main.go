@@ -177,9 +177,10 @@ const roadmapURL = "https://raw.githubusercontent.com/agmonetti/mcTUI/main/roadm
 // fetched (offline, GitHub down, etc). Update this whenever you cut a
 // release, so offline users still see something reasonably current.
 var embeddedRoadmap = []string{
-	"• Microsoft Auth",
-	"• Custom JVM Arguments",
-	"• Expanded UI Themes",
+	"• Local worlds browser",
+	"• Configurable memory allocation",
+	"• Forge / NeoForge support (planned)",
+	"• Microsoft Auth (planned)",
 }
 
 var roadmapClient = &http.Client{Timeout: 2 * time.Second}

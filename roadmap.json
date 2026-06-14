@@ -1,8 +1,9 @@
 {
   "changes": [
-    "• Automatic Java version detection & selection",
-    "• Multi-JRE support (Linux, macOS, Windows + IDE installs)",
-    "• Remote roadmap (this panel updates without reinstalling)",
+    "• Local worlds browser with smart version select",
+    "• Configurable memory allocation (1-8 GB)",
+    "• Download integrity checks (SHA1)",
+    "• Crash log preview on early exit",
     "• Forge / NeoForge modloader support (planned)",
     "• Custom JVM arguments (planned)",
     "• Microsoft Auth (planned)"
