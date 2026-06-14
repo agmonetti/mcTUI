@@ -5,6 +5,7 @@
 package java
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -206,4 +207,19 @@ func globDirs(pattern string) []string {
 		return nil
 	}
 	return matches
+}
+
+// DownloadURL returns a direct link to Eclipse Adoptium's release page,
+// pre-filtered for a JRE matching requiredMajor and the current OS. Used
+// to point users at a compatible Java download when none was found
+// locally — mcTUI never downloads or installs a JRE itself.
+func DownloadURL(requiredMajor int) string {
+	osName := "linux"
+	switch runtime.GOOS {
+	case "windows":
+		osName = "windows"
+	case "darwin":
+		osName = "mac"
+	}
+	return fmt.Sprintf("https://adoptium.net/temurin/releases/?version=%d&os=%s&package=jre", requiredMajor, osName)
 }

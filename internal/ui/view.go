@@ -60,8 +60,11 @@ func (m Model) View() string {
 
 	newsStr := strings.Builder{}
 	newsStr.WriteString(lipgloss.NewStyle().Foreground(colorMagenta).Bold(true).Render(" Future Changes") + "\n\n")
+	const newsContentWidth = 36 // panelNews.Width(40) - Padding(0,1)*2 - margen
 	for _, item := range m.roadmap {
-		newsStr.WriteString(lipgloss.NewStyle().Foreground(colorWhite).Render(item) + "\n")
+		for _, line := range wrapText(item, newsContentWidth) {
+			newsStr.WriteString(lipgloss.NewStyle().Foreground(colorWhite).Render(line) + "\n")
+		}
 	}
 	newsStr.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDark).Render("Stay tuned..."))
 
@@ -177,7 +180,12 @@ func (m Model) renderActiveSession(c *strings.Builder) {
 	if required > 0 && m.javaMajor < required {
 		javaStyle = lipgloss.NewStyle().Foreground(colorRed)
 	}
-	c.WriteString(fmt.Sprintf("Java     : %s\n\n", javaStyle.Render(javaLine)))
+	c.WriteString(fmt.Sprintf("Java     : %s\n", javaStyle.Render(javaLine)))
+
+	if required > 0 && m.javaMajor < required {
+		c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("           adoptium.net/temurin") + "\n")
+	}
+	c.WriteString("\n")
 
 	if installationReady(m.versionSelect, m.modloader) {
 		c.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Render("● Ready (offline-capable)"))
@@ -272,4 +280,27 @@ func windowAround(cursor, total, before, windowSize int) (int, int) {
 		}
 	}
 	return start, end
+}
+
+// wrapText breaks s into lines of at most width characters, breaking
+// only at spaces (never mid-word), so long roadmap items wrap cleanly
+// instead of being cut by the panel's fixed width.
+func wrapText(s string, width int) []string {
+	words := strings.Fields(s)
+	if len(words) == 0 {
+		return []string{s}
+	}
+
+	var lines []string
+	current := words[0]
+	for _, w := range words[1:] {
+		if len(current)+1+len(w) <= width {
+			current += " " + w
+		} else {
+			lines = append(lines, current)
+			current = w
+		}
+	}
+	lines = append(lines, current)
+	return lines
 }

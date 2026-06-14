@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -127,9 +128,13 @@ func Launch(mcDir, username, targetVersion, modloader string, memoryMB int) {
 			fmt.Println()
 			fmt.Printf("[!] This version requires Java %d or newer, but no compatible\n", data.JavaVersion.MajorVersion)
 			fmt.Println("[!] JRE was found (checked PATH and common install locations).")
-			fmt.Println("[!] Install a newer JRE, e.g.:")
-			fmt.Println("[!]   Arch:    pacman -S jdk-openjdk")
-			fmt.Println("[!]   Debian:  apt install openjdk-21-jre  (or newer)")
+			fmt.Println("[!] Download a compatible JRE here:")
+			fmt.Println("[!]  ", java.DownloadURL(data.JavaVersion.MajorVersion))
+			if runtime.GOOS != "windows" {
+				fmt.Println("[!] Or via your package manager, e.g.:")
+				fmt.Println("[!]   Arch:    pacman -S jdk-openjdk")
+				fmt.Println("[!]   Debian:  apt install openjdk-21-jre  (or newer)")
+			}
 			return
 		}
 		javaBinary = candidate.Path
