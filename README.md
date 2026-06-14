@@ -16,6 +16,23 @@ git clone [https://github.com/agmonetti/mcTUI.git](https://github.com/agmonetti/
 
 ---
 
+## Project Structure
+
+mcTUI is organized into focused internal packages, each with a single
+responsibility:
+
+- `internal/config` — settings persistence and OS-specific paths
+- `internal/roadmap` — fetches the "Future Changes" panel content
+- `internal/nbt` / `internal/worlds` — reads level.dat to list saved worlds
+- `internal/java` — detects compatible JRE installations
+- `internal/mojang` — talks to Mojang's manifest and download servers
+- `internal/fabric` — resolves Fabric Loader profiles
+- `internal/launcher` — orchestrates the actual game launch
+- `internal/ui` — the Bubble Tea model, update, and view
+
+`main.go` itself is just wiring: ~25 lines that load config, build the
+UI, and hand off to the launcher.
+
 ## Features
 
 * **TUI Interface:** Smooth keyboard navigation using [Bubble Tea](https://github.com/charmbracelet/bubbletea).
