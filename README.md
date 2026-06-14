@@ -103,6 +103,7 @@ mctui
 ```
 
 > **Note:** Use `↑/↓` arrows to navigate, `Enter` to select/toggle, and `Esc/q` to quit or go back.
+> **Note:** Usernames must be 1-16 characters, using only letters, numbers, and underscores — this matches Minecraft's own requirements.
 
 ## Disclaimer
 
