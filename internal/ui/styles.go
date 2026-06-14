@@ -40,7 +40,6 @@ var (
 		Padding(0, 1)
 
 	panelFooter = lipgloss.NewStyle().
-		Width(120).
 		Height(3).
 		Padding(1, 0)
 

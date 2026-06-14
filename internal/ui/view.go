@@ -66,7 +66,18 @@ func (m Model) View() string {
 	newsStr.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDark).Render("Stay tuned..."))
 
 	controls := m.controlsHint()
-	separator := lipgloss.NewStyle().Foreground(colorDark).Render(strings.Repeat("─", 120))
+	
+	// Responsive layout logic
+	showNews := true
+	if m.width > 0 && m.width < 122 {
+		showNews = false
+	}
+
+	separatorWidth := 120
+	if !showNews {
+		separatorWidth = 80 // Menu (32) + Content (48)
+	}
+	separator := lipgloss.NewStyle().Foreground(colorDark).Render(strings.Repeat("─", separatorWidth))
 
 	var statusPart string
 	if installationReady(m.versionSelect, m.modloader) {
@@ -80,11 +91,19 @@ func (m Model) View() string {
 
 	footerContent := fmt.Sprintf("%s\n%s   %s   %s", separator, statusPart, userPart, controlsPart)
 
-	topPanels := lipgloss.JoinHorizontal(lipgloss.Top,
-		panelMenu.Render(menuStr.String()),
-		panelContent.Render(contentStr.String()),
-		panelNews.Render(newsStr.String()),
-	)
+	var topPanels string
+	if showNews {
+		topPanels = lipgloss.JoinHorizontal(lipgloss.Top,
+			panelMenu.Render(menuStr.String()),
+			panelContent.Render(contentStr.String()),
+			panelNews.Render(newsStr.String()),
+		)
+	} else {
+		topPanels = lipgloss.JoinHorizontal(lipgloss.Top,
+			panelMenu.Render(menuStr.String()),
+			panelContent.Render(contentStr.String()),
+		)
+	}
 
 	fullInterface := lipgloss.JoinVertical(lipgloss.Center, asciiHeader, topPanels, panelFooter.Render(footerContent))
 
