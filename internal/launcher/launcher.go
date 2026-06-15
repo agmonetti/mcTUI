@@ -220,20 +220,32 @@ func downloadAssetObjects(mcDir, indexPath string, wg *sync.WaitGroup, download 
 func runGame(mcDir, javaBinary, classpath, mainClass, username, targetVersion, assetIndexID string, memoryMB int) {
 	sessionUUID := uuid.New().String()
 
-	cmd := exec.Command(javaBinary,
-		fmt.Sprintf("-Xmx%dM", memoryMB),
-		"-cp", classpath,
-		mainClass,
-		"--username", username,
-		"--version", targetVersion,
-		"--gameDir", mcDir,
-		"--assetsDir", filepath.Join(mcDir, "assets"),
-		"--assetIndex", assetIndexID,
-		"--uuid", sessionUUID,
-		"--accessToken", "0",
-		"--userType", "legacy",
-		"--versionType", "release",
-	)
+    args := []string{
+        fmt.Sprintf("-Xmx%dM", memoryMB),
+    }
+
+    // macOS requires GLFW (and therefore Minecraft's render thread) to run
+    // on the first thread of the process. The official launcher adds this
+    // flag automatically on macOS; without it, the JVM crashes on init.
+    if runtime.GOOS == "darwin" {
+        args = append(args, "-XstartOnFirstThread")
+    }
+
+    args = append(args,
+        "-cp", classpath,
+        mainClass,
+        "--username", username,
+        "--version", targetVersion,
+        "--gameDir", mcDir,
+        "--assetsDir", filepath.Join(mcDir, "assets"),
+        "--assetIndex", assetIndexID,
+        "--uuid", sessionUUID,
+        "--accessToken", "0",
+        "--userType", "legacy",
+        "--versionType", "release",
+    )
+
+    cmd := exec.Command(javaBinary, args...)
 
 	logFile, err := os.Create(filepath.Join(mcDir, "mctui_latest.log"))
 	if err == nil {
