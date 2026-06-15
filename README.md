@@ -1,5 +1,7 @@
 # mcTUI
 
+![mcTUI screenshot](assets/main.png)
+
 An extremely lightweight, fast, and pure terminal (TUI) Minecraft (Java Edition) launcher. Written in Go, designed for minimalist environments and users who prefer the console.
 
 ---
