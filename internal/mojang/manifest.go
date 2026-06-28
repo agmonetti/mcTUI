@@ -5,6 +5,7 @@
 package mojang
 
 import (
+	"archive/zip"
 	"crypto/sha1"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 )
 
@@ -43,13 +46,26 @@ type VersionData struct {
 		} `json:"client"`
 	} `json:"downloads"`
 	Libraries []struct {
+		Name    string `json:"name"`
 		Downloads struct {
 			Artifact struct {
 				Path string `json:"path"`
 				URL  string `json:"url"`
 				SHA1 string `json:"sha1"`
 			} `json:"artifact"`
+			Classifiers map[string]struct {
+				Path string `json:"path"`
+				URL  string `json:"url"`
+				SHA1 string `json:"sha1"`
+			} `json:"classifiers"`
 		} `json:"downloads"`
+		Natives map[string]string `json:"natives"`
+		Rules   []struct {
+			Action string `json:"action"`
+			OS     struct {
+				Name string `json:"name"`
+			} `json:"os"`
+		} `json:"rules"`
 	} `json:"libraries"`
 }
 
@@ -242,5 +258,176 @@ func Download(wg *sync.WaitGroup) func(url, destination, expectedSHA1 string) {
 			fmt.Printf("   [!] Checksum mismatch for %s, removing.\n", filepath.Base(destination))
 			os.Remove(destination)
 		}
+	}
+}
+
+// osName returns the Mojang OS identifier for the current platform.
+func osName() string {
+	switch runtime.GOOS {
+	case "linux":
+		return "linux"
+	case "darwin":
+		return "macos"
+	case "windows":
+		return "windows"
+	default:
+		return ""
+	}
+}
+
+// ShouldIncludeLibrary checks the "rules" field of a library to determine
+// if it should be included for the current OS. Libraries with no rules are
+// always included. Libraries with rules are included only if an "allow"
+// rule matches the current OS (or has no OS constraint), and no "deny"
+// rule blocks it.
+func ShouldIncludeLibrary(rules []struct {
+	Action string `json:"action"`
+	OS     struct {
+		Name string `json:"name"`
+	} `json:"os"`
+}) bool {
+	if len(rules) == 0 {
+		return true
+	}
+	currentOS := osName()
+	allowed := false
+	for _, r := range rules {
+		if r.Action == "allow" {
+			if r.OS.Name == "" || r.OS.Name == currentOS {
+				allowed = true
+			}
+		}
+		if r.Action == "deny" && (r.OS.Name == "" || r.OS.Name == currentOS) {
+			return false
+		}
+	}
+	return allowed
+}
+
+// NativeLibDir returns where native libraries should be extracted for the
+// given version.
+func NativeLibDir(mcDir, version string) string {
+	return filepath.Join(mcDir, "versions", version, "natives")
+}
+
+// DownloadAndExtractNatives downloads and extracts native libraries
+// (LWJGL, OpenAL, etc.) for the current OS. It returns the path to the
+// natives directory, which should be passed via -Djava.library.path.
+//
+// In modern Minecraft (1.19+), natives are separate library entries with
+// names like "org.lwjgl:lwjgl:3.3.3:natives-linux" rather than using the
+// old classifiers format.
+func DownloadAndExtractNatives(data VersionData, mcDir, version string, wg *sync.WaitGroup, download func(url, destination, expectedSHA1 string)) string {
+	currentOS := osName()
+	if currentOS == "" {
+		return ""
+	}
+
+	nativesDir := NativeLibDir(mcDir, version)
+
+	// Check if natives are already extracted
+	if info, err := os.Stat(nativesDir); err == nil && info.IsDir() {
+		entries, _ := os.ReadDir(nativesDir)
+		if len(entries) > 0 {
+			return nativesDir
+		}
+	}
+
+	os.MkdirAll(nativesDir, 0755)
+
+	librariesPath := filepath.Join(mcDir, "libraries")
+	nativesSuffix := ":natives-" + currentOS
+
+	for _, lib := range data.Libraries {
+		if !ShouldIncludeLibrary(lib.Rules) {
+			continue
+		}
+
+		name := lib.Name
+
+		// Check if this is a native library (name ends with ":natives-linux" etc.)
+		isNative := strings.HasSuffix(name, nativesSuffix)
+
+		// Also check old classifiers format
+		classifierKey := ""
+		if !isNative && lib.Natives != nil {
+			if key, ok := lib.Natives[currentOS]; ok {
+				classifierKey = key
+			}
+		}
+
+		if !isNative && classifierKey == "" {
+			continue
+		}
+
+		// Try classifiers first (old format)
+		var nativeInfo struct {
+			Path string `json:"path"`
+			URL  string `json:"url"`
+			SHA1 string `json:"sha1"`
+		}
+		if classifierKey != "" {
+			if ci, ok := lib.Downloads.Classifiers[classifierKey]; ok {
+				nativeInfo = ci
+			}
+		}
+
+		// For new format (natives in name), use the artifact download
+		if nativeInfo.URL == "" && isNative && lib.Downloads.Artifact.URL != "" {
+			nativeInfo = lib.Downloads.Artifact
+		}
+
+		if nativeInfo.URL == "" {
+			continue
+		}
+
+		jarPath := filepath.Join(librariesPath, nativeInfo.Path)
+		wg.Add(1)
+		go func(url, dest, sha1 string) {
+			download(url, dest, sha1)
+			extractJar(dest, nativesDir)
+		}(nativeInfo.URL, jarPath, nativeInfo.SHA1)
+	}
+
+	return nativesDir
+}
+
+// extractJar extracts the contents of a JAR/ZIP file into destDir,
+// skipping directories and META-INF.
+func extractJar(jarPath, destDir string) {
+	r, err := zip.OpenReader(jarPath)
+	if err != nil {
+		return
+	}
+	defer r.Close()
+
+	for _, f := range r.File {
+		if f.FileInfo().IsDir() {
+			continue
+		}
+		name := f.Name
+		// Skip META-INF and directories
+		if strings.HasPrefix(name, "META-INF/") || strings.HasSuffix(name, "/") {
+			continue
+		}
+		// Only extract native library files
+		ext := strings.ToLower(filepath.Ext(name))
+		if ext != ".so" && ext != ".dll" && ext != ".dylib" && ext != ".jnilib" {
+			continue
+		}
+
+		outPath := filepath.Join(destDir, filepath.Base(name))
+		outFile, err := os.Create(outPath)
+		if err != nil {
+			continue
+		}
+		inFile, err := f.Open()
+		if err != nil {
+			outFile.Close()
+			continue
+		}
+		io.Copy(outFile, inFile)
+		inFile.Close()
+		outFile.Close()
 	}
 }

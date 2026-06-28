@@ -80,6 +80,10 @@ func Launch(mcDir, username, targetVersion, modloader string, memoryMB int) {
 	if haveVersionData {
 		libSem := make(chan struct{}, maxConcurrentDownloads)
 		for _, lib := range data.Libraries {
+			// Check OS rules before including this library
+			if !mojang.ShouldIncludeLibrary(lib.Rules) {
+				continue
+			}
 			url := lib.Downloads.Artifact.URL
 			path := lib.Downloads.Artifact.Path
 			if url != "" && path != "" {
@@ -115,8 +119,15 @@ func Launch(mcDir, username, targetVersion, modloader string, memoryMB int) {
 	fmt.Println("2. Validating Assets...")
 	assetIndexID, haveAssetIndex := validateAssets(mcDir, data, haveVersionData, &wg, download)
 
+	// Download and extract native libraries (LWJGL, OpenAL, etc.)
+	var nativesDir string
+	if haveVersionData {
+		nativesDir = mojang.DownloadAndExtractNatives(data, mcDir, targetVersion, &wg, download)
+	}
+
 	wg.Wait()
 	classpathEntries = append(classpathEntries, clientPath)
+	classpathEntries = deduplicateClasspath(classpathEntries)
 	finalClasspath := strings.Join(classpathEntries, string(filepath.ListSeparator))
 
 	fmt.Println("3. All set! Launching Minecraft...")
@@ -147,7 +158,7 @@ func Launch(mcDir, username, targetVersion, modloader string, memoryMB int) {
 		assetIndexID = data.AssetIndex.ID
 	}
 
-	runGame(mcDir, javaBinary, finalClasspath, mainClass, username, targetVersion, assetIndexID, memoryMB)
+	runGame(mcDir, javaBinary, finalClasspath, mainClass, username, targetVersion, assetIndexID, memoryMB, nativesDir)
 }
 
 // validateAssets ensures the asset index is available locally (using a
@@ -217,7 +228,7 @@ func downloadAssetObjects(mcDir, indexPath string, wg *sync.WaitGroup, download 
 // runGame execs java with the assembled classpath and arguments, then
 // watches for an early crash (process exits within a few seconds) and
 // surfaces the JVM log if so.
-func runGame(mcDir, javaBinary, classpath, mainClass, username, targetVersion, assetIndexID string, memoryMB int) {
+func runGame(mcDir, javaBinary, classpath, mainClass, username, targetVersion, assetIndexID string, memoryMB int, nativesDir string) {
 	sessionUUID := uuid.New().String()
 
     args := []string{
@@ -229,6 +240,11 @@ func runGame(mcDir, javaBinary, classpath, mainClass, username, targetVersion, a
     // flag automatically on macOS; without it, the JVM crashes on init.
     if runtime.GOOS == "darwin" {
         args = append(args, "-XstartOnFirstThread")
+    }
+
+    // Point the JVM to the extracted native libraries (.so, .dll, .dylib)
+    if nativesDir != "" {
+        args = append(args, "-Djava.library.path="+nativesDir)
     }
 
     args = append(args,
@@ -285,6 +301,56 @@ func runGame(mcDir, javaBinary, classpath, mainClass, username, targetVersion, a
 		fmt.Println("   You can close this window — the game will keep running")
 		fmt.Println("   in the background as a separate process.")
 	}
+}
+
+// deduplicateClasspath removes duplicate libraries from the classpath,
+// keeping only the newest version of each artifact. This prevents errors
+// like "duplicate ASM classes found" when both Vanilla and Fabric include
+// the same library at different versions.
+func deduplicateClasspath(entries []string) []string {
+	type libInfo struct {
+		path    string
+		version string
+	}
+	// key = "group/artifact", value = best candidate
+	libs := make(map[string]libInfo)
+
+	for _, entry := range entries {
+		// Extract group/artifact from the full path
+		// Find "libraries/" prefix and take everything after it up to the version dir
+		normalized := filepath.ToSlash(entry)
+		idx := strings.Index(normalized, "/libraries/")
+		if idx == -1 {
+			// Not a standard library path, keep it
+			libs[entry] = libInfo{path: entry, version: ""}
+			continue
+		}
+		afterLibraries := normalized[idx+len("/libraries/"):]
+		parts := strings.Split(afterLibraries, "/")
+		// parts: [org, ow2, asm, asm, 9.6, asm-9.6.jar]
+		// key = everything except the last 2 parts (version and filename)
+		if len(parts) < 3 {
+			libs[entry] = libInfo{path: entry, version: ""}
+			continue
+		}
+		key := strings.Join(parts[:len(parts)-2], "/")
+		ver := parts[len(parts)-2]
+
+		if existing, ok := libs[key]; ok {
+			// Keep the one with the higher version string (simple lexicographic works for most cases)
+			if ver > existing.version {
+				libs[key] = libInfo{path: entry, version: ver}
+			}
+		} else {
+			libs[key] = libInfo{path: entry, version: ver}
+		}
+	}
+
+	result := make([]string, 0, len(libs))
+	for _, info := range libs {
+		result = append(result, info.path)
+	}
+	return result
 }
 
 // printLogTail prints the last n lines of the file at path.
