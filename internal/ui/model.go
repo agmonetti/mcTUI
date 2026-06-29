@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"mcTUI/internal/config"
+	"mcTUI/internal/updater"
 	"mcTUI/internal/worlds"
 )
 
@@ -38,6 +39,7 @@ type Model struct {
 	versions      []string
 	worlds        []worlds.Info
 	roadmap       []string
+	latestRelease updater.Release // zero value = no update available
 
 	input textinput.Model
 	play  bool
@@ -48,8 +50,9 @@ type Model struct {
 }
 
 // New builds the initial model from the loaded config, available
-// versions, roadmap content, and detected default Java version.
-func New(versions []string, cfg config.Data, roadmap []string, javaMajor int) Model {
+// versions, roadmap content, detected default Java version, and the
+// latest release info from GitHub (for update notifications).
+func New(versions []string, cfg config.Data, roadmap []string, javaMajor int, latest updater.Release) Model {
 	ti := textinput.New()
 	ti.Placeholder = "Type your name..."
 	ti.Focus()
@@ -67,6 +70,7 @@ func New(versions []string, cfg config.Data, roadmap []string, javaMajor int) Mo
 		memoryMB:      cfg.MemoryMB,
 		versions:      versions,
 		roadmap:       roadmap,
+		latestRelease: latest,
 		input:         ti,
 		play:          false,
 		javaMajor:     javaMajor,

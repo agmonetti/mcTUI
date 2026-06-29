@@ -66,6 +66,12 @@ func (m Model) View() string {
 			newsStr.WriteString(lipgloss.NewStyle().Foreground(colorWhite).Render(line) + "\n")
 		}
 	}
+	if m.latestRelease.TagName != "" {
+		newsStr.WriteString("\n" + lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FFD700")).
+			Bold(true).
+			Render(fmt.Sprintf("⬆ %s available!", m.latestRelease.TagName)) + "\n")
+	}
 	newsStr.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDark).Render("Stay tuned..."))
 
 	controls := m.controlsHint()
@@ -92,7 +98,13 @@ func (m Model) View() string {
 	userPart := lipgloss.NewStyle().Foreground(colorGray).Render(fmt.Sprintf("[%s - %s]", m.username, m.versionSelect))
 	controlsPart := lipgloss.NewStyle().Foreground(colorDark).Render(controls)
 
-	footerContent := fmt.Sprintf("%s\n%s   %s   %s", separator, statusPart, userPart, controlsPart)
+	var updatePart string
+	if m.latestRelease.TagName != "" {
+		updatePart = "   " + lipgloss.NewStyle().Foreground(lipgloss.Color("#FFD700")).Bold(true).Render(
+			fmt.Sprintf("⬆ %s available — github.com/agmonetti/mcTUI/releases", m.latestRelease.TagName),
+		)
+	}
+	footerContent := fmt.Sprintf("%s\n%s   %s   %s%s", separator, statusPart, userPart, controlsPart, updatePart)
 
 	var topPanels string
 	if showNews {
