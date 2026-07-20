@@ -9,3 +9,4 @@ mctui-linux-amd64
 # Carpetas de entorno de Go
 vendor/
 logs/
+mctui-darwin-*
