@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -337,8 +338,7 @@ func deduplicateClasspath(entries []string) []string {
 		ver := parts[len(parts)-2]
 
 		if existing, ok := libs[key]; ok {
-			// Keep the one with the higher version string (simple lexicographic works for most cases)
-			if ver > existing.version {
+			if versionGreaterThan(ver, existing.version) {
 				libs[key] = libInfo{path: entry, version: ver}
 			}
 		} else {
@@ -351,6 +351,43 @@ func deduplicateClasspath(entries []string) []string {
 		result = append(result, info.path)
 	}
 	return result
+}
+
+// versionGreaterThan returns true if a is a higher version than b.
+// Versions are split by "." and each segment is compared numerically.
+// If any segment is not a valid integer, it falls back to string comparison.
+func versionGreaterThan(a, b string) bool {
+	as := strings.Split(a, ".")
+	bs := strings.Split(b, ".")
+	max := len(as)
+	if len(bs) > max {
+		max = len(bs)
+	}
+	for i := 0; i < max; i++ {
+		var an, bn int
+		var aOK, bOK bool
+		if i < len(as) {
+			var err error
+			an, err = strconv.Atoi(as[i])
+			aOK = err == nil
+		} else {
+			aOK = true
+		}
+		if i < len(bs) {
+			var err error
+			bn, err = strconv.Atoi(bs[i])
+			bOK = err == nil
+		} else {
+			bOK = true
+		}
+		if !aOK || !bOK {
+			return a > b
+		}
+		if an != bn {
+			return an > bn
+		}
+	}
+	return false
 }
 
 // printLogTail prints the last n lines of the file at path.
