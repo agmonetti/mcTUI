@@ -382,8 +382,10 @@ func DownloadAndExtractNatives(data VersionData, mcDir, version string, wg *sync
 		}
 
 		jarPath := filepath.Join(librariesPath, nativeInfo.Path)
-		wg.Add(1)
+		wg.Add(1) // Registramos la operación completa (descarga + extracción)
 		go func(url, dest, sha1 string) {
+			defer wg.Done() // Señalamos que la extracción ha terminado
+			wg.Add(1)       // Balanceamos el wg.Done() interno que hace la función download()
 			download(url, dest, sha1)
 			extractJar(dest, nativesDir)
 		}(nativeInfo.URL, jarPath, nativeInfo.SHA1)

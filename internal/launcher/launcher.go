@@ -337,12 +337,32 @@ func deduplicateClasspath(entries []string) []string {
 		key := strings.Join(parts[:len(parts)-2], "/")
 		ver := parts[len(parts)-2]
 
-		if existing, ok := libs[key]; ok {
+		// To prevent throwing away natives or classifiers that share the same base artifact and version
+		// (e.g. lwjgl-3.4.1-unsafe.jar vs lwjgl-3.4.1-natives-windows.jar), we must include the
+		// classifier in the deduplication key.
+		baseArtifact := parts[len(parts)-3]
+		expectedPrefix := baseArtifact + "-" + ver
+		fileName := parts[len(parts)-1]
+
+		classifier := ""
+		if strings.HasPrefix(fileName, expectedPrefix+"-") {
+			classifier = strings.TrimPrefix(fileName, expectedPrefix+"-")
+			classifier = strings.TrimSuffix(classifier, ".jar")
+		} else if fileName != expectedPrefix+".jar" {
+			classifier = fileName
+		}
+
+		fullKey := key
+		if classifier != "" {
+			fullKey = key + ":" + classifier
+		}
+
+		if existing, ok := libs[fullKey]; ok {
 			if versionGreaterThan(ver, existing.version) {
-				libs[key] = libInfo{path: entry, version: ver}
+				libs[fullKey] = libInfo{path: entry, version: ver}
 			}
 		} else {
-			libs[key] = libInfo{path: entry, version: ver}
+			libs[fullKey] = libInfo{path: entry, version: ver}
 		}
 	}
 
