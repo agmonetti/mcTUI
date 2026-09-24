@@ -51,19 +51,29 @@ func AppDataDir(subdirs ...string) string {
 	return filepath.Join(append([]string{base}, subdirs...)...)
 }
 
-// MinecraftDir returns the path to the .minecraft directory, following
-// the same conventions as the official launcher.
+// MinecraftDir returns the existing launcher path. Destructive operations
+// should use MinecraftDirChecked instead.
 func MinecraftDir() string {
+	dir, _ := MinecraftDirChecked()
+	return dir
+}
+
+// MinecraftDirChecked resolves the Minecraft directory without falling back
+// to a relative path when the user's home directory is unavailable.
+func MinecraftDirChecked() (string, error) {
 	if runtime.GOOS == "windows" {
-		appData := os.Getenv("APPDATA")
-		if appData != "" {
-			return filepath.Join(appData, ".minecraft")
+		if appData := os.Getenv("APPDATA"); appData != "" {
+			return filepath.Join(appData, ".minecraft"), nil
 		}
-		homeDir, _ := os.UserHomeDir()
-		return filepath.Join(homeDir, "AppData", "Roaming", ".minecraft")
 	}
-	homeDir, _ := os.UserHomeDir()
-	return filepath.Join(homeDir, ".minecraft")
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	if runtime.GOOS == "windows" {
+		return filepath.Join(homeDir, "AppData", "Roaming", ".minecraft"), nil
+	}
+	return filepath.Join(homeDir, ".minecraft"), nil
 }
 
 // path returns the location of the config file.

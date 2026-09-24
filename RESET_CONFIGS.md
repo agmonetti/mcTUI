@@ -59,26 +59,21 @@ En Windows, que es el sistema operativo prioritario para esta funcionalidad, deb
 %APPDATA%\\.minecraft\\
 ```
 
-En Linux se debe conservar el comportamiento actual de `config.MinecraftDir()`. En macOS se debe utilizar la ruta oficial de la plataforma:
+En Linux y macOS se conserva el comportamiento actual de `config.MinecraftDir()`:
 
 ```text
-Linux:  ~/.minecraft/
-macOS: ~/Library/Application Support/minecraft/
+Linux / macOS: ~/.minecraft/
 ```
 
 La resolución de estas rutas debe centralizarse en `internal/config`. `Resets Configs` no debe construir rutas suponiendo que el sistema utiliza `/`, `~` o una carpeta concreta del usuario.
 
 ### Estado actual de mcTUI
 
-`internal/config.MinecraftDir()` ya contempla la ruta de Windows mediante `%APPDATA%`, pero actualmente agrupa Linux y macOS bajo la misma ruta `~/.minecraft`.
+`internal/config.MinecraftDir()` utiliza `%APPDATA%\.minecraft` en Windows y `~/.minecraft` en Linux y macOS.
 
-Para cumplir completamente esta especificación, esa función deberá distinguir macOS y utilizar:
+Para la primera versión se mantiene deliberadamente la ruta unificada `~/.minecraft` en macOS para no romper ni desacoplar instalaciones, mundos y perfiles existentes creados por mcTUI. Cualquier cambio a la ruta oficial de macOS (`~/Library/Application Support/minecraft`) debe ser, en todo caso, una migración global independiente con detección de instalaciones previas.
 
-```text
-~/Library/Application Support/minecraft/
-```
-
-Este ajuste debe realizarse antes o junto con la implementación de `Resets Configs`, y debe cubrir también las demás funcionalidades que consumen `MinecraftDir()` para evitar que cada componente utilice una ubicación diferente.
+Sin embargo, `MinecraftDir()` actualmente ignora el error de `os.UserHomeDir()`. El motor de reset debe verificar que la ruta devuelta sea absoluta y válida antes de cualquier operación destructiva o de movimiento, abortando inmediatamente si no se puede resolver la carpeta de usuario de manera segura.
 
 ---
 
@@ -133,23 +128,23 @@ En distribuciones donde Minecraft se ejecuta mediante un launcher empaquetado, F
 
 ### macOS
 
-La instalación oficial suele ubicarse en:
+mcTUI utiliza la ruta estándar Unix en el perfil del usuario:
 
 ```text
-~/Library/Application Support/minecraft/
+~/.minecraft/
 ```
 
-La implementación debe utilizar `filepath.Join()` porque la ruta contiene espacios. No debe asumir que todas las instalaciones están bajo `~/.minecraft`.
+La implementación debe utilizar `filepath.Join()`. Se mantiene `~/.minecraft` para coincidir con las demás partes del launcher y no perder acceso a perfiles previos.
 
 También debe contemplarse que macOS puede bloquear archivos mientras Minecraft está abierto, de forma análoga a Windows.
 
 ### Matriz mínima de comportamiento
 
 | Sistema | Ruta esperada | Prioridad | Riesgo principal |
-|---|---|---:|---|
+| --- | --- | ---: | --- |
 | Windows | `%APPDATA%\\.minecraft` | Alta | Archivos bloqueados y permisos |
 | Linux | `~/.minecraft` | Media | Permisos y launchers alternativos |
-| macOS | `~/Library/Application Support/minecraft` | Media | Espacios en rutas y archivos bloqueados |
+| macOS | `~/.minecraft` | Media | Permisos y archivos bloqueados |
 
 El resultado funcional debe ser el mismo en los tres sistemas: mover `mods/` y `config/` a un backup, conservar los datos protegidos y reportar errores de manera clara.
 
@@ -192,6 +187,9 @@ shaderpacks/
 Contiene los mundos de un jugador. Es el dato más importante para proteger.
 
 `Resets Configs` no debe borrar, mover, renombrar ni modificar ningún archivo dentro de esta carpeta.
+
+> **Advertencia crítica sobre mundos:** Aunque el reset no toca físicamente `saves/`, si el usuario abre y guarda posteriormente un mundo que contenía bloques, entidades o ítems de mods ahora eliminados, el juego puede borrar de forma permanente esos datos del mapa. La TUI debe advertir explícitamente:
+> *"Worlds are preserved, but do not load mod-dependent worlds until those mods are restored to prevent block/item loss."*
 
 ### `versions/`
 
@@ -428,7 +426,11 @@ No debe utilizar una limpieza recursiva sobre toda la carpeta `.minecraft`.
 
 ### No seguir enlaces simbólicos ni junctions de forma peligrosa
 
-Antes de operar, comprobar con `os.Lstat()` las rutas de `.minecraft`, `mods/`, `config/` y el destino de backup. Si alguna ruta que se va a operar es un enlace simbólico o una junction inesperada, rechazar la operación y explicarlo. En la primera versión se mueven o eliminan las carpetas objetivo completas; no se recorren sus archivos internos para decidir qué resetear. Volver a validar inmediatamente antes de la operación reduce el riesgo de que las rutas hayan cambiado desde la pantalla informativa.
+Antes de operar, comprobar con `os.Lstat()` las rutas de `.minecraft`, `mods/`, `config/`, el directorio base de respaldos (`mctui-backups/`) y el subdirectorio de destino.
+
+Si alguna de estas rutas intermedias o finales es un enlace simbólico o una junction inesperada, se debe rechazar la operación y explicarlo. Esto evita que un enlace en `mctui-backups` desvíe archivos hacia `saves/` o fuera de la instalación.
+
+En la primera versión se mueven o eliminan las carpetas objetivo completas; no se recorren sus archivos internos para decidir qué resetear. Volver a validar inmediatamente antes de la operación reduce el riesgo de que las rutas hayan cambiado desde la pantalla informativa.
 
 ### Minecraft cerrado
 
@@ -446,7 +448,13 @@ Cuando se elige el reset sin backup, la eliminación permanente debe ejecutarse 
 
 La implementación debe contemplar que `mods/` exista pero `config/` no, o viceversa.
 
-Si una carpeta se mueve o elimina correctamente y la otra falla, no se debe anunciar éxito completo ni intentar revertir automáticamente lo ya modificado. Se deben detener las operaciones restantes e informar qué carpeta quedó en origen, cuál fue movida o eliminada y, en modo backup, la ruta exacta de su destino. En modo sin backup, una carpeta ya eliminada no puede recuperarse desde mcTUI.
+Además, debe contemplarse el **borrado o movimiento parcial dentro de una misma carpeta**: si `os.RemoveAll("mods")` o `os.Rename` elimina o traslada varios archivos internos y luego falla debido a un archivo bloqueado, la carpeta quedará en estado corrupto o parcialmente eliminada.
+
+Si una carpeta se mueve o elimina correctamente y la otra falla, o si una carpeta queda a medio borrar:
+- No se debe anunciar éxito completo ni asumir que la carpeta quedó intacta solo porque sigue existiendo.
+- No se debe intentar revertir automáticamente lo ya modificado (un borrado parcial no se puede recuperar).
+- Se deben detener las operaciones restantes.
+- Se debe clasificar el estado de cada carpeta (`deleted`, `partially_deleted`, `moved`, `failed`, `untouched`) e informar qué archivos se alcanzaron a procesar y los errores correspondientes.
 
 ---
 
@@ -484,13 +492,14 @@ La UI no debería ocuparse directamente de `os.Rename`, `os.ReadDir` ni de la es
 
 La UI necesitaría:
 
-- Un nuevo estado de pantalla para `Resets Configs`.
-- Una pantalla de información y confirmación.
-- Una pantalla de progreso o resultado.
-- Mensajes de éxito y error.
-- Una nueva opción en el menú.
+- Nuevos estados de pantalla propios para `Resets Configs` (por ejemplo `resetMenuScreen`, `resetConfirmScreen`, `resetResultScreen`).
+- Una pantalla de información y selección de modo (backup vs rápido).
+- Una pantalla de confirmación diferenciada para el modo destructivo.
+- Una pantalla de progreso y resultado detallado.
+- Mensajes de éxito y error con estado granular por carpeta.
+- Una nueva opción en el menú principal (`Resets Configs`), actualizando `menuOptionsCount` y el cursor.
 
-El patrón puede reutilizar la pantalla existente de confirmación y el sistema de mensajes de descarga, pero el reset debe ser sincrónico o ejecutarse en una tarea controlada, ya que normalmente mover carpetas es rápido.
+**Importante:** No reutilizar los mensajes ni el flujo de descarga de `downloadScreen` (`DownloadDoneMsg` en `update.go` activa `m.play = true` y cierra el TUI con `tea.Quit` para lanzar el juego). El reset debe usar su propio comando asíncrono (`tea.Cmd`) ejecutado en goroutine y su propio tipo de mensaje (`ResetDoneMsg`), evitando congelar la interfaz durante operaciones de E/S lentas o bloqueos.
 
 ### `main.go`
 
@@ -500,22 +509,37 @@ No debería ejecutar directamente la operación. La lógica debe vivir en su paq
 
 ## Modelo de resultado sugerido
 
-El paquete podría devolver un resultado estructurado similar a:
+El paquete debe devolver un resultado estructurado que permita reflejar estados parciales tanto en movimiento como en borrado:
 
 ```go
+type FolderStatus string
+
+const (
+    StatusUntouched        FolderStatus = "untouched"
+    StatusMoved            FolderStatus = "moved"
+    StatusDeleted          FolderStatus = "deleted"
+    StatusPartiallyDeleted FolderStatus = "partially_deleted"
+    StatusFailed           FolderStatus = "failed"
+)
+
+type FolderResult struct {
+    Name   string       // "mods", "config"
+    Path   string       // ruta absoluta de origen
+    Status FolderStatus // estado alcanzado tras la operación
+    Err    error        // error específico si falló o quedó parcial
+}
+
 type Result struct {
-    BackupPath       string
-    Moved            []string
-    Skipped          []string
-    Preserved        []string
-    Errors           []error
-    NothingToReset   bool
+    Mode           string         // "backup" o "purge"
+    BackupPath     string         // ruta del directorio de respaldo si se usó
+    Folders        []FolderResult // resultado por cada carpeta objetivo
+    Preserved      []string       // ["saves", "versions", "assets", "libraries", "shaderpacks"]
+    Errors         []error        // resumen de errores encontrados
+    NothingToReset bool           // true si no existía ninguna carpeta objetivo
 }
 ```
 
-Esto permitiría que la UI muestre información precisa sin interpretar mensajes de texto del sistema de archivos.
-
-Los nombres y campos pueden ajustarse durante la implementación.
+Esto permite que la UI muestre información exacta sin asumir estados binarios ni interpretar cadenas arbitrarias de error.
 
 ---
 
@@ -575,13 +599,13 @@ Sin embargo, implementar instancias aisladas desde el inicio ampliaría bastante
 
 ### Fase 1: motor seguro
 
-- Ajustar `internal/config.MinecraftDir()` para macOS, compartiendo la ruta con el resto de funcionalidades.
-- Crear `internal/resetconfigs` para detectar `mods/` y `config/`.
-- Validar las rutas objetivo, rechazar enlaces simbólicos o junctions inesperadas y repetir la validación antes de operar.
-- Crear un destino de backup exclusivo dentro de `.minecraft` cuando corresponda.
+- Validar que `internal/config.MinecraftDir()` devuelva una ruta absoluta y no vacía, controlando posibles errores de `os.UserHomeDir()`. Mantener la ruta unificada `~/.minecraft` en macOS y Linux.
+- Crear `internal/resetconfigs` para detectar y procesar `mods/` y `config/`.
+- Validar las rutas objetivo y ancestros de backup (`mctui-backups`), rechazando enlaces simbólicos o junctions inesperadas.
+- Crear un destino de backup exclusivo con timestamp dentro de `.minecraft` cuando corresponda.
 - Mover carpetas con `os.Rename()` o eliminarlas según la elección del usuario; no copiar entre volúmenes.
-- Verificar el resultado y devolver errores parciales con las rutas afectadas.
-- Agregar pruebas con carpetas temporales para rutas, carpetas inexistentes, enlaces y fallos parciales.
+- Verificar el resultado reportando estados parciales (`deleted`, `partially_deleted`, `moved`, `failed`).
+- Agregar pruebas unitarias con carpetas temporales para rutas absolutas, inexistentes, symlinks y fallos parciales de borrado/movimiento.
 
 ### Fase 2: integración con la TUI
 
@@ -625,11 +649,11 @@ La primera versión puede considerarse terminada cuando:
 - La operación se puede cancelar antes de ejecutarse.
 - Se informa correctamente cuando no hay nada que resetear.
 - Se informa correctamente ante errores parciales, indicando el estado y las rutas de cada carpeta afectada.
-- Las rutas objetivo enlazadas o junctions inesperadas se rechazan antes de mover o eliminar.
-- La TUI advierte que se debe cerrar Minecraft antes del reset; los archivos bloqueados o en uso se informan sin anunciar éxito completo. Si se agrega detección de procesos, un Minecraft detectado bloquea la operación.
-- El juego puede volver a iniciarse después del reset.
+- Las rutas objetivo enlazadas o junctions inesperadas (incluyendo `mctui-backups/`) se rechazan antes de mover o eliminar.
+- La TUI advierte que se debe cerrar Minecraft antes del reset y advierte sobre el riesgo de cargar mundos que dependan de mods eliminados. Los archivos bloqueados o en uso se informan sin anunciar éxito completo.
+- Una instalación conocida (Vanilla o Fabric) vuelve a iniciar correctamente tras el reset en pruebas de validación.
 - La operación funciona con rutas y separadores propios de Windows.
-- La operación funciona con rutas Linux y macOS sin depender de comandos del sistema.
+- La operación funciona con rutas Linux y macOS (`~/.minecraft`) sin depender de comandos del sistema.
 - Windows es probado como plataforma principal, incluyendo archivos bloqueados, espacios en rutas y permisos normales de usuario.
 
 ---
