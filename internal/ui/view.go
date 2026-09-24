@@ -15,32 +15,71 @@ import (
 )
 
 func (m Model) View() string {
-	asciiHeader := getAsciiArt() + "\n\n"
+	// ── Download screen completo (tapa todo el TUI) ──────────────────────────
+	if m.state == downloadScreen {
+		return m.renderDownloadScreen()
+	}
+
+	hasUpdate := m.latestRelease.TagName != ""
+
+	// ── Logo ─────────────────────────────────────────────────────────────────
+	logo := getAsciiArt()
+
+	// ── Topbar de tabs ───────────────────────────────────────────────────────
+	topBar := renderTopBar(m.cursorMenu, hasUpdate)
+
+	// ── Featured Banner ──────────────────────────────────────────────────────
+	ready := installationReady(m.versionSelect, m.modloader)
+	banner := renderFeaturedBanner(m.versionSelect, m.modloader, m.memoryMB, ready)
+
+	// ── Panel izquierdo: Profile Card + menú ────────────────────────────────
+	profileCard := renderProfileCard(m.username, m.versionSelect, m.modloader)
 
 	menuStr := strings.Builder{}
-	menuStr.WriteString(lipgloss.NewStyle().Foreground(colorViolet).Bold(true).Render(" Options") + "\n\n")
+	header := lipgloss.NewStyle().
+		Foreground(colorBlue).Bold(true).Render("OPTIONS")
+	divLine := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 24))
+	menuStr.WriteString(header + "\n" + divLine + "\n\n")
 
 	menuOptions := []string{
 		fmt.Sprintf("Play (%s)", m.versionSelect),
 		"Change Name",
 		"Change Version",
 		"Worlds",
-		fmt.Sprintf("Modloader: %s", lipgloss.NewStyle().Foreground(colorCyan).Render(m.modloader)),
+		fmt.Sprintf("Modloader: %s", lipgloss.NewStyle().Foreground(colorAccent2).Render(m.modloader)),
 		fmt.Sprintf("Memory: %d MB", m.memoryMB),
 		"Quit",
 	}
 
 	for i, option := range menuOptions {
 		if m.cursorMenu == i {
-			menuStr.WriteString(cursorStyle.Render(fmt.Sprintf("▶ %s", option)) + "\n")
+			line := lipgloss.NewStyle().
+				Foreground(colorAccent).Bold(true).
+				Render(fmt.Sprintf("► %s", option))
+			menuStr.WriteString(line + "\n")
 		} else {
-			menuStr.WriteString(itemStyle.Render(fmt.Sprintf("  %s", option)) + "\n")
+			line := lipgloss.NewStyle().Foreground(colorGray).
+				Render(fmt.Sprintf("  %s", option))
+			menuStr.WriteString(line + "\n")
 		}
 	}
 
-	contentStr := strings.Builder{}
-	contentStr.WriteString(lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render(" mcTUI Launcher") + "\n\n")
+	leftBorderColor := colorBorder
+	if m.state == menuScreen {
+		leftBorderColor = colorAccent
+	}
+	leftPanel := lipgloss.NewStyle().
+		Width(28).Height(14).
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(leftBorderColor).
+		Padding(0, 1).
+		Render(menuStr.String())
 
+	// Stack: profile card encima del panel de menú
+	leftColumn := lipgloss.JoinVertical(lipgloss.Left, profileCard, leftPanel)
+
+	// ── Panel central: detalle ───────────────────────────────────────────────
+	contentStr := strings.Builder{}
 	switch {
 	case m.state == menuScreen && m.cursorMenu == 5:
 		m.renderMemoryPanel(&contentStr)
@@ -57,75 +96,145 @@ func (m Model) View() string {
 	case m.state == confirmScreen:
 		m.renderConfirmScreen(&contentStr)
 	}
+	centerPanel := panelContent.Render(contentStr.String())
 
+	// ── Panel derecho: roadmap ───────────────────────────────────────────────
 	newsStr := strings.Builder{}
-	newsStr.WriteString(lipgloss.NewStyle().Foreground(colorMagenta).Bold(true).Render(" Future Changes") + "\n\n")
-	const newsContentWidth = 36 // panelNews.Width(40) - Padding(0,1)*2 - margen
+	newsHeader := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("FUTURE CHANGES")
+	newsDivLine := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 31))
+	newsStr.WriteString(newsHeader + "\n" + newsDivLine + "\n\n")
+
+	const newsContentWidth = 32
 	for _, item := range m.roadmap {
 		for _, line := range wrapText(item, newsContentWidth) {
-			newsStr.WriteString(lipgloss.NewStyle().Foreground(colorWhite).Render(line) + "\n")
+			newsStr.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("· "+line) + "\n")
 		}
 	}
-	if m.latestRelease.TagName != "" {
+	if hasUpdate {
 		newsStr.WriteString("\n" + lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFD700")).
-			Bold(true).
+			Foreground(colorAccent2).Bold(true).
 			Render(fmt.Sprintf("⬆ %s available!", m.latestRelease.TagName)) + "\n")
 	}
-	newsStr.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDark).Render("Stay tuned..."))
+	newsStr.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render("Stay tuned..."))
 
-	controls := m.controlsHint()
-	
-	// Responsive layout logic
+	// ── Layout responsive ────────────────────────────────────────────────────
 	showNews := true
 	if m.width > 0 && m.width < 122 {
 		showNews = false
 	}
 
-	separatorWidth := 120
+	separatorWidth := 118
 	if !showNews {
-		separatorWidth = 80 // Menu (32) + Content (48)
+		separatorWidth = 82
 	}
-	separator := lipgloss.NewStyle().Foreground(colorDark).Render(strings.Repeat("─", separatorWidth))
+	separator := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", separatorWidth))
 
+	// ── Footer ───────────────────────────────────────────────────────────────
 	var statusPart string
-	if installationReady(m.versionSelect, m.modloader) {
-		statusPart = lipgloss.NewStyle().Foreground(colorGreen).Render("● Ready")
+	if ready {
+		statusPart = lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("● READY")
 	} else {
-		statusPart = lipgloss.NewStyle().Foreground(colorRed).Render("● Needs setup")
+		statusPart = lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("● NEEDS SETUP")
 	}
-
-	userPart := lipgloss.NewStyle().Foreground(colorGray).Render(fmt.Sprintf("[%s - %s]", m.username, m.versionSelect))
-	controlsPart := lipgloss.NewStyle().Foreground(colorDark).Render(controls)
+	userPart := lipgloss.NewStyle().Foreground(colorGray).
+		Render(fmt.Sprintf("[%s · %s]", m.username, m.versionSelect))
+	controls := m.controlsHint()
+	controlsPart := lipgloss.NewStyle().Foreground(colorDimGray).Render(controls)
 
 	var updatePart string
-	if m.latestRelease.TagName != "" {
-		updatePart = "   " + lipgloss.NewStyle().Foreground(lipgloss.Color("#FFD700")).Bold(true).Render(
-			fmt.Sprintf("⬆ %s available — github.com/agmonetti/mcTUI/releases", m.latestRelease.TagName),
+	if hasUpdate {
+		updatePart = "   " + lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(
+			fmt.Sprintf("⬆ %s — github.com/agmonetti/mcTUI/releases", m.latestRelease.TagName),
 		)
 	}
-	footerContent := fmt.Sprintf("%s\n%s   %s   %s%s", separator, statusPart, userPart, controlsPart, updatePart)
+	footerContent := fmt.Sprintf("%s\n%s   %s   %s%s",
+		separator, statusPart, userPart, controlsPart, updatePart)
 
+	// ── Composición de paneles ────────────────────────────────────────────────
 	var topPanels string
 	if showNews {
 		topPanels = lipgloss.JoinHorizontal(lipgloss.Top,
-			panelMenu.Render(menuStr.String()),
-			panelContent.Render(contentStr.String()),
+			leftColumn,
+			centerPanel,
 			panelNews.Render(newsStr.String()),
 		)
 	} else {
 		topPanels = lipgloss.JoinHorizontal(lipgloss.Top,
-			panelMenu.Render(menuStr.String()),
-			panelContent.Render(contentStr.String()),
+			leftColumn,
+			centerPanel,
 		)
 	}
 
-	fullInterface := lipgloss.JoinVertical(lipgloss.Center, asciiHeader, topPanels, panelFooter.Render(footerContent))
+	fullInterface := lipgloss.JoinVertical(lipgloss.Left,
+		logo,
+		"",
+		topBar,
+		"",
+		banner,
+		"",
+		topPanels,
+		panelFooter.Render(footerContent),
+	)
 
 	if m.width > 0 && m.height > 0 {
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, fullInterface)
 	}
 	return "\n" + fullInterface
+}
+
+// ── Download Screen ───────────────────────────────────────────────────────────
+func (m Model) renderDownloadScreen() string {
+	title := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("DOWNLOADING FILES")
+	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 60))
+
+	pct := 0.0
+	if m.dlTotal > 0 {
+		pct = float64(m.dlDone) / float64(m.dlTotal) * 100
+	}
+
+	bar := renderProgressBar(m.dlDone, m.dlTotal, 48)
+
+	fileLabel := lipgloss.NewStyle().Foreground(colorGray).Render("FILE  ")
+	fileVal := lipgloss.NewStyle().Foreground(colorWhite).Render(m.dlFile)
+
+	countLabel := lipgloss.NewStyle().Foreground(colorGray).Render("DONE  ")
+	countVal := lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).
+		Render(fmt.Sprintf("%d / %d", m.dlDone, m.dlTotal))
+
+	pctLabel := lipgloss.NewStyle().Foreground(colorGray).Render("PCT   ")
+	pctVal := lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).
+		Render(fmt.Sprintf("%.0f%%", pct))
+
+	var errLine string
+	if m.dlErr != nil {
+		errLine = "\n" + lipgloss.NewStyle().Foreground(colorRed).Bold(true).
+			Render("⚠ "+m.dlErr.Error())
+	}
+
+	hint := lipgloss.NewStyle().Foreground(colorDimGray).
+		Render("[Ctrl+C] Abort")
+
+	body := fmt.Sprintf(
+		"%s\n%s\n\n%s\n\n%s%s\n%s%s\n%s%s\n\n%s%s",
+		title, div,
+		bar,
+		fileLabel, fileVal,
+		countLabel, countVal,
+		pctLabel, pctVal,
+		errLine, hint,
+	)
+
+	panel := lipgloss.NewStyle().
+		Width(64).
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(colorAccent).
+		Padding(1, 3).
+		Render(body)
+
+	if m.width > 0 && m.height > 0 {
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, panel)
+	}
+	return "\n" + panel
 }
 
 func (m Model) controlsHint() string {
@@ -144,33 +253,48 @@ func (m Model) controlsHint() string {
 }
 
 func (m Model) renderMemoryPanel(c *strings.Builder) {
-	c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(" Memory Configuration") + "\n\n")
-	c.WriteString(fmt.Sprintf("Current Allocation : %s MB\n\n", lipgloss.NewStyle().Foreground(colorWhite).Render(fmt.Sprintf("%d", m.memoryMB))))
-	c.WriteString("Recommended RAM:\n")
-	c.WriteString("  Vanilla 1.20.x    →  1-2 GB (1024-2048 MB)\n")
-	c.WriteString("  Fabric/light mods →  2-4 GB (2048-4096 MB)\n")
-	c.WriteString("  Heavy modpacks    →  4-8 GB (4096-8192 MB)\n\n")
-	c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Press [Enter] to cycle values."))
+	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("MEMORY CONFIGURATION")
+	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+	c.WriteString(title + "\n" + div + "\n\n")
+
+	c.WriteString(labelStyle.Render("CURRENT ALLOCATION  ") +
+		valueStyle.Render(fmt.Sprintf("%d MB", m.memoryMB)) + "\n\n")
+
+	c.WriteString(labelStyle.Render("RECOMMENDED RAM") + "\n")
+	rows := []struct{ label, gb, mb string }{
+		{"Vanilla 1.20.x", "1-2 GB", "1024-2048 MB"},
+		{"Fabric/light mods", "2-4 GB", "2048-4096 MB"},
+		{"Heavy modpacks", "4-8 GB", "4096-8192 MB"},
+	}
+	for _, r := range rows {
+		line := fmt.Sprintf("  %-18s %-6s (%s)", r.label, r.gb, r.mb)
+		c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(line) + "\n")
+	}
+	c.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render("Press [Enter] to cycle values."))
 }
 
 func (m Model) renderWorldsHint(c *strings.Builder) {
-	c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(" Local Worlds") + "\n\n")
-	c.WriteString("View and manage your saved singleplayer worlds.\n\n")
-	c.WriteString("Selecting a world will automatically change\n")
-	c.WriteString("your launcher version to match the world's\n")
-	c.WriteString("last played version to prevent corruption.\n\n")
-	c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Press [Enter] to browse saves."))
+	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("LOCAL WORLDS")
+	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+	c.WriteString(title + "\n" + div + "\n\n")
+
+	text := "View and manage your saved singleplayer\n" +
+		"worlds.\n\n" +
+		"Selecting a world will automatically\n" +
+		"change your launcher version to match\n" +
+		"the world's last played version to\n" +
+		"prevent corruption."
+
+	c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(text) + "\n\n")
+	c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("Press [Enter] to browse saves."))
 }
 
 func (m Model) renderActiveSession(c *strings.Builder) {
-	c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(" Active Session") + "\n\n")
-	c.WriteString(fmt.Sprintf("User     : %s\n", lipgloss.NewStyle().Foreground(colorWhite).Render(m.username)))
+	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("ACTIVE SESSION")
+	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+	c.WriteString(title + "\n" + div + "\n\n")
 
-	verString := m.versionSelect
-	if m.modloader != "Vanilla" {
-		verString += fmt.Sprintf(" (%s)", m.modloader)
-	}
-	c.WriteString(fmt.Sprintf("Version  : %s\n", lipgloss.NewStyle().Foreground(colorWhite).Render(verString)))
+	pad := "  "
 
 	osName := runtime.GOOS
 	switch osName {
@@ -182,32 +306,58 @@ func (m Model) renderActiveSession(c *strings.Builder) {
 		osName = "Linux"
 	}
 
-	c.WriteString("Auth     : Offline (LAN Mode)\n")
-	c.WriteString(fmt.Sprintf("OS       : %s\n", lipgloss.NewStyle().Foreground(colorWhite).Render(osName)))
+	verString := m.versionSelect
+	if m.modloader != "Vanilla" {
+		verString += fmt.Sprintf(" (%s)", m.modloader)
+	}
 
 	mcDir := config.MinecraftDir()
 	required := mojang.RequiredJavaVersion(mcDir, m.versionSelect)
 	javaLine := java.FormatInfo(m.javaMajor, required)
-	javaStyle := lipgloss.NewStyle().Foreground(colorWhite)
+	javaColor := colorWhite
 	if required > 0 && m.javaMajor < required {
-		javaStyle = lipgloss.NewStyle().Foreground(colorRed)
+		javaColor = colorRed
 	}
-	c.WriteString(fmt.Sprintf("Java     : %s\n", javaStyle.Render(javaLine)))
+
+	rows := []struct {
+		label, val string
+		vc         lipgloss.Color
+	}{
+		{"USER      ", m.username, colorWhite},
+		{"VERSION   ", verString, colorWhite},
+		{"AUTH      ", "Offline (LAN Mode)", colorGray},
+		{"OS        ", osName, colorWhite},
+		{"JAVA      ", javaLine, javaColor},
+	}
+
+	for _, r := range rows {
+		c.WriteString(fmt.Sprintf("%s%s  %s\n",
+			pad,
+			labelStyle.Render(r.label),
+			lipgloss.NewStyle().Foreground(r.vc).Render(r.val),
+		))
+	}
 
 	if required > 0 && m.javaMajor < required {
-		c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("           adoptium.net/temurin") + "\n")
+		c.WriteString(pad + "          " +
+			lipgloss.NewStyle().Foreground(colorDimGray).Render("adoptium.net/temurin") + "\n")
 	}
+
 	c.WriteString("\n")
 
 	if installationReady(m.versionSelect, m.modloader) {
-		c.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Render("● Ready (offline-capable)"))
+		c.WriteString(pad + lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("● READY — offline-capable"))
 	} else {
-		c.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("● Not installed — will need network"))
+		c.WriteString(pad + lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("● NOT INSTALLED — will need network"))
 	}
 }
 
 func (m Model) renderNameScreen(c *strings.Builder) {
-	c.WriteString("New LAN username:\n\n")
+	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("CHANGE NAME")
+	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+	c.WriteString(title + "\n" + div + "\n\n")
+
+	c.WriteString(labelStyle.Render("NEW LAN USERNAME") + "\n\n")
 	c.WriteString(m.input.View())
 	c.WriteString("\n\n")
 
@@ -215,25 +365,29 @@ func (m Model) renderNameScreen(c *strings.Builder) {
 	if m.input.Value() != "" && !validUsername(m.input.Value()) {
 		c.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("⚠ " + hint))
 	} else {
-		c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(hint))
+		c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(hint))
 	}
 }
 
 func (m Model) renderVersionsScreen(c *strings.Builder) {
-	c.WriteString("Select a stable version:\n\n")
+	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("SELECT VERSION")
+	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+	c.WriteString(title + "\n" + div + "\n\n")
 
 	start, end := windowAround(m.cursorVersions, len(m.versions), 3, 6)
 	for i := start; i < end; i++ {
 		if i == m.cursorVersions {
-			c.WriteString(cursorStyle.Render(fmt.Sprintf("  ▶ %s", m.versions[i])) + "\n")
+			c.WriteString(cursorStyle.Render(fmt.Sprintf("► %s", m.versions[i])) + "\n")
 		} else {
-			c.WriteString(fmt.Sprintf("    %s", m.versions[i]) + "\n")
+			c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(fmt.Sprintf("  %s", m.versions[i])) + "\n")
 		}
 	}
 }
 
 func (m Model) renderWorldsScreen(c *strings.Builder) {
-	c.WriteString("Select a world to load:\n\n")
+	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("SELECT WORLD")
+	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+	c.WriteString(title + "\n" + div + "\n\n")
 
 	if len(m.worlds) == 0 {
 		c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("No worlds found in ~/.minecraft/saves"))
@@ -244,35 +398,44 @@ func (m Model) renderWorldsScreen(c *strings.Builder) {
 	for i := start; i < end; i++ {
 		w := m.worlds[i]
 
-		verStyle := lipgloss.NewStyle().Foreground(colorRed)
+		verColor := colorRed
 		if w.Version == m.versionSelect {
-			verStyle = lipgloss.NewStyle().Foreground(colorGreen)
+			verColor = colorGreen
 		}
 
-		versionPart := verStyle.Render(" (" + w.Version + ")")
+		versionPart := lipgloss.NewStyle().Foreground(verColor).Render(" (" + w.Version + ")")
 		timePart := ""
 		if lastPlayed := worlds.FormatRelativeTime(w.LastPlayed); lastPlayed != "" {
-			timePart = " " + lipgloss.NewStyle().Foreground(colorGray).Render("· "+lastPlayed)
+			timePart = " " + lipgloss.NewStyle().Foreground(colorDimGray).Render("· "+lastPlayed)
 		}
 
 		if i == m.cursorWorlds {
-			c.WriteString(cursorStyle.Render("  ▶ "+w.LevelName) + versionPart + timePart + "\n")
+			c.WriteString(cursorStyle.Render("► "+w.LevelName) + versionPart + timePart + "\n")
 		} else {
-			c.WriteString(itemStyle.Render("    "+w.LevelName) + versionPart + timePart + "\n")
+			c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("  "+w.LevelName) + versionPart + timePart + "\n")
 		}
 	}
 }
 
 func (m Model) renderConfirmScreen(c *strings.Builder) {
-	c.WriteString(lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("⚠ MISSING FILES") + "\n\n")
+	title := lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("⚠ MISSING FILES")
+	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+	c.WriteString(title + "\n" + div + "\n\n")
 
 	if m.modloader == "Fabric" && !fabric.ProfileExists(config.MinecraftDir(), m.versionSelect) {
-		c.WriteString(fmt.Sprintf("Fabric libraries for %s are not yet\ncached on your system.\n\n", m.versionSelect))
+		c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(
+			fmt.Sprintf("Fabric libraries for %s are not yet\ncached on your system.", m.versionSelect)) + "\n\n")
 	} else {
-		c.WriteString(fmt.Sprintf("The client.jar file (%s) is not\nfound on your system.\n\n", m.versionSelect))
+		c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(
+			fmt.Sprintf("The client.jar file (%s) is not\nfound on your system.", m.versionSelect)) + "\n\n")
 	}
-	c.WriteString("Would you like to download the missing\nfiles from the official Mojang/Fabric\nservers?\n\n")
-	c.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Render("[y/Enter] Yes") + "   " + lipgloss.NewStyle().Foreground(colorGray).Render("[n/Esc] Cancel"))
+
+	c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(
+		"Would you like to download the missing\nfiles from the official Mojang/Fabric\nservers?") + "\n\n")
+
+	c.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("[y/Enter] YES") +
+		"   " +
+		lipgloss.NewStyle().Foreground(colorGray).Render("[n/Esc] Cancel"))
 }
 
 // windowAround computes a [start, end) slice window of size windowSize

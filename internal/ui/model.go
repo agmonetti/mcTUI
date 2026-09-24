@@ -18,12 +18,27 @@ const (
 	versionsScreen
 	worldsScreen
 	confirmScreen
+	downloadScreen // nueva pantalla: descarga en tiempo real dentro del TUI
 )
 
 // menuOptionsCount must match len(menuOptions) in View(). Centralized
 // here so Update()'s cursor bounds check doesn't drift from the menu's
 // actual length if options are added/removed.
 const menuOptionsCount = 7
+
+// DownloadProgressMsg es enviado por la goroutine de descarga al TUI
+// cada vez que un archivo termina de descargarse.
+type DownloadProgressMsg struct {
+	Done  int    // archivos completados hasta ahora
+	Total int    // total de archivos a descargar
+	File  string // nombre corto del archivo actual
+	Err   error  // nil si OK
+}
+
+// DownloadDoneMsg señala que la descarga finalizó completamente.
+type DownloadDoneMsg struct {
+	Err error
+}
 
 // Model is the root Bubble Tea model for mcTUI.
 type Model struct {
@@ -40,6 +55,12 @@ type Model struct {
 	worlds        []worlds.Info
 	roadmap       []string
 	latestRelease updater.Release // zero value = no update available
+
+	// Download progress (usado en downloadScreen)
+	dlDone  int
+	dlTotal int
+	dlFile  string
+	dlErr   error
 
 	input textinput.Model
 	play  bool
@@ -58,8 +79,8 @@ func New(versions []string, cfg config.Data, roadmap []string, javaMajor int, la
 	ti.Focus()
 	ti.CharLimit = 16
 	ti.Width = 30
-	ti.PromptStyle = lipgloss.NewStyle().Foreground(colorCyan)
-	ti.TextStyle = lipgloss.NewStyle().Foreground(colorWhite)
+	ti.PromptStyle = lipgloss.NewStyle().Foreground(colorBlue)
+	ti.TextStyle = lipgloss.NewStyle().Foreground(colorAccent2)
 
 	return Model{
 		state:         menuScreen,

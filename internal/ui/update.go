@@ -49,7 +49,36 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
+	// ── Mensajes de progreso de descarga ───────────────────────────────────
+	case downloadChanMsg:
+		// Procesa el mensaje portado y encadena la espera del siguiente.
+		switch inner := msg.msg.(type) {
+		case DownloadProgressMsg:
+			m.dlDone = inner.Done
+			m.dlTotal = inner.Total
+			m.dlFile = inner.File
+			m.dlErr = inner.Err
+			return m, nextDownloadCmd(msg.ch)
+		case DownloadDoneMsg:
+			if inner.Err != nil {
+				m.dlErr = inner.Err
+				return m, nil
+			}
+			// Descarga completada → lanzar el juego
+			m.play = true
+			return m, tea.Quit
+		}
+
 	case tea.KeyMsg:
+		// En downloadScreen solo se puede cancelar con Ctrl+C
+		if m.state == downloadScreen {
+			switch msg.String() {
+			case "ctrl+c":
+				return m, tea.Quit
+			}
+			return m, cmd
+		}
+
 		switch msg.String() {
 		case "ctrl+c", "q":
 			if m.state == menuScreen {
@@ -143,14 +172,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.state = menuScreen
 			} else if m.state == confirmScreen {
-				m.play = true
-				return m, tea.Quit
+				// [Enter] en confirmScreen → iniciar descarga dentro del TUI
+				m.state = downloadScreen
+				m.dlDone = 0
+				m.dlTotal = 0
+				m.dlFile = "Initializing..."
+				m.dlErr = nil
+				return m, StartDownloadCmd(m.versionSelect, m.modloader)
 			}
 
 		case "y", "Y":
 			if m.state == confirmScreen {
-				m.play = true
-				return m, tea.Quit
+				m.state = downloadScreen
+				m.dlDone = 0
+				m.dlTotal = 0
+				m.dlFile = "Initializing..."
+				m.dlErr = nil
+				return m, StartDownloadCmd(m.versionSelect, m.modloader)
 			}
 
 		case "n", "N":
