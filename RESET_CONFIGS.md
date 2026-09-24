@@ -619,6 +619,20 @@ Sin embargo, implementar instancias aisladas desde el inicio ampliaría bastante
 
 - Evaluar si es posible detectar procesos de Minecraft con un alcance definido y comprobable en cada plataforma. La falta de detección no debe presentarse como garantía de que el juego esté cerrado.
 
+#### Evaluación de la fase 3 (2026-09-24)
+
+La detección **positiva** es viable, pero no hay un mecanismo único en la biblioteca estándar de Go para enumerar procesos y leer sus argumentos en Windows, Linux y macOS. Buscar solo `java`/`javaw` daría falsos positivos; para asociar un proceso con esta instalación habría que comprobar un argumento `--gameDir` cuya ruta coincida con `config.MinecraftDirChecked()` (el launcher de mcTUI ya lo pasa). Otros launchers pueden omitir ese argumento, y los permisos o una carrera entre inspección y reset pueden impedir una respuesta concluyente.
+
+| Plataforma | Fuente candidata | Límite para validar |
+| --- | --- | --- |
+| Windows | `Win32_Process.CommandLine` vía CIM/WMI | Probar Java abierto, otro Java, argumentos no accesibles y rutas con espacios en Windows real; `tasklist` no expone la línea de comandos. |
+| Linux | `/proc/<pid>/cmdline` (argumentos separados por NUL) | Probar proceso propio y lectura restringida (`hidepid`); un proceso puede terminar durante el recorrido. |
+| macOS | Argumentos del proceso vía API específica del sistema o `ps` | Probar permisos y argumentos largos en macOS real; la salida textual de `ps` no es una fuente estructurada de argumentos. |
+
+**Decisión:** no introducir todavía un bloqueo basado en procesos. No se puede comprobar su comportamiento multiplataforma desde este entorno ni usar una respuesta negativa como prueba de que Minecraft está cerrado. Se mantiene la advertencia explícita de la fase 2 y el manejo de errores de archivos en uso. Si se incorpora después, solo una coincidencia positiva comprobada debe bloquear el reset; resultado negativo o inaccesible debe mostrarse como *no verificado*, nunca como *Minecraft cerrado*. Antes de hacerlo obligatorio, ejecutar los casos de la tabla en las tres plataformas y volver a comprobar justo antes de operar; aun así existirá una carrera entre comprobación y modificación.
+
+Referencias: [Win32_Process](https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-process), [tasklist](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/tasklist), [proc_pid_cmdline(5)](https://man7.org/linux/man-pages/man5/proc_pid_cmdline.5.html), [proc(5)](https://man7.org/linux/man-pages/man5/proc.5.html).
+
 ### Fase 4: historial y restauración
 
 - Listar respaldos existentes.
