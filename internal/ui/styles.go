@@ -167,7 +167,8 @@ func renderTopBar(cursorMenu int, hasUpdate bool) string {
 		{"WORLDS", 3},
 		{"MODLOADER", 4},
 		{"MEMORY", 5},
-		{"QUIT", 6},
+		{"RESET", 6},
+		{"QUIT", 7},
 	}
 
 	var parts []string

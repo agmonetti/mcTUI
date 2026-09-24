@@ -6,6 +6,7 @@ import (
 	"mcTUI/internal/config"
 	"mcTUI/internal/fabric"
 	"mcTUI/internal/mojang"
+	"mcTUI/internal/resetconfigs"
 	"mcTUI/internal/worlds"
 )
 
@@ -49,6 +50,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
+	case ResetDoneMsg:
+		if m.state == resetRunningScreen {
+			m.resetResult = msg.Result
+			m.resetErr = msg.Err
+			m.resetScroll = 0
+			m.state = resetResultScreen
+		}
+		return m, nil
+
 	// ── Mensajes de progreso de descarga ───────────────────────────────────
 	case downloadChanMsg:
 		// Procesa el mensaje portado y encadena la espera del siguiente.
@@ -70,6 +80,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyMsg:
+		if m.state >= resetModeScreen && m.state <= resetResultScreen {
+			return m.updateResetKey(msg.String())
+		}
 		// En downloadScreen solo se puede cancelar con Ctrl+C
 		if m.state == downloadScreen {
 			switch msg.String() {
@@ -146,6 +159,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					m.save()
 				} else if m.cursorMenu == 6 {
+					m.resetDir, m.resetFound, m.resetErr = resetconfigs.Inspect()
+					m.resetMode = resetconfigs.Backup
+					m.resetScroll = 0
+					m.state = resetModeScreen
+				} else if m.cursorMenu == 7 {
 					return m, tea.Quit
 				}
 			} else if m.state == nameScreen {
@@ -208,6 +226,54 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, cmd
+}
+
+// updateResetKey keeps a purge impossible without a mode choice and a fresh
+// explicit confirmation. Bubble Tea executes commands asynchronously.
+func (m Model) updateResetKey(key string) (tea.Model, tea.Cmd) {
+	switch m.state {
+	case resetModeScreen:
+		switch key {
+		case "esc", "q":
+			m.state = menuScreen
+		case "up", "down", "k", "j":
+			if m.resetMode == resetconfigs.Backup {
+				m.resetMode = resetconfigs.Purge
+			} else {
+				m.resetMode = resetconfigs.Backup
+			}
+		case "enter":
+			if m.resetErr == nil && len(m.resetFound) > 0 {
+				m.state = resetConfirmScreen
+			}
+		}
+	case resetConfirmScreen:
+		switch key {
+		case "esc", "n", "N":
+			m.state = resetModeScreen
+		case "y", "Y":
+			mode := m.resetMode
+			m.state = resetRunningScreen
+			return m, func() tea.Msg {
+				result, err := resetconfigs.Run(mode)
+				return ResetDoneMsg{Result: result, Err: err}
+			}
+		}
+	case resetResultScreen:
+		switch key {
+		case "up", "k":
+			if m.resetScroll > 0 {
+				m.resetScroll--
+			}
+		case "down", "j":
+			if m.resetScroll < m.resetMaxScroll() {
+				m.resetScroll++
+			}
+		case "esc", "enter", "q":
+			m.state = menuScreen
+		}
+	}
+	return m, nil
 }
 
 // save persists the model's current settings to disk.

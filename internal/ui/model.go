@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"mcTUI/internal/config"
+	"mcTUI/internal/resetconfigs"
 	"mcTUI/internal/updater"
 	"mcTUI/internal/worlds"
 )
@@ -19,12 +20,16 @@ const (
 	worldsScreen
 	confirmScreen
 	downloadScreen // nueva pantalla: descarga en tiempo real dentro del TUI
+	resetModeScreen
+	resetConfirmScreen
+	resetRunningScreen
+	resetResultScreen
 )
 
 // menuOptionsCount must match len(menuOptions) in View(). Centralized
 // here so Update()'s cursor bounds check doesn't drift from the menu's
 // actual length if options are added/removed.
-const menuOptionsCount = 7
+const menuOptionsCount = 8
 
 // DownloadProgressMsg es enviado por la goroutine de descarga al TUI
 // cada vez que un archivo termina de descargarse.
@@ -38,6 +43,12 @@ type DownloadProgressMsg struct {
 // DownloadDoneMsg señala que la descarga finalizó completamente.
 type DownloadDoneMsg struct {
 	Err error
+}
+
+// ResetDoneMsg is independent of the download/launch flow.
+type ResetDoneMsg struct {
+	Result resetconfigs.Result
+	Err    error
 }
 
 // Model is the root Bubble Tea model for mcTUI.
@@ -61,6 +72,13 @@ type Model struct {
 	dlTotal int
 	dlFile  string
 	dlErr   error
+
+	resetDir    string
+	resetFound  []string
+	resetMode   resetconfigs.Mode
+	resetResult resetconfigs.Result
+	resetErr    error
+	resetScroll int
 
 	input textinput.Model
 	play  bool

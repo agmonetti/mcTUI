@@ -11,6 +11,7 @@ import (
 	"mcTUI/internal/fabric"
 	"mcTUI/internal/java"
 	"mcTUI/internal/mojang"
+	"mcTUI/internal/resetconfigs"
 	"mcTUI/internal/worlds"
 )
 
@@ -18,6 +19,9 @@ func (m Model) View() string {
 	// ── Download screen completo (tapa todo el TUI) ──────────────────────────
 	if m.state == downloadScreen {
 		return m.renderDownloadScreen()
+	}
+	if m.state >= resetModeScreen && m.state <= resetResultScreen {
+		return m.renderResetScreen()
 	}
 
 	hasUpdate := m.latestRelease.TagName != ""
@@ -48,6 +52,7 @@ func (m Model) View() string {
 		"Worlds",
 		fmt.Sprintf("Modloader: %s", lipgloss.NewStyle().Foreground(colorAccent2).Render(m.modloader)),
 		fmt.Sprintf("Memory: %d MB", m.memoryMB),
+		"Resets Configs",
 		"Quit",
 	}
 
@@ -180,6 +185,147 @@ func (m Model) View() string {
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, fullInterface)
 	}
 	return "\n" + fullInterface
+}
+
+// ── Reset screens ────────────────────────────────────────────────────────────
+func (m Model) resetLines() []string {
+	preserved := "Preserved: saves/, versions/, assets/, libraries/, shaderpacks/"
+	worldsWarning := "Worlds are preserved, but do not load mod-dependent worlds until those mods are restored to prevent block/item loss."
+	switch m.state {
+	case resetModeScreen, resetConfirmScreen:
+		lines := []string{
+			"Minecraft directory: " + m.resetDir,
+			"Close Minecraft before resetting; open files may be locked.",
+			"Affected folders:",
+		}
+		for _, name := range m.resetFound {
+			lines = append(lines, "  - "+name+"/")
+		}
+		lines = append(lines, preserved, worldsWarning, "")
+		if m.resetErr != nil {
+			return append(lines, "Cannot reset: "+m.resetErr.Error(), "[Esc] Back")
+		}
+		if len(m.resetFound) == 0 {
+			return append(lines, "Nothing to reset.", "[Esc] Back")
+		}
+		if m.state == resetModeScreen {
+			selectedBackup, selectedPurge := "  ", "  "
+			if m.resetMode == resetconfigs.Backup {
+				selectedBackup = "> "
+			} else {
+				selectedPurge = "> "
+			}
+			return append(lines,
+				"How should Resets Configs handle the old files?",
+				selectedBackup+"Reset and create backup (move files; manual restore only)",
+				selectedPurge+"Reset without backup (delete permanently)",
+				"[↑/↓] Choose  [Enter] Continue  [Esc] Cancel")
+		}
+		if m.resetMode == resetconfigs.Purge {
+			return append(lines, "PERMANENT DELETION: the affected folders cannot be restored by mcTUI.",
+				"[y] Delete permanently  [n/Esc] Cancel (Enter does not confirm)")
+		}
+		return append(lines, "Move affected folders into a new timestamped backup?",
+			"[y] Move to backup  [n/Esc] Cancel (Enter does not confirm)")
+	case resetRunningScreen:
+		return []string{"Resetting " + m.resetDir + "...", "Please wait. Do not close mcTUI or Minecraft files may be left incomplete."}
+	case resetResultScreen:
+		lines := []string{"Minecraft directory: " + m.resetDir}
+		if m.resetMode == resetconfigs.Purge {
+			lines = append(lines, "Mode: permanent deletion")
+		} else {
+			lines = append(lines, "Mode: backup")
+		}
+		if m.resetErr != nil {
+			lines = append(lines, "Reset could not start: "+m.resetErr.Error())
+		} else if m.resetResult.NothingToReset {
+			lines = append(lines, "Nothing to reset; no backup was created.")
+		} else if len(m.resetResult.Errors) > 0 {
+			lines = append(lines, "Reset incomplete; check each folder below. No automatic rollback.")
+		} else {
+			lines = append(lines, "Resets Configs completed successfully.")
+		}
+		for _, folder := range m.resetResult.Folders {
+			lines = append(lines, "", folder.Name+"/: "+string(folder.Status), "  Source: "+folder.Path)
+			if folder.Err != nil {
+				lines = append(lines, "  Error: "+folder.Err.Error())
+			}
+			for _, path := range folder.Removed {
+				lines = append(lines, "  Removed: "+path)
+			}
+		}
+		if m.resetResult.BackupPath != "" {
+			lines = append(lines, "", "Backup: "+m.resetResult.BackupPath, "Restore manually; mcTUI does not provide undo.")
+		}
+		return append(lines, "", preserved, worldsWarning)
+	}
+	return nil
+}
+
+func (m Model) resetWidth() int {
+	if m.width > 0 {
+		return max(32, min(80, m.width-12))
+	}
+	return 80
+}
+
+func (m Model) resetVisibleLines() int {
+	if m.height > 0 {
+		return max(4, m.height-9)
+	}
+	return 18
+}
+
+// Long paths must remain visible, not be silently truncated by the panel.
+func (m Model) resetDisplayLines() []string {
+	var lines []string
+	width := m.resetWidth()
+	for _, line := range m.resetLines() {
+		part := ""
+		for _, r := range line {
+			if lipgloss.Width(part+string(r)) > width {
+				lines = append(lines, part)
+				part = ""
+			}
+			part += string(r)
+		}
+		lines = append(lines, part)
+	}
+	return lines
+}
+
+func (m Model) resetMaxScroll() int {
+	return max(0, len(m.resetDisplayLines())-m.resetVisibleLines())
+}
+
+func (m Model) renderResetScreen() string {
+	title := "RESETS CONFIGS"
+	if m.state == resetResultScreen {
+		title = "RESET RESULT"
+	} else if m.state == resetRunningScreen {
+		title = "RESET IN PROGRESS"
+	} else if m.state == resetConfirmScreen {
+		title = "CONFIRM RESET"
+	}
+	lines := m.resetDisplayLines()
+	start := min(m.resetScroll, m.resetMaxScroll())
+	end := min(len(lines), start+m.resetVisibleLines())
+	footer := "[Esc] Back"
+	if m.state == resetResultScreen {
+		footer = "[↑/↓] Scroll  [Enter/Esc] Main menu"
+	} else if m.state == resetRunningScreen {
+		footer = "Waiting for reset to finish..."
+	}
+	body := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(title) + "\n" +
+		lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", m.resetWidth())) + "\n\n" +
+		lipgloss.NewStyle().Foreground(colorWhite).Render(strings.Join(lines[start:end], "\n")) + "\n\n" +
+		lipgloss.NewStyle().Foreground(colorAccent2).Render(footer)
+	panel := lipgloss.NewStyle().Width(m.resetWidth()+4).Border(lipgloss.NormalBorder()).
+		BorderForeground(colorAccent).Padding(1, 2).Render(body)
+	if m.width > 0 && m.height > 0 {
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, panel)
+	}
+	return "\n" + panel
 }
 
 // ── Download Screen ───────────────────────────────────────────────────────────
