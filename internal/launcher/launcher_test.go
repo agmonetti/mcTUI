@@ -5,8 +5,23 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 )
+
+func TestInvalidAssetIndexNeverQueuesDownloads(t *testing.T) {
+	root := t.TempDir()
+	index := filepath.Join(root, "index.json")
+	for _, contents := range []string{"not json", `{}`, `{"objects":{"bad":{"hash":"x"}}}`} {
+		if err := os.WriteFile(index, []byte(contents), 0600); err != nil {
+			t.Fatal(err)
+		}
+		called := false
+		if err := downloadAssetObjects(root, index, &sync.WaitGroup{}, func(string, string, string) { called = true }); err == nil || called {
+			t.Fatalf("invalid index accepted or downloads queued: %q", contents)
+		}
+	}
+}
 
 func TestRunGameUsesSeparateGameAndRuntimeDirs(t *testing.T) {
 	if runtime.GOOS == "windows" {

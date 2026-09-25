@@ -530,8 +530,11 @@ func (m Model) renderDownloadScreen() string {
 			Render("⚠ "+m.dlErr.Error())
 	}
 
-	hint := lipgloss.NewStyle().Foreground(colorDimGray).
-		Render("[Ctrl+C] Abort")
+	hintText := "[Ctrl+C] Abort"
+	if m.dlFinished && m.dlErr != nil {
+		hintText = "[Esc] Return to menu  [Ctrl+C] Quit"
+	}
+	hint := lipgloss.NewStyle().Foreground(colorDimGray).Render(hintText)
 
 	body := fmt.Sprintf(
 		"%s\n%s\n\n%s\n\n%s%s\n%s%s\n%s%s\n\n%s%s",

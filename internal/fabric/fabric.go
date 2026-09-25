@@ -28,7 +28,7 @@ type Profile struct {
 // size > 0, and to call wg.Done() when finished (Resolve calls wg.Add(1)
 // before invoking it). See package mojang for the standard
 // implementation.
-type Downloader func(url, destination, expectedSHA1 string)
+type Downloader func(url, destination, expectedSHA1 string) error
 
 // ProfilePath returns where the resolved Fabric launch profile is cached
 // for a given Minecraft version, so a previously launched Fabric setup
@@ -46,9 +46,7 @@ func ProfileExists(mcDir, version string) bool {
 // Resolve tries to obtain the Fabric launch profile for targetVersion. It
 // first checks for a cached profile on disk (written by a previous
 // successful resolution); if absent, it queries the Fabric meta API. All
-// network errors are handled gracefully — on any failure this returns
-// ok=false so the caller can fall back to Vanilla instead of panicking or
-// aborting the whole launch.
+// network errors return ok=false; a Fabric failure must not launch Vanilla.
 //
 // Library downloads triggered here are capped via a semaphore (maxConcurrent),
 // same as vanilla libraries and assets in package mojang.
@@ -58,7 +56,7 @@ func Resolve(targetVersion, mcDir, librariesPath string, wg *sync.WaitGroup, dow
 	// Try cached profile first (enables fully offline Fabric launches).
 	if cached, err := os.ReadFile(cachePath); err == nil {
 		var p Profile
-		if json.Unmarshal(cached, &p) == nil && p.MainClass != "" {
+		if json.Unmarshal(cached, &p) == nil && p.MainClass != "" && librariesPresent(p.ClasspathEntries) {
 			fmt.Println("   Using cached Fabric profile.")
 			return p, true
 		}
@@ -110,6 +108,7 @@ func Resolve(targetVersion, mcDir, librariesPath string, wg *sync.WaitGroup, dow
 	result := Profile{MainClass: rawProfile.MainClass}
 
 	fabricSem := make(chan struct{}, maxConcurrent)
+	errors := make(chan error, len(rawProfile.Libraries))
 	for _, lib := range rawProfile.Libraries {
 		parts := strings.Split(lib.Name, ":")
 		if len(parts) < 3 {
@@ -136,8 +135,17 @@ func Resolve(targetVersion, mcDir, librariesPath string, wg *sync.WaitGroup, dow
 		fabricSem <- struct{}{}
 		go func(u, d string) {
 			defer func() { <-fabricSem }()
-			download(u, d, "")
+			if err := download(u, d, ""); err != nil {
+				errors <- err
+			}
 		}(fullURL, fullDest)
+	}
+	wg.Wait()
+	select {
+	case err := <-errors:
+		fmt.Println("[!] Fabric library unavailable:", err)
+		return Profile{}, false
+	default:
 	}
 
 	// Cache the resolved profile so future launches can work offline.
@@ -147,4 +155,14 @@ func Resolve(targetVersion, mcDir, librariesPath string, wg *sync.WaitGroup, dow
 	}
 
 	return result, true
+}
+
+func librariesPresent(paths []string) bool {
+	for _, path := range paths {
+		info, err := os.Stat(path)
+		if err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
+			return false
+		}
+	}
+	return true
 }

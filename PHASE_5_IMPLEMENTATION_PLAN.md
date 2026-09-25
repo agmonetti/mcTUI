@@ -1,6 +1,6 @@
 # Fase 5 — Plan de implementación: instancias y gestor de mods integrado en la TUI
 
-> Estado: plan pendiente de implementación.
+> Estado: 5A en curso; el núcleo 5A–5D y la ampliación 5E siguen pendientes.
 > Base de código revisada: `c7e7af9` — `Integrate reset configs backup restore flow`.
 > Antecedente: [RESET_CONFIGS.md](RESET_CONFIGS.md), sección «Fase 5: gestor de mods».
 > Objetivo solicitado: integración completa en mcTUI, tomando Prism Launcher como referencia funcional.
@@ -260,7 +260,7 @@ Depende de: estado actual de fases 1–4.
 - [ ] **A04** Instancia heredada y copia selectiva no destructiva.
 - [ ] **A05** Duplicación independiente; política explícita de inclusión de mundos.
 - [ ] **A06** Ajustes por instancia; Minecraft y loader fijados, Java y memoria validados.
-- [ ] **A07** Preparación común con errores; corregir éxito falso y fallback silencioso (fallback del lanzador eliminado; faltan errores de descarga y preparación común).
+- [ ] **A07** Preparación común con errores; corregir éxito falso y fallback silencioso (descargador ahora propaga fallos y evita publicar archivos incompletos; aún falta unificar preparación y validar assets/natives).
 - [ ] **A08** Lanzamiento integrado con resultado/proceso/log en TUI; fijar `cmd.Dir`.
 - [ ] **A09** Mundos y avisos de compatibilidad referidos a la instancia seleccionada.
 - [ ] **A10** Reset/restore con raíz explícita e historial identificado por instancia.
@@ -412,6 +412,12 @@ Implementado en este corte: `DataDirChecked()` resuelve la raíz nueva sin crear
 
 **Aún no listo para uso desde la TUI:** `main.go`, la preparación/descarga, los mundos, Reset Configs y sus vistas siguen operando sobre la instalación heredada. No seleccionar una instancia gestionada para jugar hasta que todos esos flujos compartan el mismo contexto fijado al iniciar cada tarea. Las descargas todavía pueden ocultar errores: A07 sigue pendiente. La selección persistida en `selection.json` no afecta el lanzamiento anterior hasta integrar A03 en la UI. No se considera A02/A03/A07 cerrada por este trabajo preparatorio.
 
+### 10.3. Continuación de A07 — descargas verificadas (corte parcial)
+
+`mojang.Download` comprueba HTTP, tipo HTML, lectura completa y SHA-1 publicado cuando existe; revalida archivos conocidos en caché y descarga a un temporal antes de publicar. Devuelve errores para que la TUI no anuncie éxito ni lance el juego tras fallar metadata, cliente, librerías o Fabric. El lanzador también bloquea el arranque ante fallos de descarga y ausencia de metadata/índice de assets, y rechaza índices con JSON o hashes malformados. Los tests locales cubren 404, HTML, truncado, caché alterada, índices inválidos y resultado fallido en TUI. SHA-1 procede del manifiesto oficial de Mojang: aquí verifica integridad frente a esa fuente, no es una firma ni prueba ausencia de malware.
+
+**No cerrar A07 aún:** UI y lanzador siguen duplicando preparación; falta verificar integridad del índice en caché y extracción de natives, URLs sin hash, timeout/contexto de metadata, cancelación y retorno del proceso dentro de TUI. La instalación gestionada sigue sin estar conectada a Play. No se ha validado en Windows/macOS reales.
+
 ## 11. Trazabilidad y seguimiento
 
 | Requisito original | Implementación rastreable |
@@ -434,7 +440,7 @@ Al cerrar tareas, sustituir «pendiente» por commit y evidencia. Documentar dif
 
 | Hito | Estado | Commit(s) | Evidencia / bloqueos |
 | --- | --- | --- | --- |
-| 5A | En curso (A01; A02/A03/A07 parciales) | — | §10.1–10.2; TUI aún heredada, DEC-03/05 pendientes |
+| 5A | En curso (A01; A02/A03/A07 parciales) | — | §10.1–10.3; TUI aún heredada, DEC-03/05 pendientes |
 | 5B | Pendiente | — | Requiere 5A; DEC-04 |
 | 5C | Pendiente | — | Requiere 5A/5B; DEC-06/10 |
 | 5D | Pendiente | — | Requiere 5A–5C; DEC-07/10 |

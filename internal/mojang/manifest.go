@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 )
 
 const manifestURL = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
@@ -206,58 +207,74 @@ func ClientJarExists(mcDir, version string) bool {
 
 // --- Downloads ---
 
-// Download fetches url into destination. If expectedSHA1 is non-empty,
-// the downloaded content is verified against it; on mismatch, the
-// partial/corrupt file is removed so a future run will retry instead of
-// treating it as already-installed.
-//
-// If destination already exists with size > 0, Download skips the fetch
-// entirely — hash verification only applies to freshly downloaded
-// content, to avoid re-hashing potentially large files (assets,
-// client.jar) on every launch.
-//
-// Download calls wg.Done() when finished; callers must call wg.Add(1)
-// before invoking it (matching the fabric.Downloader contract).
-func Download(wg *sync.WaitGroup) func(url, destination, expectedSHA1 string) {
-	return func(url, destination, expectedSHA1 string) {
+// Download verifies cached files with a known SHA-1 and publishes downloads
+// only after a complete, successful transfer. Callers must Add before calling;
+// Done is called even on failure.
+func Download(wg *sync.WaitGroup) func(url, destination, expectedSHA1 string) error {
+	return func(url, destination, expectedSHA1 string) error {
 		defer wg.Done()
 		if url == "" {
-			return
+			return fmt.Errorf("missing download URL for %s", destination)
 		}
-		os.MkdirAll(filepath.Dir(destination), 0755)
-		if info, err := os.Stat(destination); err == nil && info.Size() > 0 {
-			return
+		if info, err := os.Stat(destination); err == nil && info.Mode().IsRegular() && info.Size() > 0 {
+			if expectedSHA1 == "" {
+				return nil
+			}
+			f, err := os.Open(destination)
+			if err != nil {
+				return err
+			}
+			// Mojang publishes SHA-1, not SHA-256; this checks integrity against its manifest.
+			h := sha1.New() // nosemgrep: go.lang.security.audit.crypto.use_of_weak_crypto.use-of-sha1
+			_, err = io.Copy(h, f)
+			f.Close()
+			if err != nil {
+				return err
+			}
+			if strings.EqualFold(fmt.Sprintf("%x", h.Sum(nil)), expectedSHA1) {
+				return nil
+			}
 		}
-		r, err := http.Get(url)
-		if err != nil || r == nil {
-			return
+		if err := os.MkdirAll(filepath.Dir(destination), 0755); err != nil {
+			return err
+		}
+		r, err := (&http.Client{Timeout: 2 * time.Minute}).Get(url)
+		if err != nil {
+			return fmt.Errorf("download %s: %w", destination, err)
 		}
 		defer r.Body.Close()
-
-		f, err := os.Create(destination)
+		if r.StatusCode != http.StatusOK {
+			return fmt.Errorf("download %s: HTTP %d", destination, r.StatusCode)
+		}
+		if strings.HasPrefix(r.Header.Get("Content-Type"), "text/html") {
+			return fmt.Errorf("download %s: unexpected HTML response", destination)
+		}
+		f, err := os.CreateTemp(filepath.Dir(destination), ".mctui-download-*")
 		if err != nil {
-			return
+			return err
 		}
-
-		if expectedSHA1 == "" {
-			io.Copy(f, r.Body)
+		defer os.Remove(f.Name())
+		// Mojang publishes SHA-1, not SHA-256; this checks integrity against its manifest.
+		h := sha1.New() // nosemgrep: go.lang.security.audit.crypto.use_of_weak_crypto.use-of-sha1
+		n, err := io.Copy(io.MultiWriter(f, h), r.Body)
+		if err == nil && (n == 0 || r.ContentLength >= 0 && n != r.ContentLength) {
+			err = fmt.Errorf("empty or truncated response")
+		}
+		if err == nil && expectedSHA1 != "" && !strings.EqualFold(expectedSHA1, fmt.Sprintf("%x", h.Sum(nil))) {
+			err = fmt.Errorf("SHA-1 mismatch")
+		}
+		if err == nil {
+			err = f.Close()
+		} else {
 			f.Close()
-			return
 		}
-
-		h := sha1.New()
-		_, copyErr := io.Copy(io.MultiWriter(f, h), r.Body)
-		f.Close()
-
-		if copyErr != nil {
-			os.Remove(destination)
-			return
+		if err != nil {
+			return fmt.Errorf("download %s: %w", destination, err)
 		}
-
-		if fmt.Sprintf("%x", h.Sum(nil)) != expectedSHA1 {
-			fmt.Printf("   [!] Checksum mismatch for %s, removing.\n", filepath.Base(destination))
-			os.Remove(destination)
+		if err := os.Rename(f.Name(), destination); err != nil {
+			return fmt.Errorf("publish %s: %w", destination, err)
 		}
+		return nil
 	}
 }
 

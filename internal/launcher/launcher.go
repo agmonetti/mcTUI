@@ -5,6 +5,7 @@
 package launcher
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -55,27 +56,37 @@ func Launch(gameDir, runtimeDir, username, targetVersion, modloader string, memo
 		}
 	}
 
-	if !haveVersionData && !haveClient {
-		fmt.Println("\n[!] Cannot launch: no internet connection and no local")
-		fmt.Println("    installation found for version", targetVersion+".")
-		fmt.Println("    Connect to the internet at least once to download it.")
+	if !haveVersionData {
+		fmt.Println("\n[!] Cannot launch: version metadata unavailable for", targetVersion)
 		return
 	}
 
 	var classpathEntries []string
 	librariesPath := filepath.Join(runtimeDir, "libraries")
 	var wg sync.WaitGroup
-	download := mojang.Download(&wg)
-
-	// Download client.jar if missing and we have a URL for it.
-	if !haveClient {
-		if !haveVersionData || data.Downloads.Client.URL == "" {
-			fmt.Println("\n[!] Cannot download client.jar: no version data available.")
-			return
+	checkedDownload := mojang.Download(&wg)
+	var downloadErr error
+	var errMu sync.Mutex
+	download := func(url, dest, sha1 string) {
+		if err := checkedDownload(url, dest, sha1); err != nil {
+			errMu.Lock()
+			if downloadErr == nil {
+				downloadErr = err
+			}
+			errMu.Unlock()
 		}
-		wg.Add(1)
-		download(data.Downloads.Client.URL, clientPath, data.Downloads.Client.SHA1)
-		wg.Wait() // wait specifically for the client jar before proceeding
+	}
+
+	// Validate the cached client too: a non-empty JAR can still be corrupt.
+	if !haveClient {
+		fmt.Println("   Client JAR missing; downloading from Mojang.")
+	}
+	wg.Add(1)
+	download(data.Downloads.Client.URL, clientPath, data.Downloads.Client.SHA1)
+	wg.Wait()
+	if downloadErr != nil {
+		fmt.Println("[!] Cannot prepare client:", downloadErr)
+		return
 	}
 
 	if haveVersionData {
@@ -107,7 +118,7 @@ func Launch(gameDir, runtimeDir, username, targetVersion, modloader string, memo
 	if modloader == "Fabric" {
 		fmt.Println("-> Fabric injection detected. Resolving profile...")
 
-		profile, ok := fabric.Resolve(targetVersion, runtimeDir, librariesPath, &wg, download, maxConcurrentDownloads)
+		profile, ok := fabric.Resolve(targetVersion, runtimeDir, librariesPath, &wg, checkedDownload, maxConcurrentDownloads)
 		if ok {
 			mainClass = profile.MainClass
 			classpathEntries = append(classpathEntries, profile.ClasspathEntries...)
@@ -128,6 +139,14 @@ func Launch(gameDir, runtimeDir, username, targetVersion, modloader string, memo
 	}
 
 	wg.Wait()
+	if downloadErr != nil {
+		fmt.Println("[!] Cannot prepare game:", downloadErr)
+		return
+	}
+	if !haveAssetIndex {
+		fmt.Println("[!] Cannot prepare game: asset index unavailable.")
+		return
+	}
 	classpathEntries = append(classpathEntries, clientPath)
 	classpathEntries = deduplicateClasspath(classpathEntries)
 	finalClasspath := strings.Join(classpathEntries, string(filepath.ListSeparator))
@@ -171,7 +190,10 @@ func validateAssets(mcDir string, data mojang.VersionData, haveVersionData bool,
 	indexPath := filepath.Join(mcDir, "assets", "indexes", data.AssetIndex.ID+".json")
 
 	if info, err := os.Stat(indexPath); err == nil && info.Size() > 0 {
-		downloadAssetObjects(mcDir, indexPath, wg, download)
+		if err := downloadAssetObjects(mcDir, indexPath, wg, download); err != nil {
+			fmt.Println("[!] Invalid cached asset index:", err)
+			return "", false
+		}
 		return data.AssetIndex.ID, true
 	}
 
@@ -190,24 +212,38 @@ func validateAssets(mcDir string, data mojang.VersionData, haveVersionData bool,
 		return "", false
 	}
 
-	downloadAssetObjects(mcDir, indexPath, wg, download)
+	if err := downloadAssetObjects(mcDir, indexPath, wg, download); err != nil {
+		fmt.Println("[!] Invalid asset index:", err)
+		return "", false
+	}
 	return data.AssetIndex.ID, true
 }
 
 // downloadAssetObjects reads an asset index JSON and kicks off downloads
 // for every object listed, capped at 50 concurrent downloads.
-func downloadAssetObjects(mcDir, indexPath string, wg *sync.WaitGroup, download func(url, destination, expectedSHA1 string)) {
+func downloadAssetObjects(mcDir, indexPath string, wg *sync.WaitGroup, download func(url, destination, expectedSHA1 string)) error {
 	indexBytes, err := os.ReadFile(indexPath)
 	if err != nil {
-		return
+		return err
 	}
 	var assetIndexData struct {
 		Objects map[string]struct {
 			Hash string `json:"hash"`
 		} `json:"objects"`
 	}
-	if json.Unmarshal(indexBytes, &assetIndexData) != nil {
-		return
+	if err := json.Unmarshal(indexBytes, &assetIndexData); err != nil {
+		return err
+	}
+	if assetIndexData.Objects == nil {
+		return fmt.Errorf("missing objects")
+	}
+	for _, obj := range assetIndexData.Objects {
+		if len(obj.Hash) != 40 {
+			return fmt.Errorf("invalid asset hash %q", obj.Hash)
+		}
+		if _, err := hex.DecodeString(obj.Hash); err != nil {
+			return fmt.Errorf("invalid asset hash %q: %w", obj.Hash, err)
+		}
 	}
 
 	const maxConcurrentAssets = 50
@@ -225,6 +261,7 @@ func downloadAssetObjects(mcDir, indexPath string, wg *sync.WaitGroup, download 
 			download(u, d, h)
 		}(url, dest, obj.Hash)
 	}
+	return nil
 }
 
 // runGame execs java with the assembled classpath and arguments, then

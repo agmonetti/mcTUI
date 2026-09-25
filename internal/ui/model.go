@@ -75,10 +75,11 @@ type Model struct {
 	latestRelease updater.Release // zero value = no update available
 
 	// Download progress (usado en downloadScreen)
-	dlDone  int
-	dlTotal int
-	dlFile  string
-	dlErr   error
+	dlDone     int
+	dlTotal    int
+	dlFile     string
+	dlErr      error
+	dlFinished bool
 
 	resetDir         string
 	resetFound       []string

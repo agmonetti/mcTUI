@@ -4,6 +4,7 @@ package ui
 // Permite mostrar barra de progreso en tiempo real en downloadScreen.
 
 import (
+	"fmt"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -48,7 +49,7 @@ func nextDownloadCmd(ch <-chan interface{}) tea.Cmd {
 	return func() tea.Msg {
 		msg, ok := <-ch
 		if !ok {
-			return DownloadDoneMsg{}
+			return DownloadDoneMsg{Err: fmt.Errorf("download stopped without a result")}
 		}
 		return downloadChanMsg{ch: ch, msg: msg}
 	}
@@ -77,8 +78,7 @@ func startDownload(version, modloader string) <-chan interface{} {
 		}
 
 		if !haveVersionData {
-			ch <- DownloadProgressMsg{File: "version metadata", Done: 0, Total: 1}
-			ch <- DownloadDoneMsg{Err: nil}
+			ch <- DownloadDoneMsg{Err: fmt.Errorf("version metadata unavailable for %s (connect to Mojang or restore the cache)", version)}
 			return
 		}
 
@@ -128,23 +128,30 @@ func startDownload(version, modloader string) <-chan interface{} {
 		// Función de descarga con reporte de progreso
 		var wg sync.WaitGroup
 		downloadFn := mojang.Download(&wg)
-
-		wrappedDownload := func(url, dest, sha1, label string) {
-			downloadFn(url, dest, sha1)
-			done := int(atomic.AddInt32(&doneFiles, 1))
-			ch <- DownloadProgressMsg{
-				Done:  done,
-				Total: total,
-				File:  label,
+		var firstErr error
+		var errMu sync.Mutex
+		wrappedDownload := func(url, dest, sha1, label string) error {
+			err := downloadFn(url, dest, sha1)
+			if err != nil {
+				errMu.Lock()
+				if firstErr == nil {
+					firstErr = err
+				}
+				errMu.Unlock()
 			}
+			done := int(atomic.AddInt32(&doneFiles, 1))
+			ch <- DownloadProgressMsg{Done: done, Total: total, File: label, Err: err}
+			return err
 		}
 
 		// 1. client.jar
-		if needClient && haveVersionData && data.Downloads.Client.URL != "" {
+		if needClient {
 			wg.Add(1)
-			wrappedDownload(data.Downloads.Client.URL, clientPath,
-				data.Downloads.Client.SHA1, "client.jar")
-			wg.Wait()
+			if err := wrappedDownload(data.Downloads.Client.URL, clientPath,
+				data.Downloads.Client.SHA1, "client.jar"); err != nil {
+				ch <- DownloadDoneMsg{Err: err}
+				return
+			}
 		}
 
 		// 2. Librerías (paralelo, cap 20)
@@ -161,6 +168,10 @@ func startDownload(version, modloader string) <-chan interface{} {
 				}()
 			}
 			wg.Wait()
+			if firstErr != nil {
+				ch <- DownloadDoneMsg{Err: firstErr}
+				return
+			}
 		}
 
 		// 3. Fabric si aplica
@@ -172,8 +183,10 @@ func startDownload(version, modloader string) <-chan interface{} {
 			}
 			var fwg sync.WaitGroup
 			fDl := mojang.Download(&fwg)
-			fabric.Resolve(version, mcDir, filepath.Join(mcDir, "libraries"), &fwg, fDl, 20)
-			fwg.Wait()
+			if _, ok := fabric.Resolve(version, mcDir, filepath.Join(mcDir, "libraries"), &fwg, fDl, 20); !ok {
+				ch <- DownloadDoneMsg{Err: fmt.Errorf("Fabric profile unavailable for %s", version)}
+				return
+			}
 			atomic.AddInt32(&doneFiles, 5)
 			ch <- DownloadProgressMsg{
 				Done:  int(atomic.LoadInt32(&doneFiles)),

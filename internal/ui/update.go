@@ -36,6 +36,9 @@ func installationReady(version, modloader string) bool {
 	if !mojang.ClientJarExists(mcDir, version) {
 		return false
 	}
+	if data, ok := mojang.CachedVersionData(mcDir, version); !ok || data.Downloads.Client.URL == "" || data.AssetIndex.ID == "" {
+		return false
+	}
 	if modloader == "Fabric" && !fabric.ProfileExists(mcDir, version) {
 		return false
 	}
@@ -81,15 +84,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// ── Mensajes de progreso de descarga ───────────────────────────────────
 	case downloadChanMsg:
+		if m.state != downloadScreen {
+			return m, nil
+		}
 		// Procesa el mensaje portado y encadena la espera del siguiente.
 		switch inner := msg.msg.(type) {
 		case DownloadProgressMsg:
 			m.dlDone = inner.Done
 			m.dlTotal = inner.Total
 			m.dlFile = inner.File
-			m.dlErr = inner.Err
+			if inner.Err != nil {
+				m.dlErr = inner.Err
+			}
 			return m, nextDownloadCmd(msg.ch)
 		case DownloadDoneMsg:
+			m.dlFinished = true
 			if inner.Err != nil {
 				m.dlErr = inner.Err
 				return m, nil
@@ -103,11 +112,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.state >= resetModeScreen && m.state <= resetResultScreen {
 			return m.updateResetKey(msg.String())
 		}
-		// En downloadScreen solo se puede cancelar con Ctrl+C
+		// A failed download stays visible until the user returns to the menu.
 		if m.state == downloadScreen {
 			switch msg.String() {
 			case "ctrl+c":
 				return m, tea.Quit
+			case "esc":
+				if m.dlFinished && m.dlErr != nil {
+					m.state = menuScreen
+				}
 			}
 			return m, cmd
 		}
@@ -219,6 +232,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.dlTotal = 0
 				m.dlFile = "Initializing..."
 				m.dlErr = nil
+				m.dlFinished = false
 				return m, StartDownloadCmd(m.versionSelect, m.modloader)
 			}
 
@@ -229,6 +243,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.dlTotal = 0
 				m.dlFile = "Initializing..."
 				m.dlErr = nil
+				m.dlFinished = false
 				return m, StartDownloadCmd(m.versionSelect, m.modloader)
 			}
 
