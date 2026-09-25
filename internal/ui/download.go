@@ -6,15 +6,14 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"mcTUI/internal/config"
 	"mcTUI/internal/launcher"
 )
 
 // StartDownloadCmd prepares the requested version using the same engine as
 // Launch; the runtime and selection are fixed when the command starts.
-func StartDownloadCmd(ctx context.Context, version, modloader string) tea.Cmd {
+func StartDownloadCmd(ctx context.Context, runtimeDir, version, modloader, javaPath string) tea.Cmd {
 	return func() tea.Msg {
-		ch := startDownload(ctx, version, modloader)
+		ch := startDownload(ctx, runtimeDir, version, modloader, javaPath)
 		return downloadChanMsg{ch: ch, msg: <-ch}
 	}
 }
@@ -34,23 +33,25 @@ func nextDownloadCmd(ch <-chan interface{}) tea.Cmd {
 	}
 }
 
-func startDownload(ctx context.Context, version, modloader string) <-chan interface{} {
+func startDownload(ctx context.Context, runtimeDir, version, modloader, javaPath string) <-chan interface{} {
 	ch := make(chan interface{}, 64)
 	go func() {
 		defer close(ch)
-		runtimeDir, err := config.MinecraftDirChecked()
-		if err != nil {
-			ch <- DownloadDoneMsg{Err: err}
+		if runtimeDir == "" {
+			ch <- DownloadDoneMsg{Err: fmt.Errorf("runtime directory is empty")}
 			return
 		}
 		done := 0
-		_, err = launcher.PrepareContext(ctx, runtimeDir, version, modloader, func(file string) {
+		prepared, err := launcher.PrepareContext(ctx, runtimeDir, version, modloader, func(file string) {
 			done++
 			select {
 			case ch <- DownloadProgressMsg{Done: done, File: file}:
 			case <-ctx.Done():
 			}
 		})
+		if err == nil {
+			_, err = launcher.ResolvePreparedJava(runtimeDir, prepared, javaPath)
+		}
 		select {
 		case ch <- DownloadDoneMsg{Err: err}:
 		case <-ctx.Done():

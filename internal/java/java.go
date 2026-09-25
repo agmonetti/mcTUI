@@ -5,6 +5,7 @@
 package java
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -12,6 +13,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Candidate represents a discovered Java installation.
@@ -31,7 +33,7 @@ type Candidate struct {
 func FindBinary(requiredMajor int, mcDir string) (Candidate, bool) {
 	pathJava := Candidate{Path: "java", Major: VersionAt("java")}
 
-	if requiredMajor == 0 || (pathJava.Major > 0 && pathJava.Major >= requiredMajor) {
+	if pathJava.Major > 0 && (requiredMajor == 0 || pathJava.Major >= requiredMajor) {
 		return pathJava, true
 	}
 
@@ -53,11 +55,39 @@ func FindBinary(requiredMajor int, mcDir string) (Candidate, bool) {
 	return pathJava, false
 }
 
+// ResolveBinary selects and validates the Java binary for a Minecraft version.
+// An explicit path is an override; otherwise it chooses an installed compatible
+// runtime, preferring PATH and Mojang-bundled runtimes as FindBinary does.
+func ResolveBinary(requiredMajor int, mcDir, overridePath string) (Candidate, error) {
+	if overridePath != "" {
+		major := VersionAt(overridePath)
+		if major == 0 {
+			return Candidate{}, fmt.Errorf("selected Java is missing or invalid")
+		}
+		if requiredMajor > 0 && major < requiredMajor {
+			return Candidate{}, fmt.Errorf("selected Java %d is older than required Java %d", major, requiredMajor)
+		}
+		return Candidate{Path: overridePath, Major: major}, nil
+	}
+
+	candidate, ok := FindBinary(requiredMajor, mcDir)
+	if !ok || candidate.Major == 0 {
+		if requiredMajor > 0 {
+			return Candidate{}, fmt.Errorf("Minecraft requires Java %d or newer, but no compatible runtime was found; install one from %s", requiredMajor, DownloadURL(requiredMajor))
+		}
+		return Candidate{}, fmt.Errorf("no usable Java runtime found")
+	}
+	return candidate, nil
+}
+
 // VersionAt runs "<binaryPath> -version" and parses the major version
 // (handling both old "1.8.0_xxx" and new "21.0.x" / "25" formats).
 // Returns 0 if it couldn't be determined (e.g. binary not found).
 func VersionAt(binaryPath string) int {
-	cmd := exec.Command(binaryPath, "-version")
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	// binaryPath is the Java executable selected or discovered by the user; the argument is fixed and no shell is invoked.
+	cmd := exec.CommandContext(ctx, binaryPath, "-version") // nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
 	var out strings.Builder
 	cmd.Stdout = &out
 	cmd.Stderr = &out
@@ -90,25 +120,6 @@ func VersionAt(binaryPath string) int {
 		}
 	}
 	return major
-}
-
-// FormatInfo builds a short "Java : ..." status line, cross-checking the
-// installed default against a selected version's requirement when known.
-func FormatInfo(installedMajor int, requiredMajor int) string {
-	if installedMajor == 0 {
-		return "not found"
-	}
-	if requiredMajor == 0 {
-		return strconvItoa(installedMajor) + " (default)"
-	}
-	if installedMajor >= requiredMajor {
-		return strconvItoa(installedMajor) + " (default, OK)"
-	}
-	return strconvItoa(installedMajor) + " (default) — needs " + strconvItoa(requiredMajor) + "+ ⚠"
-}
-
-func strconvItoa(n int) string {
-	return strconv.Itoa(n)
 }
 
 // scanEmbeddedRuntimes looks for JREs bundled by the official

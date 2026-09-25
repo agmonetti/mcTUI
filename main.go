@@ -7,7 +7,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"mcTUI/internal/config"
-	"mcTUI/internal/java"
 	"mcTUI/internal/launcher"
 	"mcTUI/internal/mojang"
 	"mcTUI/internal/roadmap"
@@ -25,7 +24,6 @@ var Version = "dev"
 func main() {
 	validReleases := mojang.FetchReleases()
 	cfg := config.Load()
-	javaMajor := java.VersionAt("java")
 	roadmapItems := roadmap.Load()
 
 	// Check for updates concurrently so startup isn't delayed.
@@ -39,7 +37,7 @@ func main() {
 	latestRelease := <-updateCh
 
 	p := tea.NewProgram(
-		ui.New(validReleases, cfg, roadmapItems, javaMajor, latestRelease),
+		ui.New(validReleases, cfg, roadmapItems, latestRelease),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)
@@ -51,6 +49,7 @@ func main() {
 	}
 
 	if m, ok := finalModel.(ui.Model); ok && m.PlaySelected() {
-		launcher.Launch(config.MinecraftDir(), config.MinecraftDir(), m.Username(), m.VersionSelect(), m.Modloader(), m.MemoryMB())
+		launch := m.LaunchConfig()
+		launcher.Launch(launch.GameDir, launch.RuntimeDir, launch.Username, launch.Version, launch.Modloader, launch.MemoryMB, launch.JavaPath)
 	}
 }

@@ -255,12 +255,12 @@ Las casillas reflejan el cierre completo de cada tarea; los avances parciales se
 Depende de: estado actual de fases 1–4.
 
 - [x] **A01** Resolver decisiones de rutas/esquema y documentarlas en la sección 10 (diseño; implementación pendiente).
-- [ ] **A02** Separar gameDir y runtime; revisar todos los callers de `MinecraftDir()` (lanzador separado; falta conectar preparación/TUI a la instancia activa).
-- [ ] **A03** Persistir/listar/crear/seleccionar/renombrar instancias con ID estable (API y pruebas listas; falta exponerlo en la TUI).
+- [ ] **A02** Separar gameDir y runtime; revisar todos los callers de `MinecraftDir()` (lanzador/preparación reciben rutas distintas; corte local conecta Play y mundos con la instancia activa, falta revisar Reset/restore y callers restantes).
+- [ ] **A03** Persistir/listar/crear/seleccionar/renombrar instancias con ID estable (API y TUI completas para listar, crear Vanilla, cambiar activa y renombrar; falta validar el corte en ejecución).
 - [ ] **A04** Instancia heredada y copia selectiva no destructiva.
 - [ ] **A05** Duplicación independiente; política explícita de inclusión de mundos.
-- [ ] **A06** Ajustes por instancia; Minecraft y loader fijados, Java y memoria validados.
-- [ ] **A07** Preparación común con errores; corregir éxito falso y fallback silencioso (UI y lanzador reutilizan `launcher.Prepare`; índice y natives verificados en §10.4; aún faltan metadata con contexto, archivos sin hash y cancelación).
+- [ ] **A06** Ajustes por instancia; Minecraft y loader fijados, Java y memoria validados (selector de Java con modo automático y override manual persistido, validación preflight unificada y memoria persistida en instance.json).
+- [ ] **A07** Preparación común con errores; corregir éxito falso y fallback silencioso (UI y lanzador reutilizan `launcher.Prepare`; índice/natives en §10.4 y contexto/integridad/cancelación en §10.5; faltan errores tipados y casos de arquitectura/extracción señalados allí).
 - [ ] **A08** Lanzamiento integrado con resultado/proceso/log en TUI; fijar `cmd.Dir`.
 - [ ] **A09** Mundos y avisos de compatibilidad referidos a la instancia seleccionada.
 - [ ] **A10** Reset/restore con raíz explícita e historial identificado por instancia.
@@ -367,9 +367,9 @@ La entrada real a Minecraft por versión/loader se valida manualmente por el usu
 
 | Fecha | Commit / Build | OS / Arch | Minecraft | Loader | Java | Prep / Descarga | Menú principal | Salida / Log |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-09-25 | `7c12b8a` + corte A07 | Arch Linux (kernel 7.2.6, x86_64) | 1.20.4 | Vanilla | OpenJDK 27 | OK (descarga y verificación completas) | Sí, confirmado | Exit 0; `~/.minecraft/mctui_latest.log` |
-| 2026-09-25 | `7c12b8a` + corte A07 | Arch Linux (kernel 7.2.6, x86_64) | 1.21.1 | Vanilla | OpenJDK 27 | OK (descarga y verificación completas) | Sí, confirmado | Exit 0; `~/.minecraft/mctui_latest.log` |
-| 2026-09-25 | `7c12b8a` + corte A07 | Arch Linux (kernel 7.2.6, x86_64) | 1.20.4 | Fabric (loader compatible) | OpenJDK 27 | OK (perfil Fabric y SHA-1 Maven verificados) | Sí, confirmado | Exit 0; `~/.minecraft/mctui_latest.log` |
+| No confirmada | No confirmado | Arch Linux (reportado; arquitectura/build no confirmados) | 1.20.4 | Vanilla | No confirmado | Sin fallas (reportado; detalles no confirmados) | No confirmado | No confirmado |
+| No confirmada | No confirmado | Arch Linux (reportado; arquitectura/build no confirmados) | 1.21.1 | Vanilla | No confirmado | Sin fallas (reportado; detalles no confirmados) | No confirmado | No confirmado |
+| No confirmada | No confirmado | Arch Linux (reportado; arquitectura/build no confirmados) | 1.20.4 | Fabric (loader exacto no confirmado) | No confirmado | Sin fallas (reportado; detalles no confirmados) | No confirmado | No confirmado |
 
 
 ### Plataformas
@@ -452,9 +452,24 @@ Implementado sobre `e3079af`, en este commit:
 
 Pruebas locales: fallo de metadata, hash incorrecto, falta de hash, cancelación de una solicitud HTTP en curso y rechazo de Play tras cancelar. Pasan `go test ./...`, `go test -race ./...`, `go vet ./...`, `git diff --check` y compilación cruzada Windows amd64/macOS arm64; compilar no equivale a probar ejecución.
 
-Validación manual registrada en §9 (Arch Linux x86_64, OpenJDK 27): Vanilla 1.20.4, Vanilla 1.21.1 y Fabric 1.20.4 se probaron llegando al menú principal sin fallas en el log. Esto descarta una falla general reproducible en esas tres combinaciones, pero no acredita otras versiones o plataformas.
+Validación manual reportada en §9: el usuario probó Vanilla 1.20.4, Vanilla 1.21.1 y Fabric 1.20.4 en Arch Linux sin fallas reportadas. Fecha/build/arquitectura/Java/llegada al menú/salida/log no quedaron confirmados; no inferirlos del entorno actual ni tratar el reporte como evidencia de otras plataformas.
 
 **A07 continúa abierta:** faltan errores tipados por causa, revisión de reglas de arquitectura y versiones antiguas, interrupción durante la copia de un único archivo nativo y validación real de Fabric/Vanilla en las plataformas anunciadas. Un runtime con metadata antigua no verificable puede fallar explícitamente; no se lo convierte en éxito falso. A08 (resultado/proceso dentro de TUI) y conectar instancias gestionadas siguen pendientes.
+
+### 10.6. Primer corte vertical A02/A03/A06 — selección, instancias y selector de Java
+
+La TUI carga la selección persistida y permite abrir el selector con `i`, cambiar de instancia, renombrar con `r` y crear instancias Vanilla con `n`. Confirmar Play fija `gameDir`, `runtimeDir`, versión/loader/memoria y Java antes de iniciar preparación; el worker recibe el runtime explícito. `main.go` lanza usando ese mismo snapshot. Estado de caché/Java y mundos consultan runtime/gameDir seleccionados. La instalación heredada continúa usando `.minecraft`; Reset queda etiquetado/restringido a legacy hasta A10. No se escribe la configuración de juego managed en el `config.json` global; la memoria se cicla y persiste en `instance.json`.
+
+El selector de Java adapta automáticamente la versión según el requisito oficial (`javaVersion.majorVersion`) de los metadatos de Minecraft o un ejecutable manual por instancia:
+- En modo automático, busca una JRE en `PATH`, en `runtime/` empaquetado por Mojang o instalaciones del sistema que cumpla la versión requerida.
+- El picker permite navegar y seleccionar manualmente un binario `java`. Si el requisito de la versión ya está en caché, rechaza binarios incompatibles al momento de elegir.
+- Con `d` en el picker se restablece la selección al modo automático.
+- Preflight unificado en la TUI: la comprobación de compatibilidad (`ResolvePreparedJava`) se ejecuta al terminar la preparación y antes de salir de la interfaz, evitando lanzar con un Java incompatible.
+- En la vista activa, el estado de Java refleja si se usa el modo automático o el override manual y solo alerta incompatibilidad si el ejecutable manual seleccionado no alcanza la versión mayor requerida.
+
+Las rutas managed rechazan `minecraft/` o `runtime/` si son symlinks para evitar romper aislamiento. Instancias Fabric gestionadas quedan bloqueadas al Play hasta honrar `loader_version` exacto y cachear el perfil por la identidad completa; no hay fallback a Vanilla.
+
+`TestInstancePickerAndLaunchPathsStayIsolated`, `TestRenameInstanceFromPicker`, `TestManagedSettingsAndJavaPickerPersist`, `TestResolveBinaryRejectsIncompatibleOverrideAndFindsBundledJava`, `TestManagedFabricLaunchIsBlockedUntilExactLoaderSupport` y la prueba de rechazo de gameDir/runtime enlazados cubren selección persistida, runtime común, renombrado, persistencia y validación de Java, y aislamiento seguro. Pasan `go test ./...`, `go test -race ./...`, `go vet ./...` y `git diff --check`. No se ha ejecutado Minecraft con una instancia gestionada ni se marcan A02/A03/A06 cerradas formalmente hasta validación de juego real.
 
 ## 11. Trazabilidad y seguimiento
 
@@ -478,7 +493,7 @@ Al cerrar tareas, sustituir «pendiente» por commit y evidencia. Documentar dif
 
 | Hito | Estado | Commit(s) | Evidencia / bloqueos |
 | --- | --- | --- | --- |
-| 5A | En curso (A01; A02/A03/A07 parciales) | `8e3c89d`, `c834078`, `e3079af`, `7c12b8a`, corte A07 (preparación cancelable y Fabric SHA-1) | §10.1–10.5; TUI aún heredada, DEC-03/05 pendientes |
+| 5A | En curso (A01; A02/A03/A07 parciales) | `8e3c89d`, `c834078`, `e3079af`, `7c12b8a`, `c57fbe2`; corte A02/A03 sin commit | §10.1–10.6; selector/Play gestionado pendiente de validación; DEC-03/05 pendientes |
 | 5B | Pendiente | — | Requiere 5A; DEC-04 |
 | 5C | Pendiente | — | Requiere 5A/5B; DEC-06/10 |
 | 5D | Pendiente | — | Requiere 5A–5C; DEC-07/10 |

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -9,6 +10,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"mcTUI/internal/config"
+	"mcTUI/internal/instances"
+	"mcTUI/internal/java"
 	"mcTUI/internal/resetconfigs"
 	"mcTUI/internal/updater"
 	"mcTUI/internal/worlds"
@@ -32,12 +35,15 @@ const (
 	resetRestoreConfirmScreen
 	resetRunningScreen
 	resetResultScreen
+	javaPickerScreen
+	instancesScreen
+	instanceNameScreen
 )
 
 // menuOptionsCount must match len(menuOptions) in View(). Centralized
 // here so Update()'s cursor bounds check doesn't drift from the menu's
 // actual length if options are added/removed.
-const menuOptionsCount = 8
+const menuOptionsCount = 9
 
 // DownloadProgressMsg es enviado por la goroutine de descarga al TUI
 // cada vez que un archivo termina de descargarse.
@@ -58,20 +64,35 @@ type ResetDoneMsg struct {
 }
 
 // Model is the root Bubble Tea model for mcTUI.
+type LaunchConfig struct {
+	GameDir, RuntimeDir          string
+	Username, Version, Modloader string
+	MemoryMB                     int
+	JavaPath                     string
+}
+
 type Model struct {
 	state          screenState
 	cursorMenu     int
 	cursorVersions int
 	cursorWorlds   int
 
-	username      string
-	versionSelect string
-	memoryMB      int
-	modloader     string
-	versions      []string
-	worlds        []worlds.Info
-	roadmap       []string
-	latestRelease updater.Release // zero value = no update available
+	username         string
+	versionSelect    string
+	memoryMB         int
+	modloader        string
+	versions         []string
+	worlds           []worlds.Info
+	roadmap          []string
+	dataRoot         string
+	instanceList     []instances.Instance
+	instance         instances.Instance
+	instanceErr      error
+	instanceCursor   int
+	instanceRenameID string
+	pickerForJava    bool
+	launch           LaunchConfig
+	latestRelease    updater.Release // zero value = no update available
 
 	// Download progress (usado en downloadScreen)
 	dlDone     int
@@ -105,15 +126,14 @@ type Model struct {
 	input textinput.Model
 	play  bool
 
-	width     int
-	height    int
-	javaMajor int // major version of the default "java" in PATH; 0 = not found
+	width             int
+	height            int
+	javaOverrideMajor int // major version of the selected instance override
 }
 
-// New builds the initial model from the loaded config, available
-// versions, roadmap content, detected default Java version, and the
-// latest release info from GitHub (for update notifications).
-func New(versions []string, cfg config.Data, roadmap []string, javaMajor int, latest updater.Release) Model {
+// New builds the initial model from the loaded config, available versions,
+// roadmap content, and latest release info from GitHub.
+func New(versions []string, cfg config.Data, roadmap []string, latest updater.Release) Model {
 	ti := textinput.New()
 	ti.Placeholder = "Type your name..."
 	ti.Focus()
@@ -122,7 +142,7 @@ func New(versions []string, cfg config.Data, roadmap []string, javaMajor int, la
 	ti.PromptStyle = lipgloss.NewStyle().Foreground(colorBlue)
 	ti.TextStyle = lipgloss.NewStyle().Foreground(colorAccent2)
 
-	return Model{
+	m := Model{
 		state:         menuScreen,
 		cursorMenu:    0,
 		username:      cfg.Username,
@@ -134,8 +154,9 @@ func New(versions []string, cfg config.Data, roadmap []string, javaMajor int, la
 		latestRelease: latest,
 		input:         ti,
 		play:          false,
-		javaMajor:     javaMajor,
 	}
+	m.loadInstanceSelection()
+	return m
 }
 
 func (m Model) Init() tea.Cmd {
@@ -150,7 +171,84 @@ func (m Model) PlaySelected() bool {
 
 // Username, VersionSelect, Modloader, and MemoryMB expose the final
 // values needed by launcher.Launch after the program exits.
-func (m Model) Username() string      { return m.username }
-func (m Model) VersionSelect() string { return m.versionSelect }
-func (m Model) Modloader() string     { return m.modloader }
-func (m Model) MemoryMB() int         { return m.memoryMB }
+func (m Model) Username() string           { return m.username }
+func (m Model) VersionSelect() string      { return m.launch.Version }
+func (m Model) Modloader() string          { return m.launch.Modloader }
+func (m Model) MemoryMB() int              { return m.launch.MemoryMB }
+func (m Model) LaunchConfig() LaunchConfig { return m.launch }
+
+func (m *Model) loadInstanceSelection() {
+	m.dataRoot, m.instanceErr = config.DataDirChecked()
+	if m.instanceErr != nil {
+		return
+	}
+	m.instanceList, m.instanceErr = instances.List(m.dataRoot)
+	if m.instanceErr != nil {
+		return
+	}
+	m.instance, m.instanceErr = instances.Selected(m.dataRoot)
+	if m.instanceErr != nil {
+		return
+	}
+	if m.instance.Kind == "legacy" {
+		m.instance.MinecraftVersion = m.versionSelect
+		m.instance.Loader = m.modloader
+		m.instance.MemoryMB = m.memoryMB
+	} else {
+		m.versionSelect = m.instance.MinecraftVersion
+		m.modloader = m.instance.Loader
+		m.memoryMB = m.instance.MemoryMB
+	}
+	m.javaOverrideMajor = java.VersionAt(m.instance.JavaPath)
+}
+
+func (m Model) isManaged() bool { return m.instance.Kind == "managed" }
+
+func (m Model) gameDir() string {
+	path, err := instances.GameDir(m.dataRoot, m.instance)
+	if err != nil {
+		return "(unavailable)"
+	}
+	return path
+}
+
+func (m Model) runtimeDir() string {
+	path, err := instances.RuntimeDir(m.dataRoot, m.instance)
+	if err != nil {
+		return ""
+	}
+	return path
+}
+
+func (m *Model) setInstance(in instances.Instance) error {
+	if err := instances.Select(m.dataRoot, in.ID); err != nil {
+		return err
+	}
+	m.instance = in
+	if in.Kind == "legacy" {
+		cfg := config.Load()
+		m.versionSelect, m.modloader, m.memoryMB = cfg.Version, cfg.Modloader, cfg.MemoryMB
+	} else {
+		m.versionSelect, m.modloader, m.memoryMB = in.MinecraftVersion, in.Loader, in.MemoryMB
+	}
+	m.javaOverrideMajor = java.VersionAt(in.JavaPath)
+	return nil
+}
+
+func (m Model) launchConfig() (LaunchConfig, error) {
+	if m.dataRoot == "" || m.instance.ID == "" {
+		return LaunchConfig{}, fmt.Errorf("no valid instance is selected")
+	}
+	gameDir, err := instances.GameDir(m.dataRoot, m.instance)
+	if err != nil {
+		return LaunchConfig{}, err
+	}
+	runtimeDir, err := instances.RuntimeDir(m.dataRoot, m.instance)
+	if err != nil {
+		return LaunchConfig{}, err
+	}
+	if m.instance.Kind == "managed" && m.instance.Loader == "Fabric" {
+		return LaunchConfig{}, fmt.Errorf("managed Fabric instances require exact loader-version preparation, not available yet")
+	}
+	return LaunchConfig{GameDir: gameDir, RuntimeDir: runtimeDir, Username: m.username, Version: m.versionSelect, Modloader: m.modloader, MemoryMB: m.memoryMB, JavaPath: m.instance.JavaPath}, nil
+}

@@ -8,14 +8,21 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"mcTUI/internal/config"
-	"mcTUI/internal/java"
 	"mcTUI/internal/mojang"
 	"mcTUI/internal/resetconfigs"
 	"mcTUI/internal/worlds"
 )
 
 func (m Model) View() string {
+	if m.state == javaPickerScreen {
+		return lipgloss.Place(m.width, m.height, lipgloss.Left, lipgloss.Top, m.pickerPanelContent())
+	}
+	if m.state == instancesScreen {
+		return m.renderInstancesScreen()
+	}
+	if m.state == instanceNameScreen {
+		return m.renderInstanceNameScreen()
+	}
 	// ── Download screen completo (tapa todo el TUI) ──────────────────────────
 	if m.state == downloadScreen {
 		return m.renderDownloadScreen()
@@ -39,7 +46,7 @@ func (m Model) View() string {
 	topBar := renderTopBar(m.cursorMenu, hasUpdate)
 
 	// ── Featured Banner ──────────────────────────────────────────────────────
-	cached := filesCached(m.versionSelect, m.modloader)
+	cached := filesCached(m.runtimeDir(), m.versionSelect, m.modloader)
 	banner := renderFeaturedBanner(m.versionSelect, m.modloader, m.memoryMB, cached)
 
 	// ── Panel izquierdo: Profile Card + menú ────────────────────────────────
@@ -51,6 +58,14 @@ func (m Model) View() string {
 	divLine := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 24))
 	menuStr.WriteString(header + "\n" + divLine + "\n\n")
 
+	javaLabel := "Automatic"
+	if m.instance.JavaPath != "" {
+		if m.javaOverrideMajor > 0 {
+			javaLabel = fmt.Sprintf("Manual Java %d", m.javaOverrideMajor)
+		} else {
+			javaLabel = "Manual (unavailable)"
+		}
+	}
 	menuOptions := []string{
 		fmt.Sprintf("Play (%s)", m.versionSelect),
 		"Change Name",
@@ -58,7 +73,8 @@ func (m Model) View() string {
 		"Worlds",
 		fmt.Sprintf("Modloader: %s", lipgloss.NewStyle().Foreground(colorAccent2).Render(m.modloader)),
 		fmt.Sprintf("Memory: %d MB", m.memoryMB),
-		"Resets Configs",
+		"Resets Configs (legacy only)",
+		"Java: " + javaLabel,
 		"Quit",
 	}
 
@@ -539,6 +555,9 @@ func (m Model) renderDownloadScreen() string {
 }
 
 func (m Model) controlsHint() string {
+	if m.state == menuScreen {
+		return " [i] Instances  [↑/↓] Navigate  [Enter] Select  [q] Quit"
+	}
 	switch m.state {
 	case nameScreen:
 		return " [Enter] Save  [Esc] Cancel"
@@ -552,6 +571,8 @@ func (m Model) controlsHint() string {
 		return " [↑/↓] Choose  [Enter] Continue  [Esc] Back"
 	case resetPickerScreen:
 		return " [←/→] Browse  [Ctrl+H] Hidden  [Enter] Select  [d] Default  [Esc] Back"
+	case javaPickerScreen:
+		return " [↑/↓] Navigate  [←/→] Browse  [Enter] Choose Java  [Esc] Back"
 	case resetResultScreen:
 		return " [↑/↓] Scroll  [Enter/Esc] Menu"
 	case resetRunningScreen:
@@ -581,7 +602,7 @@ func (m Model) renderMemoryPanel(c *strings.Builder) {
 		line := fmt.Sprintf("  %-18s %-6s (%s)", r.label, r.gb, r.mb)
 		c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(line) + "\n")
 	}
-	c.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render("Press [Enter] to cycle values."))
+	c.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render("Press [Enter] to cycle values; saved for this installation."))
 }
 
 func (m Model) renderWorldsHint(c *strings.Builder) {
@@ -589,12 +610,12 @@ func (m Model) renderWorldsHint(c *strings.Builder) {
 	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 	c.WriteString(title + "\n" + div + "\n\n")
 
-	text := "View and manage your saved singleplayer\n" +
-		"worlds.\n\n" +
-		"Selecting a world will automatically\n" +
-		"change your launcher version to match\n" +
-		"the world's last played version to\n" +
-		"prevent corruption."
+	text := "View and manage your saved singleplayer\nworlds.\n\n"
+	if m.isManaged() {
+		text += "World selection does not change this\ninstance's version. Check compatibility\nbefore opening a modded world."
+	} else {
+		text += "Selecting a world changes the legacy\ninstallation version to match its last\nplayed version."
+	}
 
 	c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(text) + "\n\n")
 	c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("Press [Enter] to browse saves."))
@@ -622,11 +643,24 @@ func (m Model) renderActiveSession(c *strings.Builder) {
 		verString += fmt.Sprintf(" (%s)", m.modloader)
 	}
 
-	mcDir := config.MinecraftDir()
-	required := mojang.RequiredJavaVersion(mcDir, m.versionSelect)
-	javaLine := java.FormatInfo(m.javaMajor, required)
+	runtimeDir := m.runtimeDir()
+	required := mojang.RequiredJavaVersion(runtimeDir, m.versionSelect)
+	javaLine := "Automatic (checks before Play)"
+	if required > 0 {
+		javaLine = fmt.Sprintf("Automatic (Java %d+)", required)
+	}
 	javaColor := colorWhite
-	if required > 0 && m.javaMajor < required {
+	javaIncompatible := false
+	if m.instance.JavaPath != "" {
+		if m.javaOverrideMajor == 0 {
+			javaLine = "Manual (unavailable)"
+			javaIncompatible = true
+		} else {
+			javaLine = fmt.Sprintf("Manual: Java %d", m.javaOverrideMajor)
+			javaIncompatible = required > 0 && m.javaOverrideMajor < required
+		}
+	}
+	if javaIncompatible {
 		javaColor = colorRed
 	}
 
@@ -634,7 +668,9 @@ func (m Model) renderActiveSession(c *strings.Builder) {
 		label, val string
 		vc         lipgloss.Color
 	}{
+		{"INSTANCE  ", m.instance.Name, colorWhite},
 		{"USER      ", m.username, colorWhite},
+
 		{"VERSION   ", verString, colorWhite},
 		{"AUTH      ", "Offline (LAN Mode)", colorGray},
 		{"OS        ", osName, colorWhite},
@@ -649,17 +685,21 @@ func (m Model) renderActiveSession(c *strings.Builder) {
 		))
 	}
 
-	if required > 0 && m.javaMajor < required {
+	if javaIncompatible && required > 0 {
 		c.WriteString(pad + "          " +
-			lipgloss.NewStyle().Foreground(colorDimGray).Render("adoptium.net/temurin") + "\n")
+			lipgloss.NewStyle().Foreground(colorDimGray).Render(fmt.Sprintf("Selected Java is below Java %d+", required)) + "\n")
 	}
 
 	c.WriteString("\n")
 
-	if filesCached(m.versionSelect, m.modloader) {
+	if filesCached(runtimeDir, m.versionSelect, m.modloader) {
 		c.WriteString(pad + lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("● Files present — verify before Play"))
 	} else {
 		c.WriteString(pad + lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("● Files missing — network may be needed"))
+	}
+	c.WriteString("\n\n" + pad + lipgloss.NewStyle().Foreground(colorDimGray).Render("GAME DATA: "+m.gameDir()))
+	if m.instanceErr != nil {
+		c.WriteString("\n\n" + lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+m.instanceErr.Error()))
 	}
 }
 
@@ -701,7 +741,7 @@ func (m Model) renderWorldsScreen(c *strings.Builder) {
 	c.WriteString(title + "\n" + div + "\n\n")
 
 	if len(m.worlds) == 0 {
-		c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("No worlds found in ~/.minecraft/saves"))
+		c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("No worlds found in this instance's saves/"))
 		return
 	}
 
@@ -732,6 +772,21 @@ func (m Model) renderConfirmScreen(c *strings.Builder) {
 	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("VERIFY INSTALLATION")
 	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 	c.WriteString(title + "\n" + div + "\n\n")
+	launch, err := m.launchConfig()
+	if err != nil {
+		c.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render(err.Error()) + "\n\n")
+	} else {
+		javaLabel := "Automatic"
+		if launch.JavaPath != "" && m.javaOverrideMajor > 0 {
+			javaLabel = fmt.Sprintf("Manual Java %d", m.javaOverrideMajor)
+		} else if launch.JavaPath != "" {
+			javaLabel = "Manual (unavailable)"
+		}
+		c.WriteString(fmt.Sprintf("Instance: %s\nGame data: %s\nShared runtime: %s\nJava: %s\n\n", m.instance.Name, launch.GameDir, launch.RuntimeDir, javaLabel))
+	}
+	if m.dlErr != nil {
+		c.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render(m.dlErr.Error()) + "\n\n")
+	}
 	c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(
 		"Check files before Play; missing or corrupt\nfiles may be downloaded from Mojang/Fabric.") + "\n\n")
 
@@ -759,9 +814,57 @@ func windowAround(cursor, total, before, windowSize int) (int, int) {
 	return start, end
 }
 
-// wrapText breaks s into lines of at most width characters, breaking
-// only at spaces (never mid-word), so long roadmap items wrap cleanly
-// instead of being cut by the panel's fixed width.
+func (m Model) renderInstancesScreen() string {
+	var b strings.Builder
+	b.WriteString("SELECT INSTANCE\n────────────────────────────────────────\n\n")
+	if m.instanceErr != nil {
+		b.WriteString("Error: " + m.instanceErr.Error() + "\n\n")
+	}
+	if len(m.instanceList) == 0 {
+		b.WriteString("No instances available.\n")
+	} else {
+		start, end := windowAround(m.instanceCursor, len(m.instanceList), 3, 8)
+		for i := start; i < end; i++ {
+			in := m.instanceList[i]
+			marker := "  "
+			if i == m.instanceCursor {
+				marker = "► "
+			}
+			selected := ""
+			if in.ID == m.instance.ID {
+				selected = "  [active]"
+			}
+			loader := in.Loader
+			if in.LoaderVersion != "" {
+				loader += " " + in.LoaderVersion
+			}
+			fmt.Fprintf(&b, "%s%s — %s %s%s\n", marker, in.Name, in.MinecraftVersion, loader, selected)
+		}
+	}
+	b.WriteString("\n[↑/↓] Move  [Enter] Select  [n] New Vanilla  [r] Rename  [Esc] Back\n")
+	b.WriteString("\nNew instances use the shared runtime and private game data.")
+	return lipgloss.NewStyle().Padding(1, 2).Render(b.String())
+}
+
+func (m Model) renderInstanceNameScreen() string {
+	title := "NEW VANILLA INSTANCE"
+	if m.instanceRenameID != "" {
+		title = "RENAME INSTANCE"
+	}
+	var b strings.Builder
+	b.WriteString(title + "\n────────────────────────────────────────\n\nName: " + m.input.View() + "\n")
+	if m.instanceErr != nil {
+		b.WriteString("\nError: " + m.instanceErr.Error() + "\n")
+	}
+	if m.instanceRenameID != "" {
+		b.WriteString("\n[Enter] Save name  [Esc] Cancel")
+	} else {
+		b.WriteString("\nMinecraft: " + m.versionSelect + "\n[Enter] Create  [Esc] Cancel")
+	}
+	return lipgloss.NewStyle().Padding(1, 2).Render(b.String())
+}
+
+// wrapText breaks s into lines of at most width characters at spaces.
 func wrapText(s string, width int) []string {
 	words := strings.Fields(s)
 	if len(words) == 0 {

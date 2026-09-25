@@ -38,7 +38,15 @@ func GameDir(root string, in Instance) (string, error) {
 	if in.Kind != "managed" || !validID(in.ID) || !filepath.IsAbs(root) {
 		return "", fmt.Errorf("invalid managed instance path")
 	}
-	return filepath.Join(root, "instances", in.ID, "minecraft"), nil
+	instanceDir := filepath.Join(root, "instances", in.ID)
+	if err := checkManagedDirectory(instanceDir, false); err != nil {
+		return "", err
+	}
+	gameDir := filepath.Join(instanceDir, "minecraft")
+	if err := checkManagedDirectory(gameDir, true); err != nil {
+		return "", err
+	}
+	return gameDir, nil
 }
 
 func RuntimeDir(root string, in Instance) (string, error) {
@@ -48,7 +56,11 @@ func RuntimeDir(root string, in Instance) (string, error) {
 	if in.Kind != "managed" || !validID(in.ID) || !filepath.IsAbs(root) {
 		return "", fmt.Errorf("invalid managed instance path")
 	}
-	return filepath.Join(root, "runtime"), nil
+	runtimeDir := filepath.Join(root, "runtime")
+	if err := checkManagedDirectory(runtimeDir, true); err != nil {
+		return "", err
+	}
+	return runtimeDir, nil
 }
 
 func legacy() Instance {
@@ -163,6 +175,16 @@ func Rename(root, id, name string) error {
 	return save(filepath.Join(root, "instances", id), in)
 }
 
+func UpdateSettings(root string, in Instance) error {
+	if in.Kind != "managed" || in.ID == LegacyID || !validID(in.ID) || in.SchemaVersion != 1 || !validName(in.Name) || !validVersion(in.MinecraftVersion) || !validLoader(in.Loader, in.LoaderVersion) || in.MemoryMB <= 0 || (in.JavaPath != "" && !filepath.IsAbs(in.JavaPath)) {
+		return fmt.Errorf("invalid instance settings")
+	}
+	if _, err := Read(root, in.ID); err != nil {
+		return err
+	}
+	return save(filepath.Join(root, "instances", in.ID), in)
+}
+
 // Selected defaults to the existing installation until the user selects a
 // managed one. A dangling selection is an error rather than a silent switch.
 func Selected(root string) (Instance, error) {
@@ -239,6 +261,20 @@ func writeJSON(dir, name string, value any) error {
 	}
 	// ponytail: Rename may not be atomic on Windows; add a recovery journal if interrupted writes prove problematic.
 	return os.Rename(f.Name(), filepath.Join(dir, name))
+}
+
+func checkManagedDirectory(path string, missingOK bool) error {
+	info, err := os.Lstat(path)
+	if os.IsNotExist(err) && missingOK {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return fmt.Errorf("managed path is not a regular directory: %s", path)
+	}
+	return nil
 }
 
 func checkInstancesDir(root string) error {

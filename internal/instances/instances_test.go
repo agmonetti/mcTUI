@@ -63,6 +63,32 @@ func TestCreateListRenameAndIsolate(t *testing.T) {
 	}
 }
 
+func TestRejectLinkedManagedGameAndRuntimeDirectories(t *testing.T) {
+	root := t.TempDir()
+	in, err := Create(root, "A", "1.20.4", "Vanilla", "", 1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outside := t.TempDir()
+	gameDir := filepath.Join(root, "instances", in.ID, "minecraft")
+	if err := os.Symlink(outside, gameDir); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if _, err := GameDir(root, in); err == nil {
+		t.Fatal("linked game directory accepted")
+	}
+	if err := os.Remove(gameDir); err != nil {
+		t.Fatal(err)
+	}
+	runtimeDir := filepath.Join(root, "runtime")
+	if err := os.Symlink(outside, runtimeDir); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if _, err := RuntimeDir(root, in); err == nil {
+		t.Fatal("linked runtime directory accepted")
+	}
+}
+
 func TestRejectLinkedInstancesDirectory(t *testing.T) {
 	root := t.TempDir()
 	if err := os.Symlink(t.TempDir(), filepath.Join(root, "instances")); err != nil {

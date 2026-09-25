@@ -3,9 +3,15 @@ package ui
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+
+	"mcTUI/internal/instances"
+	"mcTUI/internal/java"
+	"mcTUI/internal/mojang"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -14,6 +20,7 @@ import (
 // Adapted from msTTui's directorypicker: embedded in the dashboard panel,
 // with mcTUI colors and directory-only selection (no separate popup).
 func (m *Model) openResetPicker() {
+	m.pickerForJava = false
 	m.pickerPath = m.resetDir
 	m.pickerShowHidden = false
 	m.pickerCursor = 0
@@ -29,10 +36,97 @@ func (m *Model) loadPickerDir() {
 		for _, entry := range entries {
 			if entry.IsDir() && (m.pickerShowHidden || !strings.HasPrefix(entry.Name(), ".")) { // excludes symlinks; engine checks ancestors again
 				m.pickerEntries = append(m.pickerEntries, entry)
+			} else if m.pickerForJava && isJavaEntry(m.pickerPath, entry) {
+				m.pickerEntries = append(m.pickerEntries, entry)
 			}
 		}
 	}
 	m.pickerCursor = 0
+}
+
+func (m *Model) openJavaPicker() {
+	m.pickerForJava = true
+	m.pickerShowHidden = true
+	if m.instance.JavaPath != "" {
+		m.pickerPath = filepath.Dir(m.instance.JavaPath)
+	} else if path, err := exec.LookPath("java"); err == nil {
+		m.pickerPath = filepath.Dir(path)
+	} else if home, err := os.UserHomeDir(); err == nil {
+		m.pickerPath = home
+	} else {
+		m.pickerPath = string(filepath.Separator)
+	}
+	m.loadPickerDir()
+	m.state = javaPickerScreen
+}
+
+func isJavaEntry(dir string, entry os.DirEntry) bool {
+	name := "java"
+	if runtime.GOOS == "windows" {
+		name = "java.exe"
+	}
+	if entry.Name() != name || entry.IsDir() {
+		return false
+	}
+	info, err := os.Stat(filepath.Join(dir, entry.Name()))
+	if err != nil || !info.Mode().IsRegular() {
+		return false
+	}
+	return runtime.GOOS == "windows" || info.Mode().Perm()&0111 != 0
+}
+
+func (m Model) updateJavaPicker(key string) (tea.Model, tea.Cmd) {
+	switch key {
+	case "esc", "q":
+		m.state = menuScreen
+	case "d":
+		in := m.instance
+		in.JavaPath = ""
+		m.pickerErr = instances.UpdateSettings(m.dataRoot, in)
+		if m.pickerErr == nil {
+			m.instance = in
+			m.javaOverrideMajor = 0
+			m.state = menuScreen
+		}
+	case "up", "k":
+		m.pickerCursor = max(0, m.pickerCursor-1)
+	case "down", "j":
+		m.pickerCursor = min(max(0, len(m.pickerEntries)-1), m.pickerCursor+1)
+	case "left", "h":
+		if parent := filepath.Dir(m.pickerPath); parent != m.pickerPath {
+			m.pickerPath = parent
+			m.loadPickerDir()
+		}
+	case "right", "l", "enter":
+		if len(m.pickerEntries) > 0 {
+			entry := m.pickerEntries[m.pickerCursor]
+			path := filepath.Join(m.pickerPath, entry.Name())
+			if entry.IsDir() {
+				m.pickerPath = path
+				m.loadPickerDir()
+			} else if key == "enter" {
+				major := java.VersionAt(path)
+				required := mojang.RequiredJavaVersion(m.runtimeDir(), m.versionSelect)
+				switch {
+				case major == 0:
+					m.pickerErr = fmt.Errorf("cannot run Java executable: %s", path)
+				case required > 0 && major < required:
+					m.pickerErr = fmt.Errorf("Java %d is too old; Minecraft %s requires Java %d or newer", major, m.versionSelect, required)
+				default:
+					in := m.instance
+					in.JavaPath = path
+					if err := instances.UpdateSettings(m.dataRoot, in); err != nil {
+						m.pickerErr = err
+					} else {
+						m.instance = in
+						m.javaOverrideMajor = major
+						m.state = menuScreen
+					}
+				}
+			}
+		}
+	}
+	return m, nil
 }
 
 func (m Model) updateResetPicker(key string) (tea.Model, tea.Cmd) {
@@ -82,6 +176,16 @@ func (m Model) pickerLines() []string {
 	lines := []string{"Choose backup location", "Current: " + m.pickerPath,
 		"[d] Use default: " + filepath.Join(m.resetDir, "mctui-backups"), "",
 		"DIRECTORIES  [→] Open  [←] Parent", "[Ctrl+H] " + hidden}
+	if m.pickerForJava {
+		required := mojang.RequiredJavaVersion(m.runtimeDir(), m.versionSelect)
+		requirement := "Minecraft Java requirement is checked before launch"
+		if required > 0 {
+			requirement = fmt.Sprintf("Minecraft %s requires Java %d+", m.versionSelect, required)
+		}
+		lines = []string{"Choose Java executable", "Current: " + m.pickerPath,
+			"[d] Return to automatic selection", requirement, "",
+			"DIRECTORIES  [→] Open  [←] Parent", "JAVA  [Enter] Select"}
+	}
 	if m.pickerErr != nil {
 		return append(lines, "Error: "+m.pickerErr.Error())
 	}
@@ -99,7 +203,11 @@ func (m Model) pickerLines() []string {
 		if i == m.pickerCursor {
 			prefix = "> "
 		}
-		lines = append(lines, prefix+"▸ "+m.pickerEntries[i].Name())
+		icon := "▸ "
+		if m.pickerForJava && !m.pickerEntries[i].IsDir() {
+			icon = "● "
+		}
+		lines = append(lines, prefix+icon+m.pickerEntries[i].Name())
 	}
 	if end < len(m.pickerEntries) {
 		lines = append(lines, fmt.Sprintf("↓ %d more folders", len(m.pickerEntries)-end))
@@ -125,8 +233,12 @@ func (m Model) pickerPanelContent() string {
 			lines[i] = lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(line)
 		}
 	}
-	return lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("BACKUP DESTINATION") + "\n" +
+	title, controls := "BACKUP DESTINATION", "[↑/↓] Navigate  [Ctrl+H] Hidden  [Enter] Select  [Esc] Cancel"
+	if m.pickerForJava {
+		title, controls = "JAVA EXECUTABLE", "[↑/↓] Navigate  [←/→] Browse  [Enter] Choose  [d] Automatic  [Esc] Cancel"
+	}
+	return lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(title) + "\n" +
 		lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 62)) + "\n\n" +
 		strings.Join(lines, "\n") + "\n\n" +
-		lipgloss.NewStyle().Foreground(colorAccent2).Render("[↑/↓] Navigate  [Ctrl+H] Hidden  [Enter] Select  [Esc] Cancel")
+		lipgloss.NewStyle().Foreground(colorAccent2).Render(controls)
 }

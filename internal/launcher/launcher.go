@@ -32,7 +32,7 @@ const maxConcurrentDownloads = 20
 // and any errors to stdout, and never panics on network failures — if
 // everything required is already cached locally, it can run fully
 // offline.
-func Launch(gameDir, runtimeDir, username, targetVersion, modloader string, memoryMB int) {
+func Launch(gameDir, runtimeDir, username, targetVersion, modloader string, memoryMB int, javaPath string) {
 	fmt.Print("\033[H\033[2J")
 	fmt.Println(strings.Repeat("=", 75))
 	fmt.Println(" MODE: Offline / LAN")
@@ -48,16 +48,22 @@ func Launch(gameDir, runtimeDir, username, targetVersion, modloader string, memo
 		fmt.Println("[!] Cannot prepare game:", err)
 		return
 	}
-	javaBinary := "java"
-	if prepared.javaMajor > 0 {
-		candidate, ok := java.FindBinary(prepared.javaMajor, runtimeDir)
-		if !ok {
-			fmt.Printf("[!] This version requires Java %d or newer. Install a compatible JRE: %s\n", prepared.javaMajor, java.DownloadURL(prepared.javaMajor))
-			return
-		}
-		javaBinary = candidate.Path
+	javaBinary, err := ResolvePreparedJava(runtimeDir, prepared, javaPath)
+	if err != nil {
+		fmt.Println("[!] Cannot select Java:", err)
+		return
 	}
 	runGame(gameDir, runtimeDir, javaBinary, prepared.classpath, prepared.mainClass, username, targetVersion, prepared.assetIndexID, memoryMB, prepared.nativesDir)
+}
+
+// ResolvePreparedJava applies the shared selection and compatibility rules
+// after preparation has loaded the selected Minecraft version's metadata.
+func ResolvePreparedJava(runtimeDir string, prepared Prepared, overridePath string) (string, error) {
+	candidate, err := java.ResolveBinary(prepared.javaMajor, runtimeDir, overridePath)
+	if err != nil {
+		return "", err
+	}
+	return candidate.Path, nil
 }
 
 // validateAssets verifies the index against Mojang's published hash, including

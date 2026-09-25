@@ -36,12 +36,14 @@ responsibility:
 
 ## Phase 5 status
 
-Runtime preparation is shared by the TUI and launcher, but the TUI still uses
-the existing `.minecraft` installation. Managed instances and mod management
-are not yet available in the UI. Play verifies cached files first and can cancel
-preparation with Esc; a missing published hash blocks an artifact rather than
-accepting an unverifiable cache. See [the implementation plan](PHASE_5_IMPLEMENTATION_PLAN.md)
-for completed work and remaining safety checks.
+Runtime preparation is shared by the TUI and launcher. The in-progress Phase 5A
+cut adds managed Vanilla instance selection and routes game data separately from
+the shared runtime; verify this cut before relying on it. Managed Fabric launch,
+instance-specific settings, Reset Configs, and mod management remain incomplete.
+Play verifies cached files first and can cancel preparation with Esc; a missing
+published hash blocks an artifact rather than accepting an unverifiable cache.
+See [the implementation plan](PHASE_5_IMPLEMENTATION_PLAN.md) for status and
+remaining safety checks.
 
 ## Features
 

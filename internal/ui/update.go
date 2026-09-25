@@ -2,11 +2,14 @@ package ui
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"mcTUI/internal/config"
 	"mcTUI/internal/fabric"
+	"mcTUI/internal/instances"
 	"mcTUI/internal/mojang"
 	"mcTUI/internal/resetconfigs"
 	"mcTUI/internal/worlds"
@@ -31,8 +34,8 @@ func validUsername(name string) bool {
 
 // filesCached is only a display hint. Nonempty files are not evidence of a
 // valid installation; Play always runs the shared verifier asynchronously.
-func filesCached(version, modloader string) bool {
-	mcDir := config.MinecraftDir()
+func filesCached(runtimeDir, version, modloader string) bool {
+	mcDir := runtimeDir
 	if !mojang.ClientJarExists(mcDir, version) {
 		return false
 	}
@@ -112,6 +115,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyMsg:
+		if m.state == javaPickerScreen {
+			return m.updateJavaPicker(msg.String())
+		}
 		if m.state >= resetModeScreen && m.state <= resetResultScreen {
 			return m.updateResetKey(msg.String())
 		}
@@ -140,8 +146,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 
+		case "i":
+			if m.state == menuScreen {
+				m.instanceList, m.instanceErr = instances.List(m.dataRoot)
+				m.instanceCursor = 0
+				for i, in := range m.instanceList {
+					if in.ID == m.instance.ID {
+						m.instanceCursor = i
+						break
+					}
+				}
+				m.state = instancesScreen
+			}
+
 		case "up", "k":
-			if m.state == menuScreen && m.cursorMenu > 0 {
+			if m.state == instancesScreen && m.instanceCursor > 0 {
+				m.instanceCursor--
+			} else if m.state == menuScreen && m.cursorMenu > 0 {
 				m.cursorMenu--
 			} else if m.state == versionsScreen && m.cursorVersions > 0 {
 				m.cursorVersions--
@@ -150,7 +171,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "down", "j":
-			if m.state == menuScreen && m.cursorMenu < menuOptionsCount-1 {
+			if m.state == instancesScreen && m.instanceCursor+1 < len(m.instanceList) {
+				m.instanceCursor++
+			} else if m.state == menuScreen && m.cursorMenu < menuOptionsCount-1 {
 				m.cursorMenu++
 			} else if m.state == versionsScreen && m.cursorVersions < len(m.versions)-1 {
 				m.cursorVersions++
@@ -159,11 +182,51 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "enter":
-			if m.state == menuScreen {
+			if m.state == instanceNameScreen {
+				name := strings.TrimSpace(m.input.Value())
+				if m.instanceRenameID != "" {
+					m.instanceErr = instances.Rename(m.dataRoot, m.instanceRenameID, name)
+					if m.instanceErr == nil {
+						m.instanceList, m.instanceErr = instances.List(m.dataRoot)
+						for i, in := range m.instanceList {
+							if in.ID == m.instanceRenameID {
+								m.instanceCursor = i
+								if m.instance.ID == in.ID {
+									m.instance = in
+								}
+								break
+							}
+						}
+						m.instanceRenameID = ""
+						m.state = instancesScreen
+					}
+				} else {
+					in, err := instances.Create(m.dataRoot, name, m.versionSelect, "Vanilla", "", m.memoryMB)
+					if err != nil {
+						m.instanceErr = err
+					} else if err = m.setInstance(in); err != nil {
+						m.instanceErr = err
+					} else {
+						m.input.CharLimit = 16
+						m.input.Placeholder = "Type your name..."
+						m.instanceList, m.instanceErr = instances.List(m.dataRoot)
+						m.state = menuScreen
+					}
+				}
+			} else if m.state == instancesScreen && len(m.instanceList) > 0 {
+				if err := m.setInstance(m.instanceList[m.instanceCursor]); err != nil {
+					m.instanceErr = err
+				} else {
+					m.instanceErr = nil
+					m.state = menuScreen
+				}
+			} else if m.state == menuScreen {
 				if m.cursorMenu == 0 {
 					m.state = confirmScreen
 				} else if m.cursorMenu == 1 {
 					m.state = nameScreen
+					m.input.CharLimit = 16
+					m.input.Placeholder = "Type your name..."
 					m.input.SetValue(m.username)
 				} else if m.cursorMenu == 2 {
 					m.state = versionsScreen
@@ -174,11 +237,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 				} else if m.cursorMenu == 3 {
-					m.worlds = worlds.List(config.MinecraftDir())
+					gameDir, err := instances.GameDir(m.dataRoot, m.instance)
+					if err != nil {
+						m.instanceErr = err
+					} else {
+						m.worlds = worlds.List(gameDir)
+					}
 					m.state = worldsScreen
 					m.cursorWorlds = 0
 				} else if m.cursorMenu == 4 {
-					if m.modloader == "Vanilla" {
+					if m.isManaged() {
+						m.instanceErr = fmt.Errorf("managed Fabric selection requires exact loader-version support")
+					} else if m.modloader == "Vanilla" {
 						m.modloader = "Fabric"
 					} else {
 						m.modloader = "Vanilla"
@@ -195,16 +265,38 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if m.memoryMB != 1024 && m.memoryMB != 2048 && m.memoryMB != 4096 && m.memoryMB != 6144 && m.memoryMB != 8192 {
 						m.memoryMB = 2048
 					}
-					m.save()
+					if m.isManaged() {
+						updated := m.instance
+						updated.MemoryMB = m.memoryMB
+						m.instanceErr = instances.UpdateSettings(m.dataRoot, updated)
+						if m.instanceErr == nil {
+							m.instance = updated
+						} else {
+							m.memoryMB = m.instance.MemoryMB
+							return m, nil
+						}
+					} else {
+						m.save()
+					}
 				} else if m.cursorMenu == 6 {
-					m.resetDir, m.resetFound, m.resetErr = resetconfigs.Inspect()
-					m.resetMode = resetconfigs.Backup
-					m.resetBackupDir = ""
-					m.resetChoice = 0
-					m.resetIsRestore = false
-					m.resetScroll = 0
-					m.state = resetModeScreen
+					if m.isManaged() {
+						m.instanceErr = fmt.Errorf("Reset Configs is limited to the existing installation until A10")
+					} else {
+						m.resetDir, m.resetFound, m.resetErr = resetconfigs.Inspect()
+						m.resetMode = resetconfigs.Backup
+						m.resetBackupDir = ""
+						m.resetChoice = 0
+						m.resetIsRestore = false
+						m.resetScroll = 0
+						m.state = resetModeScreen
+					}
 				} else if m.cursorMenu == 7 {
+					if m.isManaged() {
+						m.openJavaPicker()
+					} else {
+						m.instanceErr = fmt.Errorf("Java override is available for managed instances only")
+					}
+				} else if m.cursorMenu == 8 {
 					return m, tea.Quit
 				}
 			} else if m.state == nameScreen {
@@ -215,23 +307,42 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				// else: stay on nameScreen, showing the validation hint
 			} else if m.state == versionsScreen {
-				m.versionSelect = m.versions[m.cursorVersions]
-				m.save()
+				version := m.versions[m.cursorVersions]
+				if m.isManaged() {
+					updated := m.instance
+					updated.MinecraftVersion = version
+					m.instanceErr = instances.UpdateSettings(m.dataRoot, updated)
+					if m.instanceErr == nil {
+						m.instance = updated
+						m.versionSelect = version
+					}
+				} else {
+					m.versionSelect = version
+					m.save()
+				}
 				m.state = menuScreen
 			} else if m.state == worldsScreen {
 				if len(m.worlds) > 0 {
 					target := m.worlds[m.cursorWorlds].Version
-					for _, v := range m.versions {
-						if v == target {
-							m.versionSelect = target
-							m.save()
-							break
+					if !m.isManaged() {
+						for _, v := range m.versions {
+							if v == target {
+								m.versionSelect = target
+								m.save()
+								break
+							}
 						}
 					}
 				}
 				m.state = menuScreen
 			} else if m.state == confirmScreen {
-				// [Enter] en confirmScreen → iniciar descarga dentro del TUI
+				// Capture target instance and paths before starting async preparation.
+				launch, err := m.launchConfig()
+				if err != nil {
+					m.dlErr = err
+					return m, nil
+				}
+				m.launch = launch
 				m.state = downloadScreen
 				m.dlDone = 0
 				m.dlFile = "Initializing..."
@@ -239,11 +350,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.dlFinished = false
 				ctx, cancel := context.WithCancel(context.Background())
 				m.dlContext, m.dlCancel = ctx, cancel
-				return m, StartDownloadCmd(ctx, m.versionSelect, m.modloader)
+				return m, StartDownloadCmd(ctx, launch.RuntimeDir, launch.Version, launch.Modloader, launch.JavaPath)
 			}
 
 		case "y", "Y":
 			if m.state == confirmScreen {
+				launch, err := m.launchConfig()
+				if err != nil {
+					m.dlErr = err
+					return m, nil
+				}
+				m.launch = launch
 				m.state = downloadScreen
 				m.dlDone = 0
 				m.dlFile = "Initializing..."
@@ -251,22 +368,57 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.dlFinished = false
 				ctx, cancel := context.WithCancel(context.Background())
 				m.dlContext, m.dlCancel = ctx, cancel
-				return m, StartDownloadCmd(ctx, m.versionSelect, m.modloader)
+				return m, StartDownloadCmd(ctx, launch.RuntimeDir, launch.Version, launch.Modloader, launch.JavaPath)
 			}
 
 		case "n", "N":
 			if m.state == confirmScreen {
 				m.state = menuScreen
+			} else if m.state == instancesScreen {
+				m.instanceErr = nil
+				m.instanceRenameID = ""
+				m.state = instanceNameScreen
+				m.input.SetValue("")
+				m.input.CharLimit = 80
+				m.input.Placeholder = "Instance name"
+				m.input.Focus()
+				return m, nil
+			}
+
+		case "r", "R":
+			if m.state == instancesScreen && len(m.instanceList) > 0 {
+				in := m.instanceList[m.instanceCursor]
+				if in.Kind != "managed" {
+					m.instanceErr = fmt.Errorf("the existing installation cannot be renamed")
+				} else {
+					m.instanceErr = nil
+					m.instanceRenameID = in.ID
+					m.state = instanceNameScreen
+					m.input.SetValue(in.Name)
+					m.input.CharLimit = 80
+					m.input.Placeholder = "Instance name"
+					m.input.Focus()
+				}
+				return m, nil
 			}
 
 		case "esc":
-			if m.state == nameScreen || m.state == versionsScreen || m.state == worldsScreen || m.state == confirmScreen {
+			if m.state == instancesScreen {
+				m.state = menuScreen
+				m.instanceErr = nil
+			} else if m.state == instanceNameScreen {
+				m.state = instancesScreen
+				m.instanceErr = nil
+				m.instanceRenameID = ""
+				m.input.CharLimit = 16
+				m.input.Placeholder = "Type your name..."
+			} else if m.state == nameScreen || m.state == versionsScreen || m.state == worldsScreen || m.state == confirmScreen {
 				m.state = menuScreen
 			}
 		}
 	}
 
-	if m.state == nameScreen {
+	if m.state == nameScreen || m.state == instanceNameScreen {
 		m.input, cmd = m.input.Update(msg)
 	}
 
@@ -439,10 +591,10 @@ func (m Model) updateResetKey(key string) (tea.Model, tea.Cmd) {
 
 // save persists the model's current settings to disk.
 func (m Model) save() {
-	config.Save(config.Data{
-		Username:  m.username,
-		Version:   m.versionSelect,
-		Modloader: m.modloader,
-		MemoryMB:  m.memoryMB,
-	})
+	cfg := config.Load()
+	cfg.Username = m.username
+	if !m.isManaged() {
+		cfg.Version, cfg.Modloader, cfg.MemoryMB = m.versionSelect, m.modloader, m.memoryMB
+	}
+	config.Save(cfg)
 }
