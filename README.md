@@ -32,8 +32,14 @@ responsibility:
 - `internal/launcher` — orchestrates the actual game launch
 - `internal/ui` — the Bubble Tea model, update, and view
 
-`main.go` itself is just wiring: ~25 lines that load config, build the
-UI, and hand off to the launcher.
+`main.go` loads config, builds the UI, and hands off to the launcher.
+
+## Phase 5 status
+
+Runtime preparation is shared by the TUI and launcher, but the TUI still uses
+the existing `.minecraft` installation. Managed instances and mod management
+are not yet available in the UI. See [the implementation plan](PHASE_5_IMPLEMENTATION_PLAN.md)
+for completed work and remaining safety checks.
 
 ## Features
 

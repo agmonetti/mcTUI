@@ -506,23 +506,10 @@ func (m Model) renderDownloadScreen() string {
 	title := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("DOWNLOADING FILES")
 	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 60))
 
-	pct := 0.0
-	if m.dlTotal > 0 {
-		pct = float64(m.dlDone) / float64(m.dlTotal) * 100
-	}
-
-	bar := renderProgressBar(m.dlDone, m.dlTotal, 48)
-
 	fileLabel := lipgloss.NewStyle().Foreground(colorGray).Render("FILE  ")
 	fileVal := lipgloss.NewStyle().Foreground(colorWhite).Render(m.dlFile)
-
 	countLabel := lipgloss.NewStyle().Foreground(colorGray).Render("DONE  ")
-	countVal := lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).
-		Render(fmt.Sprintf("%d / %d", m.dlDone, m.dlTotal))
-
-	pctLabel := lipgloss.NewStyle().Foreground(colorGray).Render("PCT   ")
-	pctVal := lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).
-		Render(fmt.Sprintf("%.0f%%", pct))
+	countVal := lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(fmt.Sprintf("%d files checked", m.dlDone))
 
 	var errLine string
 	if m.dlErr != nil {
@@ -536,15 +523,8 @@ func (m Model) renderDownloadScreen() string {
 	}
 	hint := lipgloss.NewStyle().Foreground(colorDimGray).Render(hintText)
 
-	body := fmt.Sprintf(
-		"%s\n%s\n\n%s\n\n%s%s\n%s%s\n%s%s\n\n%s%s",
-		title, div,
-		bar,
-		fileLabel, fileVal,
-		countLabel, countVal,
-		pctLabel, pctVal,
-		errLine, hint,
-	)
+	body := fmt.Sprintf("%s\n%s\n\n%s%s\n%s%s\n\n%s%s",
+		title, div, fileLabel, fileVal, countLabel, countVal, errLine, hint)
 
 	panel := lipgloss.NewStyle().
 		Width(64).

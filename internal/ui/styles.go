@@ -192,24 +192,3 @@ func renderTopBar(cursorMenu int, hasUpdate bool) string {
 
 	return bar + "\n" + divider
 }
-
-// ── Progress Bar ASCII ────────────────────────────────────────────────────────
-// Renderiza una barra de progreso estilo CS:GO: [■■■■■░░░░░] 52%
-func renderProgressBar(current, total int, width int) string {
-	if total == 0 {
-		total = 1
-	}
-	pct := float64(current) / float64(total)
-	filled := int(pct * float64(width))
-	if filled > width {
-		filled = width
-	}
-
-	bar := lipgloss.NewStyle().Foreground(colorAccent).Render(strings.Repeat("█", filled)) +
-		lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("░", width-filled))
-
-	pctStr := lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).
-		Render(fmt.Sprintf(" %3.0f%%", pct*100))
-
-	return "[" + bar + "]" + pctStr
-}

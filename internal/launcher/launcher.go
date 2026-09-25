@@ -19,7 +19,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"mcTUI/internal/fabric"
 	"mcTUI/internal/java"
 	"mcTUI/internal/mojang"
 )
@@ -44,142 +43,21 @@ func Launch(gameDir, runtimeDir, username, targetVersion, modloader string, memo
 	fmt.Printf("Starting engine for player: %s (Version: %s - Modloader: %s)\n", username, targetVersion, modloader)
 	fmt.Println("1. Verifying Vanilla Engine and Libraries...")
 
-	clientPath := mojang.ClientJarPath(runtimeDir, targetVersion)
-	haveClient := mojang.ClientJarExists(runtimeDir, targetVersion)
-
-	data, haveVersionData := mojang.FetchVersionData(targetVersion, runtimeDir)
-	if !haveVersionData {
-		if cached, ok := mojang.CachedVersionData(runtimeDir, targetVersion); ok {
-			data = cached
-			haveVersionData = true
-			fmt.Println("   Using cached version metadata.")
-		}
-	}
-
-	if !haveVersionData {
-		fmt.Println("\n[!] Cannot launch: version metadata unavailable for", targetVersion)
+	prepared, err := Prepare(runtimeDir, targetVersion, modloader, nil)
+	if err != nil {
+		fmt.Println("[!] Cannot prepare game:", err)
 		return
 	}
-
-	var classpathEntries []string
-	librariesPath := filepath.Join(runtimeDir, "libraries")
-	var wg sync.WaitGroup
-	checkedDownload := mojang.Download(&wg)
-	var downloadErr error
-	var errMu sync.Mutex
-	download := func(url, dest, sha1 string) {
-		if err := checkedDownload(url, dest, sha1); err != nil {
-			errMu.Lock()
-			if downloadErr == nil {
-				downloadErr = err
-			}
-			errMu.Unlock()
-		}
-	}
-
-	// Validate the cached client too: a non-empty JAR can still be corrupt.
-	if !haveClient {
-		fmt.Println("   Client JAR missing; downloading from Mojang.")
-	}
-	wg.Add(1)
-	download(data.Downloads.Client.URL, clientPath, data.Downloads.Client.SHA1)
-	wg.Wait()
-	if downloadErr != nil {
-		fmt.Println("[!] Cannot prepare client:", downloadErr)
-		return
-	}
-
-	if haveVersionData {
-		libSem := make(chan struct{}, maxConcurrentDownloads)
-		for _, lib := range data.Libraries {
-			// Check OS rules before including this library
-			if !mojang.ShouldIncludeLibrary(lib.Rules) {
-				continue
-			}
-			url := lib.Downloads.Artifact.URL
-			path := lib.Downloads.Artifact.Path
-			if url != "" && path != "" {
-				fullPath := filepath.Join(librariesPath, path)
-				classpathEntries = append(classpathEntries, fullPath)
-				wg.Add(1)
-				libSem <- struct{}{}
-				go func(u, d, sha1 string) {
-					defer func() { <-libSem }()
-					download(u, d, sha1)
-				}(url, fullPath, lib.Downloads.Artifact.SHA1)
-			}
-		}
-	} else {
-		fmt.Println("   No version metadata available — skipping library check (offline mode).")
-	}
-
-	mainClass := "net.minecraft.client.main.Main"
-
-	if modloader == "Fabric" {
-		fmt.Println("-> Fabric injection detected. Resolving profile...")
-
-		profile, ok := fabric.Resolve(targetVersion, runtimeDir, librariesPath, &wg, checkedDownload, maxConcurrentDownloads)
-		if ok {
-			mainClass = profile.MainClass
-			classpathEntries = append(classpathEntries, profile.ClasspathEntries...)
-		} else {
-			wg.Wait()
-			fmt.Println("[!] Fabric profile unavailable; aborting instead of starting Vanilla.")
-			return
-		}
-	}
-
-	fmt.Println("2. Validating Assets...")
-	assetIndexID, haveAssetIndex := validateAssets(runtimeDir, data, haveVersionData, &wg, download)
-
-	// Download and extract native libraries (LWJGL, OpenAL, etc.)
-	var nativesDir string
-	if haveVersionData {
-		nativesDir = mojang.DownloadAndExtractNatives(data, runtimeDir, targetVersion, &wg, download)
-	}
-
-	wg.Wait()
-	if downloadErr != nil {
-		fmt.Println("[!] Cannot prepare game:", downloadErr)
-		return
-	}
-	if !haveAssetIndex {
-		fmt.Println("[!] Cannot prepare game: asset index unavailable.")
-		return
-	}
-	classpathEntries = append(classpathEntries, clientPath)
-	classpathEntries = deduplicateClasspath(classpathEntries)
-	finalClasspath := strings.Join(classpathEntries, string(filepath.ListSeparator))
-
-	fmt.Println("3. All set! Launching Minecraft...")
-
 	javaBinary := "java"
-	if haveVersionData && data.JavaVersion.MajorVersion > 0 {
-		candidate, ok := java.FindBinary(data.JavaVersion.MajorVersion, runtimeDir)
+	if prepared.javaMajor > 0 {
+		candidate, ok := java.FindBinary(prepared.javaMajor, runtimeDir)
 		if !ok {
-			fmt.Println()
-			fmt.Printf("[!] This version requires Java %d or newer, but no compatible\n", data.JavaVersion.MajorVersion)
-			fmt.Println("[!] JRE was found (checked PATH and common install locations).")
-			fmt.Println("[!] Download a compatible JRE here:")
-			fmt.Println("[!]  ", java.DownloadURL(data.JavaVersion.MajorVersion))
-			if runtime.GOOS != "windows" {
-				fmt.Println("[!] Or via your package manager, e.g.:")
-				fmt.Println("[!]   Arch:    pacman -S jdk-openjdk")
-				fmt.Println("[!]   Debian:  apt install openjdk-21-jre  (or newer)")
-			}
+			fmt.Printf("[!] This version requires Java %d or newer. Install a compatible JRE: %s\n", prepared.javaMajor, java.DownloadURL(prepared.javaMajor))
 			return
 		}
 		javaBinary = candidate.Path
-		if candidate.Path != "java" {
-			fmt.Printf("   Using Java %d from %s (system default did not meet requirement)\n", candidate.Major, candidate.Path)
-		}
 	}
-
-	if !haveAssetIndex {
-		assetIndexID = data.AssetIndex.ID
-	}
-
-	runGame(gameDir, runtimeDir, javaBinary, finalClasspath, mainClass, username, targetVersion, assetIndexID, memoryMB, nativesDir)
+	runGame(gameDir, runtimeDir, javaBinary, prepared.classpath, prepared.mainClass, username, targetVersion, prepared.assetIndexID, memoryMB, prepared.nativesDir)
 }
 
 // validateAssets ensures the asset index is available locally (using a

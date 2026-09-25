@@ -91,11 +91,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch inner := msg.msg.(type) {
 		case DownloadProgressMsg:
 			m.dlDone = inner.Done
-			m.dlTotal = inner.Total
 			m.dlFile = inner.File
-			if inner.Err != nil {
-				m.dlErr = inner.Err
-			}
 			return m, nextDownloadCmd(msg.ch)
 		case DownloadDoneMsg:
 			m.dlFinished = true
@@ -229,7 +225,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// [Enter] en confirmScreen → iniciar descarga dentro del TUI
 				m.state = downloadScreen
 				m.dlDone = 0
-				m.dlTotal = 0
 				m.dlFile = "Initializing..."
 				m.dlErr = nil
 				m.dlFinished = false
@@ -240,7 +235,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.state == confirmScreen {
 				m.state = downloadScreen
 				m.dlDone = 0
-				m.dlTotal = 0
 				m.dlFile = "Initializing..."
 				m.dlErr = nil
 				m.dlFinished = false

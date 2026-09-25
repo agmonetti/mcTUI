@@ -260,7 +260,7 @@ Depende de: estado actual de fases 1–4.
 - [ ] **A04** Instancia heredada y copia selectiva no destructiva.
 - [ ] **A05** Duplicación independiente; política explícita de inclusión de mundos.
 - [ ] **A06** Ajustes por instancia; Minecraft y loader fijados, Java y memoria validados.
-- [ ] **A07** Preparación común con errores; corregir éxito falso y fallback silencioso (descargador ahora propaga fallos y evita publicar archivos incompletos; aún falta unificar preparación y validar assets/natives).
+- [ ] **A07** Preparación común con errores; corregir éxito falso y fallback silencioso (UI y lanzador reutilizan `launcher.Prepare`; aún faltan integridad del índice, natives y cancelación).
 - [ ] **A08** Lanzamiento integrado con resultado/proceso/log en TUI; fijar `cmd.Dir`.
 - [ ] **A09** Mundos y avisos de compatibilidad referidos a la instancia seleccionada.
 - [ ] **A10** Reset/restore con raíz explícita e historial identificado por instancia.
@@ -416,7 +416,9 @@ Implementado en este corte: `DataDirChecked()` resuelve la raíz nueva sin crear
 
 `mojang.Download` comprueba HTTP, tipo HTML, lectura completa y SHA-1 publicado cuando existe; revalida archivos conocidos en caché y descarga a un temporal antes de publicar. Devuelve errores para que la TUI no anuncie éxito ni lance el juego tras fallar metadata, cliente, librerías o Fabric. El lanzador también bloquea el arranque ante fallos de descarga y ausencia de metadata/índice de assets, y rechaza índices con JSON o hashes malformados. Los tests locales cubren 404, HTML, truncado, caché alterada, índices inválidos y resultado fallido en TUI. SHA-1 procede del manifiesto oficial de Mojang: aquí verifica integridad frente a esa fuente, no es una firma ni prueba ausencia de malware.
 
-**No cerrar A07 aún:** UI y lanzador siguen duplicando preparación; falta verificar integridad del índice en caché y extracción de natives, URLs sin hash, timeout/contexto de metadata, cancelación y retorno del proceso dentro de TUI. La instalación gestionada sigue sin estar conectada a Play. No se ha validado en Windows/macOS reales.
+**Continuación (este commit):** `launcher.Prepare` reúne metadata, cliente, bibliotecas, Fabric, assets y natives en una sola ruta con errores; tanto el Cmd de TUI como `Launch` la usan. La UI muestra progreso indeterminado real en vez de porcentajes estimados. Se comprueba caché offline, archivo alterado y traversal de rutas de bibliotecas con `httptest` y directorios temporales. La selección y el runtime se fijan al iniciar la tarea, pero `Launch` vuelve a verificar tras salir de TUI; no se considera lanzamiento integrado. Pasan `go test ./...`, `go test -race ./...`, `go vet ./...` y `git diff --check`.
+
+**No cerrar A07 aún:** falta verificar integridad del índice en caché y extracción de natives, URLs sin hash, timeout/contexto de metadata, cancelación y retorno del proceso dentro de TUI. La instalación gestionada sigue sin estar conectada a Play. No se ha validado en Windows/macOS reales.
 
 ## 11. Trazabilidad y seguimiento
 
@@ -440,7 +442,7 @@ Al cerrar tareas, sustituir «pendiente» por commit y evidencia. Documentar dif
 
 | Hito | Estado | Commit(s) | Evidencia / bloqueos |
 | --- | --- | --- | --- |
-| 5A | En curso (A01; A02/A03/A07 parciales) | — | §10.1–10.3; TUI aún heredada, DEC-03/05 pendientes |
+| 5A | En curso (A01; A02/A03/A07 parciales) | `8e3c89d`, `c834078`, este commit (preparación común) | §10.1–10.3; TUI aún heredada, DEC-03/05 pendientes |
 | 5B | Pendiente | — | Requiere 5A; DEC-04 |
 | 5C | Pendiente | — | Requiere 5A/5B; DEC-06/10 |
 | 5D | Pendiente | — | Requiere 5A–5C; DEC-07/10 |

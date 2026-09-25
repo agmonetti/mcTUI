@@ -41,10 +41,8 @@ const menuOptionsCount = 8
 // DownloadProgressMsg es enviado por la goroutine de descarga al TUI
 // cada vez que un archivo termina de descargarse.
 type DownloadProgressMsg struct {
-	Done  int    // archivos completados hasta ahora
-	Total int    // total de archivos a descargar
-	File  string // nombre corto del archivo actual
-	Err   error  // nil si OK
+	Done int    // archivos comprobados (total desconocido)
+	File string // nombre corto del archivo actual
 }
 
 // DownloadDoneMsg señala que la descarga finalizó completamente.
@@ -76,7 +74,6 @@ type Model struct {
 
 	// Download progress (usado en downloadScreen)
 	dlDone     int
-	dlTotal    int
 	dlFile     string
 	dlErr      error
 	dlFinished bool
