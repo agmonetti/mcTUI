@@ -1,6 +1,7 @@
 package launcher
 
 import (
+	"crypto/sha1"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -15,14 +16,20 @@ import (
 
 func TestPrepareSharedRuntimeWorksOfflineAndRejectsCorruptCache(t *testing.T) {
 	root := t.TempDir()
+	const indexBody = `{"objects":{}}`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/index" {
+			fmt.Fprint(w, indexBody)
+			return
+		}
 		fmt.Fprint(w, r.URL.Path)
 	}))
+	defer server.Close()
 	version := "1.20.4"
 	clientHash := "15a5f701524b9430ea1c1ee08841bfd846c1b11d"
 	libHash := "d71c71eb256c0f5918043e198dc95327f552e205"
-	meta := fmt.Sprintf(`{"assetIndex":{"id":"test"},"downloads":{"client":{"url":%q,"sha1":%q}},"libraries":[{"name":"group:lib:1","downloads":{"artifact":{"url":%q,"sha1":%q,"path":"group/lib/1/lib.jar"}}}]}`,
-		server.URL+"/client", clientHash, server.URL+"/lib", libHash)
+	meta := fmt.Sprintf(`{"assetIndex":{"id":"test","url":%q,"sha1":"%x"},"downloads":{"client":{"url":%q,"sha1":%q}},"libraries":[{"name":"group:lib:1","downloads":{"artifact":{"url":%q,"sha1":%q,"path":"group/lib/1/lib.jar"}}}]}`,
+		server.URL+"/index", sha1.Sum([]byte(indexBody)), server.URL+"/client", clientHash, server.URL+"/lib", libHash) // nosemgrep: go.lang.security.audit.crypto.use_of_weak_crypto.use-of-sha1 -- Mojang protocol fixture, not a security primitive choice.
 	cache := filepath.Join(root, "versions", version)
 	if err := os.MkdirAll(cache, 0700); err != nil {
 		t.Fatal(err)
@@ -39,12 +46,32 @@ func TestPrepareSharedRuntimeWorksOfflineAndRejectsCorruptCache(t *testing.T) {
 	}
 	var checked atomic.Int32
 	prepared, err := Prepare(root, version, "Vanilla", func(string) { checked.Add(1) })
-	if err != nil || checked.Load() != 2 || !strings.Contains(prepared.classpath, "lib.jar") {
+	if err != nil || checked.Load() != 3 || !strings.Contains(prepared.classpath, "lib.jar") {
 		t.Fatalf("initial preparation failed: %+v, %v, files=%d", prepared, err, checked.Load())
+	}
+	// A syntactically valid but altered index must be repaired, not trusted.
+	indexPath := filepath.Join(index, "test.json")
+	if err := os.WriteFile(indexPath, []byte(`{"objects":{},"altered":true}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Prepare(root, version, "Vanilla", nil); err != nil {
+		t.Fatal("index repair failed:", err)
+	}
+	if got, err := os.ReadFile(indexPath); err != nil || string(got) != indexBody {
+		t.Fatalf("index not repaired: %q, %v", got, err)
 	}
 	server.Close()
 	if _, err := Prepare(root, version, "Vanilla", nil); err != nil {
 		t.Fatal("cached preparation must work offline:", err)
+	}
+	if err := os.WriteFile(indexPath, []byte(`{"objects":{},"altered":true}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Prepare(root, version, "Vanilla", nil); err == nil {
+		t.Fatal("altered index accepted offline")
+	}
+	if err := os.WriteFile(indexPath, []byte(indexBody), 0600); err != nil {
+		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(cache, "client.jar"), []byte("corrupt"), 0600); err != nil {
 		t.Fatal(err)

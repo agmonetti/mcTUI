@@ -60,41 +60,22 @@ func Launch(gameDir, runtimeDir, username, targetVersion, modloader string, memo
 	runGame(gameDir, runtimeDir, javaBinary, prepared.classpath, prepared.mainClass, username, targetVersion, prepared.assetIndexID, memoryMB, prepared.nativesDir)
 }
 
-// validateAssets ensures the asset index is available locally (using a
-// cached copy or downloading it), then kicks off downloads for any
-// missing asset objects. Returns the resolved asset index ID and whether
-// it was actually found/usable.
-func validateAssets(mcDir string, data mojang.VersionData, haveVersionData bool, wg *sync.WaitGroup, download func(url, destination, expectedSHA1 string)) (string, bool) {
+// validateAssets verifies the index against Mojang's published hash, including
+// cached copies, before trusting its list of asset objects.
+func validateAssets(mcDir string, data mojang.VersionData, wg *sync.WaitGroup, download func(url, destination, expectedSHA1 string) error) (string, error) {
+	hash, err := hex.DecodeString(data.AssetIndex.SHA1)
+	if err != nil || len(hash) != 20 {
+		return "", fmt.Errorf("missing or invalid asset index SHA-1")
+	}
 	indexPath := filepath.Join(mcDir, "assets", "indexes", data.AssetIndex.ID+".json")
-
-	if info, err := os.Stat(indexPath); err == nil && info.Size() > 0 {
-		if err := downloadAssetObjects(mcDir, indexPath, wg, download); err != nil {
-			fmt.Println("[!] Invalid cached asset index:", err)
-			return "", false
-		}
-		return data.AssetIndex.ID, true
-	}
-
-	if !haveVersionData || data.AssetIndex.URL == "" {
-		fmt.Println("   No asset index available locally and no version data — skipping asset validation (offline mode).")
-		return "", false
-	}
-
-	os.MkdirAll(filepath.Dir(indexPath), 0755)
 	wg.Add(1)
-	download(data.AssetIndex.URL, indexPath, "")
-	wg.Wait() // need the index before we can enumerate objects
-
-	if info, err := os.Stat(indexPath); err != nil || info.Size() == 0 {
-		fmt.Println("[!] Could not download asset index (no internet?). Skipping asset validation.")
-		return "", false
+	if err := download(data.AssetIndex.URL, indexPath, data.AssetIndex.SHA1); err != nil {
+		return "", fmt.Errorf("asset index: %w", err)
 	}
-
-	if err := downloadAssetObjects(mcDir, indexPath, wg, download); err != nil {
-		fmt.Println("[!] Invalid asset index:", err)
-		return "", false
+	if err := downloadAssetObjects(mcDir, indexPath, wg, func(url, dest, hash string) { _ = download(url, dest, hash) }); err != nil {
+		return "", fmt.Errorf("invalid asset index: %w", err)
 	}
-	return data.AssetIndex.ID, true
+	return data.AssetIndex.ID, nil
 }
 
 // downloadAssetObjects reads an asset index JSON and kicks off downloads

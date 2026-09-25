@@ -51,7 +51,6 @@ func Prepare(runtimeDir, version, modloader string, progress func(string)) (Prep
 		mu.Unlock()
 		return err
 	}
-	withoutResult := func(url, dest, hash string) { _ = download(url, dest, hash) }
 	check := func() error {
 		wg.Wait()
 		mu.Lock()
@@ -69,7 +68,7 @@ func Prepare(runtimeDir, version, modloader string, progress func(string)) (Prep
 	librariesPath := filepath.Join(runtimeDir, "libraries")
 	sem := make(chan struct{}, maxConcurrentDownloads)
 	for _, lib := range data.Libraries {
-		if !mojang.ShouldIncludeLibrary(lib.Rules) {
+		if !mojang.ShouldIncludeLibrary(lib.Name, lib.Rules) {
 			continue
 		}
 		artifact := lib.Downloads.Artifact
@@ -103,15 +102,15 @@ func Prepare(runtimeDir, version, modloader string, progress func(string)) (Prep
 		classpath = append(classpath, profile.ClasspathEntries...)
 	}
 
-	assetIndexID, ok := validateAssets(runtimeDir, data, true, &wg, withoutResult)
-	if err := check(); err != nil {
+	assetIndexID, err := validateAssets(runtimeDir, data, &wg, download)
+	if downloadErr := check(); downloadErr != nil {
+		return Prepared{}, downloadErr
+	}
+	if err != nil {
 		return Prepared{}, err
 	}
-	if !ok {
-		return Prepared{}, fmt.Errorf("asset index unavailable for %s", version)
-	}
-	nativesDir := mojang.DownloadAndExtractNatives(data, runtimeDir, version, &wg, withoutResult)
-	if err := check(); err != nil {
+	nativesDir, err := mojang.DownloadAndExtractNatives(data, runtimeDir, version, &wg, download)
+	if err != nil {
 		return Prepared{}, err
 	}
 	classpath = append(classpath, clientPath)

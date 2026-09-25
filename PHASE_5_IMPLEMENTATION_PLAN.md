@@ -248,7 +248,7 @@ Instancias → Instancia seleccionada
 
 ## 8. Roadmap ejecutable
 
-Todas las casillas están pendientes. Completar un hito requiere código, comprobaciones y evidencia registrada, no solo pantallas navegables.
+Las casillas reflejan el cierre completo de cada tarea; los avances parciales se detallan en §10. Completar un hito requiere código, comprobaciones y evidencia registrada, no solo pantallas navegables.
 
 ### 5A — Instancias, runtime y migración
 
@@ -260,7 +260,7 @@ Depende de: estado actual de fases 1–4.
 - [ ] **A04** Instancia heredada y copia selectiva no destructiva.
 - [ ] **A05** Duplicación independiente; política explícita de inclusión de mundos.
 - [ ] **A06** Ajustes por instancia; Minecraft y loader fijados, Java y memoria validados.
-- [ ] **A07** Preparación común con errores; corregir éxito falso y fallback silencioso (UI y lanzador reutilizan `launcher.Prepare`; aún faltan integridad del índice, natives y cancelación).
+- [ ] **A07** Preparación común con errores; corregir éxito falso y fallback silencioso (UI y lanzador reutilizan `launcher.Prepare`; índice y natives verificados en §10.4; aún faltan metadata con contexto, archivos sin hash y cancelación).
 - [ ] **A08** Lanzamiento integrado con resultado/proceso/log en TUI; fijar `cmd.Dir`.
 - [ ] **A09** Mundos y avisos de compatibilidad referidos a la instancia seleccionada.
 - [ ] **A10** Reset/restore con raíz explícita e historial identificado por instancia.
@@ -418,7 +418,20 @@ Implementado en este corte: `DataDirChecked()` resuelve la raíz nueva sin crear
 
 **Continuación (este commit):** `launcher.Prepare` reúne metadata, cliente, bibliotecas, Fabric, assets y natives en una sola ruta con errores; tanto el Cmd de TUI como `Launch` la usan. La UI muestra progreso indeterminado real en vez de porcentajes estimados. Se comprueba caché offline, archivo alterado y traversal de rutas de bibliotecas con `httptest` y directorios temporales. La selección y el runtime se fijan al iniciar la tarea, pero `Launch` vuelve a verificar tras salir de TUI; no se considera lanzamiento integrado. Pasan `go test ./...`, `go test -race ./...`, `go vet ./...` y `git diff --check`.
 
-**No cerrar A07 aún:** falta verificar integridad del índice en caché y extracción de natives, URLs sin hash, timeout/contexto de metadata, cancelación y retorno del proceso dentro de TUI. La instalación gestionada sigue sin estar conectada a Play. No se ha validado en Windows/macOS reales.
+**Pendientes al finalizar ese corte:** integridad del índice en caché y extracción de natives (atendidos en §10.4), URLs sin hash, timeout/contexto de metadata, cancelación y retorno del proceso dentro de TUI. La instalación gestionada sigue sin estar conectada a Play. No se ha validado en Windows/macOS reales.
+
+### 10.4. Continuación de A07 — índice verificado y natives (2026-09-25)
+
+Implementado sobre `e3079af`, en este commit:
+
+- El índice de assets conserva el SHA-1 publicado en metadata y lo comprueba también en caché, antes de enumerar objetos. Un índice alterado aunque sea JSON válido se descarga de nuevo; si no puede repararse, falla la preparación. Hash ausente o inválido no equivale a instalación lista.
+- Natives dejan de confiar en una carpeta no vacía. Se verifican los JARs y se reconstruye la extracción incluso offline. Los errores de descarga, ZIP, CRC, escritura y publicación llegan a `launcher.Prepare`, compartido por TUI y lanzamiento.
+- Extracción serial en staging privado; solo después de extraer todo se publican los archivos. Se rechazan traversal, rutas Windows absolutas, enlaces, entradas no regulares y colisiones de nombres aplanados, también por mayúsculas. Límites por archivo JAR: 4096 entradas y 256 MiB expandidos de natives. No son los límites de modpacks DEC-10.
+- Directorios `versions/<version>/natives-<GOOS>-<GOARCH>`: no se borra ni reutiliza la antigua carpeta `natives`. Se filtran classifiers de otras plataformas/arquitecturas también del classpath; se corrige el identificador Mojang `osx` para macOS y se respetan reglas `allow`/`disallow` en orden. Classifiers antiguos `${arch}` usan bitness x86; el formato antiguo en ARM se rechaza explícitamente, no se sustituye silenciosamente por x86.
+
+**Evidencia:** `go test ./...`, `go test -race ./...`, `go vet ./...` y `git diff --check` pasan. Tests con `httptest` y directorios temporales comprueban reparación online y rechazo offline del índice alterado, reconstrucción offline de natives, archivo corrupto, CRC incorrecto, traversal, colisiones, enlaces de directorios y selección de classifiers. No se toca `.minecraft` real ni se afirma validación de ejecución Windows/macOS.
+
+**Límites y siguiente corte:** A07 sigue abierta: metadata con timeout/contexto y errores estructurados, integridad de URLs sin hash (incluido Fabric), cancelación y revisión completa de reglas de arquitectura/versiones antiguas. Publicar natives es una secuencia de renombrados, **no** una transacción multiarchivo: un fallo intermedio bloquea Play, conserva el error y requiere reintentar. No hay aún exclusión entre procesos; comprobar enlaces no elimina carreras ante cambios externos. No se eliminan automáticamente natives sobrantes. Continuar estos bloqueantes antes de conectar instancias gestionadas a Play; el ciclo del proceso y retorno a la TUI siguen en A08.
 
 ## 11. Trazabilidad y seguimiento
 
@@ -442,7 +455,7 @@ Al cerrar tareas, sustituir «pendiente» por commit y evidencia. Documentar dif
 
 | Hito | Estado | Commit(s) | Evidencia / bloqueos |
 | --- | --- | --- | --- |
-| 5A | En curso (A01; A02/A03/A07 parciales) | `8e3c89d`, `c834078`, este commit (preparación común) | §10.1–10.3; TUI aún heredada, DEC-03/05 pendientes |
+| 5A | En curso (A01; A02/A03/A07 parciales) | `8e3c89d`, `c834078`, `e3079af`, este commit (índice/natives) | §10.1–10.4; TUI aún heredada, DEC-03/05 pendientes |
 | 5B | Pendiente | — | Requiere 5A; DEC-04 |
 | 5C | Pendiente | — | Requiere 5A/5B; DEC-06/10 |
 | 5D | Pendiente | — | Requiere 5A–5C; DEC-07/10 |
