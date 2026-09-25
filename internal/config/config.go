@@ -5,6 +5,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -49,6 +50,37 @@ func AppDataDir(subdirs ...string) string {
 		base = filepath.Join(homeDir, ".config")
 	}
 	return filepath.Join(append([]string{base}, subdirs...)...)
+}
+
+// DataDirChecked resolves the root for managed instances and shared runtime.
+// It never falls back to the working directory when the home is unavailable.
+func DataDirChecked() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	switch runtime.GOOS {
+	case "windows":
+		base := os.Getenv("LOCALAPPDATA")
+		if base == "" {
+			base = filepath.Join(home, "AppData", "Local")
+		}
+		if !filepath.IsAbs(base) {
+			return "", fmt.Errorf("LOCALAPPDATA must be absolute: %q", base)
+		}
+		return filepath.Join(base, "mctui"), nil
+	case "darwin":
+		return filepath.Join(home, "Library", "Application Support", "mctui"), nil
+	default:
+		base := os.Getenv("XDG_DATA_HOME")
+		if base == "" {
+			base = filepath.Join(home, ".local", "share")
+		}
+		if !filepath.IsAbs(base) {
+			return "", fmt.Errorf("XDG_DATA_HOME must be absolute: %q", base)
+		}
+		return filepath.Join(base, "mctui"), nil
+	}
 }
 
 // MinecraftDir returns the existing launcher path. Destructive operations

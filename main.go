@@ -51,6 +51,6 @@ func main() {
 	}
 
 	if m, ok := finalModel.(ui.Model); ok && m.PlaySelected() {
-		launcher.Launch(config.MinecraftDir(), m.Username(), m.VersionSelect(), m.Modloader(), m.MemoryMB())
+		launcher.Launch(config.MinecraftDir(), config.MinecraftDir(), m.Username(), m.VersionSelect(), m.Modloader(), m.MemoryMB())
 	}
 }

@@ -32,7 +32,7 @@ const maxConcurrentDownloads = 20
 // and any errors to stdout, and never panics on network failures — if
 // everything required is already cached locally, it can run fully
 // offline.
-func Launch(mcDir, username, targetVersion, modloader string, memoryMB int) {
+func Launch(gameDir, runtimeDir, username, targetVersion, modloader string, memoryMB int) {
 	fmt.Print("\033[H\033[2J")
 	fmt.Println(strings.Repeat("=", 75))
 	fmt.Println(" MODE: Offline / LAN")
@@ -43,12 +43,12 @@ func Launch(mcDir, username, targetVersion, modloader string, memoryMB int) {
 	fmt.Printf("Starting engine for player: %s (Version: %s - Modloader: %s)\n", username, targetVersion, modloader)
 	fmt.Println("1. Verifying Vanilla Engine and Libraries...")
 
-	clientPath := mojang.ClientJarPath(mcDir, targetVersion)
-	haveClient := mojang.ClientJarExists(mcDir, targetVersion)
+	clientPath := mojang.ClientJarPath(runtimeDir, targetVersion)
+	haveClient := mojang.ClientJarExists(runtimeDir, targetVersion)
 
-	data, haveVersionData := mojang.FetchVersionData(targetVersion, mcDir)
+	data, haveVersionData := mojang.FetchVersionData(targetVersion, runtimeDir)
 	if !haveVersionData {
-		if cached, ok := mojang.CachedVersionData(mcDir, targetVersion); ok {
+		if cached, ok := mojang.CachedVersionData(runtimeDir, targetVersion); ok {
 			data = cached
 			haveVersionData = true
 			fmt.Println("   Using cached version metadata.")
@@ -63,7 +63,7 @@ func Launch(mcDir, username, targetVersion, modloader string, memoryMB int) {
 	}
 
 	var classpathEntries []string
-	librariesPath := filepath.Join(mcDir, "libraries")
+	librariesPath := filepath.Join(runtimeDir, "libraries")
 	var wg sync.WaitGroup
 	download := mojang.Download(&wg)
 
@@ -107,23 +107,24 @@ func Launch(mcDir, username, targetVersion, modloader string, memoryMB int) {
 	if modloader == "Fabric" {
 		fmt.Println("-> Fabric injection detected. Resolving profile...")
 
-		profile, ok := fabric.Resolve(targetVersion, mcDir, librariesPath, &wg, download, maxConcurrentDownloads)
+		profile, ok := fabric.Resolve(targetVersion, runtimeDir, librariesPath, &wg, download, maxConcurrentDownloads)
 		if ok {
 			mainClass = profile.MainClass
 			classpathEntries = append(classpathEntries, profile.ClasspathEntries...)
 		} else {
-			fmt.Println("[!] Fabric profile unavailable (offline and not cached, or no")
-			fmt.Println("    compatible loader for this version). Falling back to Vanilla.")
+			wg.Wait()
+			fmt.Println("[!] Fabric profile unavailable; aborting instead of starting Vanilla.")
+			return
 		}
 	}
 
 	fmt.Println("2. Validating Assets...")
-	assetIndexID, haveAssetIndex := validateAssets(mcDir, data, haveVersionData, &wg, download)
+	assetIndexID, haveAssetIndex := validateAssets(runtimeDir, data, haveVersionData, &wg, download)
 
 	// Download and extract native libraries (LWJGL, OpenAL, etc.)
 	var nativesDir string
 	if haveVersionData {
-		nativesDir = mojang.DownloadAndExtractNatives(data, mcDir, targetVersion, &wg, download)
+		nativesDir = mojang.DownloadAndExtractNatives(data, runtimeDir, targetVersion, &wg, download)
 	}
 
 	wg.Wait()
@@ -135,7 +136,7 @@ func Launch(mcDir, username, targetVersion, modloader string, memoryMB int) {
 
 	javaBinary := "java"
 	if haveVersionData && data.JavaVersion.MajorVersion > 0 {
-		candidate, ok := java.FindBinary(data.JavaVersion.MajorVersion, mcDir)
+		candidate, ok := java.FindBinary(data.JavaVersion.MajorVersion, runtimeDir)
 		if !ok {
 			fmt.Println()
 			fmt.Printf("[!] This version requires Java %d or newer, but no compatible\n", data.JavaVersion.MajorVersion)
@@ -159,7 +160,7 @@ func Launch(mcDir, username, targetVersion, modloader string, memoryMB int) {
 		assetIndexID = data.AssetIndex.ID
 	}
 
-	runGame(mcDir, javaBinary, finalClasspath, mainClass, username, targetVersion, assetIndexID, memoryMB, nativesDir)
+	runGame(gameDir, runtimeDir, javaBinary, finalClasspath, mainClass, username, targetVersion, assetIndexID, memoryMB, nativesDir)
 }
 
 // validateAssets ensures the asset index is available locally (using a
@@ -229,47 +230,56 @@ func downloadAssetObjects(mcDir, indexPath string, wg *sync.WaitGroup, download 
 // runGame execs java with the assembled classpath and arguments, then
 // watches for an early crash (process exits within a few seconds) and
 // surfaces the JVM log if so.
-func runGame(mcDir, javaBinary, classpath, mainClass, username, targetVersion, assetIndexID string, memoryMB int, nativesDir string) {
+func runGame(gameDir, runtimeDir, javaBinary, classpath, mainClass, username, targetVersion, assetIndexID string, memoryMB int, nativesDir string) {
 	sessionUUID := uuid.New().String()
 
-    args := []string{
-        fmt.Sprintf("-Xmx%dM", memoryMB),
-    }
+	args := []string{
+		fmt.Sprintf("-Xmx%dM", memoryMB),
+	}
 
-    // macOS requires GLFW (and therefore Minecraft's render thread) to run
-    // on the first thread of the process. The official launcher adds this
-    // flag automatically on macOS; without it, the JVM crashes on init.
-    if runtime.GOOS == "darwin" {
-        args = append(args, "-XstartOnFirstThread")
-    }
+	// macOS requires GLFW (and therefore Minecraft's render thread) to run
+	// on the first thread of the process. The official launcher adds this
+	// flag automatically on macOS; without it, the JVM crashes on init.
+	if runtime.GOOS == "darwin" {
+		args = append(args, "-XstartOnFirstThread")
+	}
 
-    // Point the JVM to the extracted native libraries (.so, .dll, .dylib)
-    if nativesDir != "" {
-        args = append(args, "-Djava.library.path="+nativesDir)
-    }
+	// Point the JVM to the extracted native libraries (.so, .dll, .dylib)
+	if nativesDir != "" {
+		args = append(args, "-Djava.library.path="+nativesDir)
+	}
 
-    args = append(args,
-        "-cp", classpath,
-        mainClass,
-        "--username", username,
-        "--version", targetVersion,
-        "--gameDir", mcDir,
-        "--assetsDir", filepath.Join(mcDir, "assets"),
-        "--assetIndex", assetIndexID,
-        "--uuid", sessionUUID,
-        "--accessToken", "0",
-        "--userType", "legacy",
-        "--versionType", "release",
-    )
+	args = append(args,
+		"-cp", classpath,
+		mainClass,
+		"--username", username,
+		"--version", targetVersion,
+		"--gameDir", gameDir,
+		"--assetsDir", filepath.Join(runtimeDir, "assets"),
+		"--assetIndex", assetIndexID,
+		"--uuid", sessionUUID,
+		"--accessToken", "0",
+		"--userType", "legacy",
+		"--versionType", "release",
+	)
 
-    cmd := exec.Command(javaBinary, args...)
+	// javaBinary is either "java" from PATH or a locally probed JRE; exec.Command does not invoke a shell.
+	cmd := exec.Command(javaBinary, args...) // nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
+	cmd.Dir = gameDir
 
-	logFile, err := os.Create(filepath.Join(mcDir, "mctui_latest.log"))
+	if err := os.MkdirAll(gameDir, 0755); err != nil {
+		fmt.Println("[!] Cannot create game directory:", err)
+		return
+	}
+	logFile, err := os.Create(filepath.Join(gameDir, "mctui_latest.log"))
 	if err == nil {
 		cmd.Stdout = logFile
 		cmd.Stderr = logFile
 	}
 
+	if logFile != nil {
+		defer logFile.Close()
+	}
 	if err := cmd.Start(); err != nil {
 		fmt.Println("\n[!] Error starting process:", err)
 		return
@@ -284,7 +294,6 @@ func runGame(mcDir, javaBinary, classpath, mainClass, username, targetVersion, a
 
 	select {
 	case waitErr := <-done:
-		logFile.Close()
 		fmt.Println()
 		if waitErr != nil {
 			fmt.Println("[!] Minecraft exited early with an error.")
@@ -293,7 +302,7 @@ func runGame(mcDir, javaBinary, classpath, mainClass, username, targetVersion, a
 		}
 		fmt.Println("[!] Last lines of the log:")
 		fmt.Println(strings.Repeat("-", 60))
-		printLogTail(filepath.Join(mcDir, "mctui_latest.log"), 25)
+		printLogTail(filepath.Join(gameDir, "mctui_latest.log"), 25)
 		fmt.Println(strings.Repeat("-", 60))
 
 	case <-time.After(8 * time.Second):
