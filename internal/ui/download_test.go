@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -21,5 +22,13 @@ func TestFailedDownloadNeverStartsGame(t *testing.T) {
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if updated.(Model).state != menuScreen {
 		t.Fatal("cannot return to menu after a failed download")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	m = Model{state: downloadScreen, dlContext: ctx}
+	updated, cmd = m.Update(downloadChanMsg{msg: DownloadDoneMsg{}})
+	m = updated.(Model)
+	if m.play || cmd != nil || !errors.Is(m.dlErr, context.Canceled) {
+		t.Fatal("late success launched after cancellation")
 	}
 }

@@ -1,11 +1,13 @@
 // Package mojang handles communication with Mojang's official metadata
 // and download servers: fetching the version manifest, per-version
 // metadata (libraries, asset index, Java requirement, client download
-// URL), and downloading files with optional SHA1 verification.
+// URL), and downloading files with published SHA-1 verification.
 package mojang
 
 import (
+	"context"
 	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,12 +22,38 @@ import (
 
 const manifestURL = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
 
+var metadataClient = &http.Client{Timeout: 20 * time.Second}
+
+func readMetadata(ctx context.Context, url string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := metadataClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("metadata %s: HTTP %d", url, resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > 8<<20 {
+		return nil, fmt.Errorf("metadata %s exceeds 8 MiB", url)
+	}
+	return body, nil
+}
+
 // manifestEntry is one entry in the version manifest: an ID and a URL to
 // fetch that version's full metadata.
 type manifestEntry struct {
 	ID   string `json:"id"`
 	Type string `json:"type"`
 	URL  string `json:"url"`
+	SHA1 string `json:"sha1"`
 }
 
 // VersionData is the subset of a version's metadata (from its per-version
@@ -74,12 +102,10 @@ type VersionData struct {
 // Mojang's manifest, or {"1.20.4"} if the manifest can't be fetched or
 // parsed.
 func FetchReleases() []string {
-	resp, err := http.Get(manifestURL)
-	if err != nil || resp == nil {
+	body, err := readMetadata(context.Background(), manifestURL)
+	if err != nil {
 		return []string{"1.20.4"}
 	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
 
 	var manifest struct {
 		Versions []manifestEntry `json:"versions"`
@@ -98,66 +124,67 @@ func FetchReleases() []string {
 	return releases
 }
 
-// FetchVersionData fetches and caches the per-version metadata for
-// targetVersion. On success, the raw JSON is also written to
-// <mcDir>/versions/<targetVersion>/version.json for later offline use by
-// CachedVersionData and RequiredJavaVersion.
-//
-// Returns ok=false if the manifest or version JSON can't be fetched or
-// parsed (e.g. no internet) — callers should fall back to
-// CachedVersionData in that case.
-func FetchVersionData(targetVersion, mcDir string) (VersionData, bool) {
+// FetchVersionData obtains metadata with a bounded, cancellable request and
+// publishes the cache only after validating the response.
+func FetchVersionData(ctx context.Context, targetVersion, mcDir string) (VersionData, error) {
+	return fetchVersionData(ctx, manifestURL, targetVersion, mcDir)
+}
+
+func fetchVersionData(ctx context.Context, manifestURL, targetVersion, mcDir string) (VersionData, error) {
 	var data VersionData
-
-	resp, err := http.Get(manifestURL)
-	if err != nil || resp == nil {
-		fmt.Println("[!] Could not reach Mojang servers (no internet?).")
-		return data, false
+	if !filepath.IsLocal(targetVersion) || filepath.Base(targetVersion) != targetVersion || strings.ContainsAny(targetVersion, "/\\:") {
+		return data, fmt.Errorf("invalid version %q", targetVersion)
 	}
-	body, readErr := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if readErr != nil {
-		return data, false
+	body, err := readMetadata(ctx, manifestURL)
+	if err != nil {
+		return data, err
 	}
-
 	var manifest struct {
 		Versions []manifestEntry `json:"versions"`
 	}
-	if json.Unmarshal(body, &manifest) != nil {
-		return data, false
+	if err := json.Unmarshal(body, &manifest); err != nil {
+		return data, err
 	}
-
-	var specificURL string
 	for _, v := range manifest.Versions {
-		if v.ID == targetVersion {
-			specificURL = v.URL
-			break
+		if v.ID != targetVersion {
+			continue
 		}
+		if err := os.MkdirAll(filepath.Dir(versionCachePath(mcDir, targetVersion)), 0755); err != nil {
+			return data, err
+		}
+		stage, err := os.MkdirTemp(filepath.Dir(versionCachePath(mcDir, targetVersion)), ".mctui-version-*")
+		if err != nil {
+			return data, err
+		}
+		defer os.RemoveAll(stage)
+		path := filepath.Join(stage, "version.json")
+		requestCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		var wg sync.WaitGroup
+		wg.Add(1)
+		err = download(requestCtx, &wg, 8<<20)(v.URL, path, v.SHA1)
+		cancel()
+		if err != nil {
+			return data, fmt.Errorf("version metadata for %s: %w", targetVersion, err)
+		}
+		body, err = os.ReadFile(path)
+		if err != nil {
+			return data, err
+		}
+		if err := json.Unmarshal(body, &data); err != nil {
+			return data, err
+		}
+		if data.Downloads.Client.URL == "" || data.AssetIndex.URL == "" || data.AssetIndex.ID == "" {
+			return data, fmt.Errorf("incomplete version metadata for %s", targetVersion)
+		}
+		if err := ctx.Err(); err != nil {
+			return data, err
+		}
+		if err := os.Rename(path, versionCachePath(mcDir, targetVersion)); err != nil {
+			return data, err
+		}
+		return data, nil
 	}
-	if specificURL == "" {
-		fmt.Println("[!] Version", targetVersion, "not found in Mojang manifest.")
-		return data, false
-	}
-
-	respVersion, vErr := http.Get(specificURL)
-	if vErr != nil || respVersion == nil {
-		fmt.Println("[!] Could not fetch version metadata (no internet?).")
-		return data, false
-	}
-	bodyVersion, _ := io.ReadAll(respVersion.Body)
-	respVersion.Body.Close()
-
-	if json.Unmarshal(bodyVersion, &data) != nil {
-		return data, false
-	}
-
-	// Cache the raw version data locally so a future offline launch can
-	// still resolve the asset index ID and library list if needed.
-	cachePath := versionCachePath(mcDir, targetVersion)
-	os.MkdirAll(filepath.Dir(cachePath), 0755)
-	os.WriteFile(cachePath, bodyVersion, 0644)
-
-	return data, true
+	return data, fmt.Errorf("version %s not found in Mojang manifest", targetVersion)
 }
 
 // CachedVersionData reads a previously cached version.json (written by
@@ -207,19 +234,25 @@ func ClientJarExists(mcDir, version string) bool {
 
 // --- Downloads ---
 
-// Download verifies cached files with a known SHA-1 and publishes downloads
-// only after a complete, successful transfer. Callers must Add before calling;
-// Done is called even on failure.
-func Download(wg *sync.WaitGroup) func(url, destination, expectedSHA1 string) error {
+// Download verifies every file against its published SHA-1. No unverifiable
+// artifact is treated as installed, including a nonempty cached file.
+func Download(ctx context.Context, wg *sync.WaitGroup) func(url, destination, expectedSHA1 string) error {
+	return download(ctx, wg, 0)
+}
+
+func download(ctx context.Context, wg *sync.WaitGroup, maxBytes int64) func(url, destination, expectedSHA1 string) error {
 	return func(url, destination, expectedSHA1 string) error {
 		defer wg.Done()
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if url == "" {
 			return fmt.Errorf("missing download URL for %s", destination)
 		}
+		if hash, err := hex.DecodeString(expectedSHA1); err != nil || len(hash) != sha1.Size {
+			return fmt.Errorf("missing or invalid SHA-1 for %s", destination)
+		}
 		if info, err := os.Stat(destination); err == nil && info.Mode().IsRegular() && info.Size() > 0 {
-			if expectedSHA1 == "" {
-				return nil
-			}
 			f, err := os.Open(destination)
 			if err != nil {
 				return err
@@ -232,13 +265,17 @@ func Download(wg *sync.WaitGroup) func(url, destination, expectedSHA1 string) er
 				return err
 			}
 			if strings.EqualFold(fmt.Sprintf("%x", h.Sum(nil)), expectedSHA1) {
-				return nil
+				return ctx.Err()
 			}
 		}
 		if err := os.MkdirAll(filepath.Dir(destination), 0755); err != nil {
 			return err
 		}
-		r, err := (&http.Client{Timeout: 2 * time.Minute}).Get(url)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return err
+		}
+		r, err := (&http.Client{Timeout: 2 * time.Minute}).Do(req)
 		if err != nil {
 			return fmt.Errorf("download %s: %w", destination, err)
 		}
@@ -249,6 +286,9 @@ func Download(wg *sync.WaitGroup) func(url, destination, expectedSHA1 string) er
 		if strings.HasPrefix(r.Header.Get("Content-Type"), "text/html") {
 			return fmt.Errorf("download %s: unexpected HTML response", destination)
 		}
+		if maxBytes > 0 && r.ContentLength > maxBytes {
+			return fmt.Errorf("download %s exceeds %d bytes", destination, maxBytes)
+		}
 		f, err := os.CreateTemp(filepath.Dir(destination), ".mctui-download-*")
 		if err != nil {
 			return err
@@ -256,11 +296,18 @@ func Download(wg *sync.WaitGroup) func(url, destination, expectedSHA1 string) er
 		defer os.Remove(f.Name())
 		// Mojang publishes SHA-1, not SHA-256; this checks integrity against its manifest.
 		h := sha1.New() // nosemgrep: go.lang.security.audit.crypto.use_of_weak_crypto.use-of-sha1
-		n, err := io.Copy(io.MultiWriter(f, h), r.Body)
+		reader := io.Reader(r.Body)
+		if maxBytes > 0 {
+			reader = io.LimitReader(r.Body, maxBytes+1)
+		}
+		n, err := io.Copy(io.MultiWriter(f, h), reader)
+		if err == nil && maxBytes > 0 && n > maxBytes {
+			err = fmt.Errorf("response exceeds %d bytes", maxBytes)
+		}
 		if err == nil && (n == 0 || r.ContentLength >= 0 && n != r.ContentLength) {
 			err = fmt.Errorf("empty or truncated response")
 		}
-		if err == nil && expectedSHA1 != "" && !strings.EqualFold(expectedSHA1, fmt.Sprintf("%x", h.Sum(nil))) {
+		if err == nil && !strings.EqualFold(expectedSHA1, fmt.Sprintf("%x", h.Sum(nil))) {
 			err = fmt.Errorf("SHA-1 mismatch")
 		}
 		if err == nil {
@@ -270,6 +317,9 @@ func Download(wg *sync.WaitGroup) func(url, destination, expectedSHA1 string) er
 		}
 		if err != nil {
 			return fmt.Errorf("download %s: %w", destination, err)
+		}
+		if err := ctx.Err(); err != nil {
+			return err
 		}
 		if err := os.Rename(f.Name(), destination); err != nil {
 			return fmt.Errorf("publish %s: %w", destination, err)

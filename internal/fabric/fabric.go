@@ -1,168 +1,181 @@
-// Package fabric resolves the Fabric Loader launch profile (main class +
-// extra classpath entries) for a given Minecraft version, either from a
-// local cache or by querying the Fabric meta API.
+// Package fabric resolves the Fabric Loader launch profile and verifies its libraries.
 package fabric
 
 import (
+	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
+	urlpkg "net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 )
 
-// Profile holds the resolved data needed to launch Fabric: the main class
-// to invoke instead of the vanilla one, and the extra classpath entries
-// (Fabric loader + dependencies).
+// Profile records both the launch classpath and hashes for offline verification.
 type Profile struct {
 	MainClass        string
 	ClasspathEntries []string
+	Hashes           map[string]string
+	URLs             map[string]string
 }
 
-// Downloader fetches url into destination, optionally verifying it
-// against expectedSHA1 (empty string = no verification). Implementations
-// are expected to skip the fetch if destination already exists with
-// size > 0, and to call wg.Done() when finished (Resolve calls wg.Add(1)
-// before invoking it). See package mojang for the standard
-// implementation.
 type Downloader func(url, destination, expectedSHA1 string) error
 
-// ProfilePath returns where the resolved Fabric launch profile is cached
-// for a given Minecraft version, so a previously launched Fabric setup
-// can be detected without hitting the network again.
 func ProfilePath(mcDir, version string) string {
 	return filepath.Join(mcDir, "versions", version, "fabric-profile.json")
 }
 
-// ProfileExists reports whether a cached profile exists for version.
 func ProfileExists(mcDir, version string) bool {
 	info, err := os.Stat(ProfilePath(mcDir, version))
 	return err == nil && info.Size() > 0
 }
 
-// Resolve tries to obtain the Fabric launch profile for targetVersion. It
-// first checks for a cached profile on disk (written by a previous
-// successful resolution); if absent, it queries the Fabric meta API. All
-// network errors return ok=false; a Fabric failure must not launch Vanilla.
-//
-// Library downloads triggered here are capped via a semaphore (maxConcurrent),
-// same as vanilla libraries and assets in package mojang.
-func Resolve(targetVersion, mcDir, librariesPath string, wg *sync.WaitGroup, download Downloader, maxConcurrent int) (Profile, bool) {
-	cachePath := ProfilePath(mcDir, targetVersion)
+var client = &http.Client{Timeout: 20 * time.Second}
 
-	// Try cached profile first (enables fully offline Fabric launches).
-	if cached, err := os.ReadFile(cachePath); err == nil {
-		var p Profile
-		if json.Unmarshal(cached, &p) == nil && p.MainClass != "" && librariesPresent(p.ClasspathEntries) {
-			fmt.Println("   Using cached Fabric profile.")
-			return p, true
+func get(ctx context.Context, url string, limit int64) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%s: HTTP %d", url, resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(body)) > limit {
+		return nil, fmt.Errorf("%s: response too large", url)
+	}
+	return body, nil
+}
+
+func sha1For(ctx context.Context, url string) (string, error) {
+	body, err := get(ctx, url+".sha1", 256)
+	if err != nil {
+		return "", err
+	}
+	hash := strings.TrimSpace(string(body))
+	decoded, err := hex.DecodeString(hash)
+	if err != nil || len(decoded) != 20 {
+		return "", fmt.Errorf("invalid Fabric library SHA-1 at %s", url)
+	}
+	return hash, nil
+}
+
+// Resolve never falls back to Vanilla or trusts a nonempty, unverified cache.
+func Resolve(ctx context.Context, targetVersion, mcDir, librariesPath string, wg *sync.WaitGroup, download Downloader) (Profile, error) {
+	cachePath := ProfilePath(mcDir, targetVersion)
+	var result Profile
+	if cached, err := os.ReadFile(cachePath); err == nil && json.Unmarshal(cached, &result) == nil && result.MainClass != "" && len(result.ClasspathEntries) > 0 && len(result.Hashes) == len(result.ClasspathEntries) && len(result.URLs) == len(result.ClasspathEntries) {
+		valid := true
+		for _, path := range result.ClasspathEntries {
+			rel, err := filepath.Rel(librariesPath, path)
+			if err != nil || !filepath.IsLocal(rel) || result.Hashes[path] == "" || result.URLs[path] == "" {
+				valid = false
+				break
+			}
+		}
+		if valid {
+			for _, path := range result.ClasspathEntries {
+				wg.Add(1)
+				if err := download(result.URLs[path], path, result.Hashes[path]); err != nil {
+					return Profile{}, err
+				}
+			}
+			return result, nil
 		}
 	}
 
 	loaderURL := fmt.Sprintf("https://meta.fabricmc.net/v2/versions/loader/%s", targetVersion)
-	loaderResp, err := http.Get(loaderURL)
-	if err != nil || loaderResp == nil {
-		fmt.Println("[!] Could not reach Fabric meta servers (no internet?).")
-		return Profile{}, false
+	body, err := get(ctx, loaderURL, 2<<20)
+	if err != nil {
+		return Profile{}, err
 	}
-	loaderBody, _ := io.ReadAll(loaderResp.Body)
-	loaderResp.Body.Close()
-
-	var loaderData []struct {
+	var loaders []struct {
 		Loader struct {
 			Version string `json:"version"`
 		} `json:"loader"`
 	}
-	if jsonErr := json.Unmarshal(loaderBody, &loaderData); jsonErr != nil || len(loaderData) == 0 {
-		fmt.Println("[!] Fabric does not have a compatible loader for this version.")
-		return Profile{}, false
+	if err := json.Unmarshal(body, &loaders); err != nil || len(loaders) == 0 || loaders[0].Loader.Version == "" {
+		return Profile{}, fmt.Errorf("no valid Fabric loader for %s", targetVersion)
 	}
-
-	latestLoader := loaderData[0].Loader.Version
-	fmt.Printf("-> Downloading Fabric bridge libraries v%s...\n", latestLoader)
-
-	profileURL := fmt.Sprintf("https://meta.fabricmc.net/v2/versions/loader/%s/%s/profile/json", targetVersion, latestLoader)
-	profileResp, pErr := http.Get(profileURL)
-	if pErr != nil || profileResp == nil {
-		fmt.Println("[!] Could not fetch Fabric profile (no internet?).")
-		return Profile{}, false
+	profileURL := fmt.Sprintf("https://meta.fabricmc.net/v2/versions/loader/%s/%s/profile/json", targetVersion, loaders[0].Loader.Version)
+	body, err = get(ctx, profileURL, 2<<20)
+	if err != nil {
+		return Profile{}, err
 	}
-	profileBody, _ := io.ReadAll(profileResp.Body)
-	profileResp.Body.Close()
-
-	var rawProfile struct {
-		MainClass string `json:"mainClass"`
-		Libraries []struct {
-			Name string `json:"name"`
-			URL  string `json:"url"`
-		} `json:"libraries"`
+	var raw struct {
+		MainClass string                       `json:"mainClass"`
+		Libraries []struct{ Name, URL string } `json:"libraries"`
 	}
-	if jsonErr := json.Unmarshal(profileBody, &rawProfile); jsonErr != nil || rawProfile.MainClass == "" {
-		fmt.Println("[!] Fabric profile response was invalid.")
-		return Profile{}, false
+	if err := json.Unmarshal(body, &raw); err != nil || raw.MainClass == "" {
+		return Profile{}, fmt.Errorf("invalid Fabric profile: %v", err)
 	}
-
-	result := Profile{MainClass: rawProfile.MainClass}
-
-	fabricSem := make(chan struct{}, maxConcurrent)
-	errors := make(chan error, len(rawProfile.Libraries))
-	for _, lib := range rawProfile.Libraries {
+	result = Profile{MainClass: raw.MainClass, Hashes: make(map[string]string), URLs: make(map[string]string)}
+	for _, lib := range raw.Libraries {
 		parts := strings.Split(lib.Name, ":")
-		if len(parts) < 3 {
-			continue
+		if len(parts) != 3 {
+			return Profile{}, fmt.Errorf("invalid Fabric coordinate %q", lib.Name)
 		}
-		group := strings.ReplaceAll(parts[0], ".", "/")
-		artifact := parts[1]
-		version := parts[2]
-		path := fmt.Sprintf("%s/%s/%s/%s-%s.jar", group, artifact, version, artifact, version)
-
-		baseURL := lib.URL
-		if baseURL == "" {
-			baseURL = "https://maven.fabricmc.net/"
+		path := strings.ReplaceAll(parts[0], ".", "/") + "/" + parts[1] + "/" + parts[2] + "/" + parts[1] + "-" + parts[2] + ".jar"
+		if !fs.ValidPath(path) || !filepath.IsLocal(path) || strings.ContainsAny(path, "\\:") {
+			return Profile{}, fmt.Errorf("invalid Fabric library path %q", path)
 		}
-		if !strings.HasSuffix(baseURL, "/") {
-			baseURL += "/"
+		base := lib.URL
+		if base == "" {
+			base = "https://maven.fabricmc.net/"
 		}
-
-		fullURL := baseURL + path
-		fullDest := filepath.Join(librariesPath, path)
-
-		result.ClasspathEntries = append(result.ClasspathEntries, fullDest)
+		url := strings.TrimRight(base, "/") + "/" + path
+		parsed, err := urlpkg.Parse(url)
+		if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil {
+			return Profile{}, fmt.Errorf("unsafe Fabric library URL %q", url)
+		}
+		hash, err := sha1For(ctx, url)
+		if err != nil {
+			return Profile{}, err
+		}
+		dest := filepath.Join(librariesPath, filepath.FromSlash(path))
+		result.ClasspathEntries = append(result.ClasspathEntries, dest)
+		result.Hashes[dest] = hash
+		result.URLs[dest] = url
 		wg.Add(1)
-		fabricSem <- struct{}{}
-		go func(u, d string) {
-			defer func() { <-fabricSem }()
-			if err := download(u, d, ""); err != nil {
-				errors <- err
-			}
-		}(fullURL, fullDest)
-	}
-	wg.Wait()
-	select {
-	case err := <-errors:
-		fmt.Println("[!] Fabric library unavailable:", err)
-		return Profile{}, false
-	default:
-	}
-
-	// Cache the resolved profile so future launches can work offline.
-	if data, mErr := json.MarshalIndent(result, "", "  "); mErr == nil {
-		os.MkdirAll(filepath.Dir(cachePath), 0755)
-		os.WriteFile(cachePath, data, 0644)
-	}
-
-	return result, true
-}
-
-func librariesPresent(paths []string) bool {
-	for _, path := range paths {
-		info, err := os.Stat(path)
-		if err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
-			return false
+		if err := download(url, dest, hash); err != nil {
+			return Profile{}, err
 		}
 	}
-	return true
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0755); err != nil {
+		return Profile{}, err
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		return Profile{}, err
+	}
+	f, err := os.CreateTemp(filepath.Dir(cachePath), ".mctui-fabric-*")
+	if err != nil {
+		return Profile{}, err
+	}
+	defer os.Remove(f.Name())
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return Profile{}, err
+	}
+	if err := f.Close(); err != nil {
+		return Profile{}, err
+	}
+	if err := os.Rename(f.Name(), cachePath); err != nil {
+		return Profile{}, err
+	}
+	return result, nil
 }

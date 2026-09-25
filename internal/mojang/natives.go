@@ -2,6 +2,7 @@ package mojang
 
 import (
 	"archive/zip"
+	"context"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -41,7 +42,10 @@ func NativeLibDir(mcDir, version string) string {
 // staging before publishing. A nonempty destination is not proof of integrity.
 // Publication is per-file, not an atomic multi-file transaction; any error
 // blocks launch and a retry re-extracts the whole set.
-func DownloadAndExtractNatives(data VersionData, mcDir, version string, wg *sync.WaitGroup, download func(url, destination, expectedSHA1 string) error) (string, error) {
+func DownloadAndExtractNatives(ctx context.Context, data VersionData, mcDir, version string, wg *sync.WaitGroup, download func(url, destination, expectedSHA1 string) error) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	if osName() == "" || nativeClassifier(runtime.GOOS, runtime.GOARCH) == "" {
 		return "", fmt.Errorf("unsupported native platform %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
@@ -62,6 +66,9 @@ func DownloadAndExtractNatives(data VersionData, mcDir, version string, wg *sync
 	defer os.RemoveAll(stage)
 	seen := make(map[string]bool)
 	for _, lib := range data.Libraries {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
 		if !ShouldIncludeLibrary(lib.Name, lib.Rules) {
 			continue
 		}
@@ -105,6 +112,9 @@ func DownloadAndExtractNatives(data VersionData, mcDir, version string, wg *sync
 		return "", err
 	}
 	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
 		dest, err := nativePath(mcDir, "versions/"+version+"/"+filepath.Base(destDir)+"/"+entry.Name())
 		if err != nil {
 			return "", err

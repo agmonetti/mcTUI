@@ -127,10 +127,10 @@ func renderProfileCard(username, version, modloader string) string {
 
 // ── Featured Banner ───────────────────────────────────────────────────────────
 // Franja horizontal que muestra la configuración activa, estilo CS:GO featured offer.
-func renderFeaturedBanner(version, modloader string, memoryMB int, ready bool) string {
-	statusStr := lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("● READY")
-	if !ready {
-		statusStr = lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("● NEEDS SETUP")
+func renderFeaturedBanner(version, modloader string, memoryMB int, cached bool) string {
+	statusStr := lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("● FILES PRESENT")
+	if !cached {
+		statusStr = lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("● FILES MISSING")
 	}
 
 	label := lipgloss.NewStyle().Foreground(colorGray).Render

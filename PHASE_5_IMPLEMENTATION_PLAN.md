@@ -204,7 +204,7 @@ Instancias → Instancia seleccionada
 - [ ] Teclado completo, foco visible, ayuda de atajos; mouse opcional, nunca obligatorio.
 - [ ] Filtros y búsqueda no deben bloquear `Update` ni `View`.
 - [ ] Paginación y cancelación de búsquedas; descartar respuestas antiguas por ID de operación.
-- [ ] Progreso con totales reales cuando se conocen, estado indeterminado cuando no.
+- [ ] Mostrar una barra de carga en la TUI, no el contador de archivos completados como indicador principal. Usar progreso determinado solo cuando exista un total real (idealmente bytes); si no, barra animada indeterminada, sin inventar porcentajes. Reutilizar Bubble Tea/Bubbles existentes; no agregar otra biblioteca solo por la barra.
 - [ ] Errores distinguibles: red, permisos, disco, hash, incompatibilidad, contenido restringido.
 - [ ] Confirmación de instalación con dependencias, reemplazos, descargas y destino.
 - [ ] Cancelación segura de descargas; no interrumpir una publicación dejando archivos ambiguos.
@@ -359,6 +359,19 @@ Usar tests Go con directorios temporales, `httptest` y procesos simulados para l
 | Terminal | Pantalla pequeña, nombres largos, controles externos | Navegación utilizable y salida sanitizada |
 | Exportación | Mod local sin permiso/fuente, posible token | Bloqueo/advertencia; ningún secreto exportado |
 
+### Pruebas manuales de versiones
+
+La entrada real a Minecraft por versión/loader se valida manualmente por el usuario en el equipo objetivo; el agente no debe intentar instalar y arrancar por su cuenta cada versión. El agente cubre la lógica con tests automatizados, ayuda a preparar la matriz y analiza los resultados/logs aportados. Registrar por cada intento: fecha, commit/build, OS/arquitectura, Minecraft, loader y versión, Java, resultado de preparación/descarga, si llegó al menú, salida/código y `mctui_latest.log` (o la ruta disponible). Un test automatizado o una compilación cruzada no sustituye esta evidencia manual.
+
+#### Registro de intentos de ejecución real
+
+| Fecha | Commit / Build | OS / Arch | Minecraft | Loader | Java | Prep / Descarga | Menú principal | Salida / Log |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-09-25 | `7c12b8a` + corte A07 | Arch Linux (kernel 7.2.6, x86_64) | 1.20.4 | Vanilla | OpenJDK 27 | OK (descarga y verificación completas) | Sí, confirmado | Exit 0; `~/.minecraft/mctui_latest.log` |
+| 2026-09-25 | `7c12b8a` + corte A07 | Arch Linux (kernel 7.2.6, x86_64) | 1.21.1 | Vanilla | OpenJDK 27 | OK (descarga y verificación completas) | Sí, confirmado | Exit 0; `~/.minecraft/mctui_latest.log` |
+| 2026-09-25 | `7c12b8a` + corte A07 | Arch Linux (kernel 7.2.6, x86_64) | 1.20.4 | Fabric (loader compatible) | OpenJDK 27 | OK (perfil Fabric y SHA-1 Maven verificados) | Sí, confirmado | Exit 0; `~/.minecraft/mctui_latest.log` |
+
+
 ### Plataformas
 
 - [ ] Windows real: prioridad principal; espacios, Unicode, archivos bloqueados, rutas, permisos normales y antivirus.
@@ -433,6 +446,16 @@ Implementado sobre `e3079af`, en este commit:
 
 **Límites y siguiente corte:** A07 sigue abierta: metadata con timeout/contexto y errores estructurados, integridad de URLs sin hash (incluido Fabric), cancelación y revisión completa de reglas de arquitectura/versiones antiguas. Publicar natives es una secuencia de renombrados, **no** una transacción multiarchivo: un fallo intermedio bloquea Play, conserva el error y requiere reintentar. No hay aún exclusión entre procesos; comprobar enlaces no elimina carreras ante cambios externos. No se eliminan automáticamente natives sobrantes. Continuar estos bloqueantes antes de conectar instancias gestionadas a Play; el ciclo del proceso y retorno a la TUI siguen en A08.
 
+### 10.5. Continuación de A07 — metadata, integridad y cancelación
+
+`PrepareContext` propaga cancelación desde la TUI por metadata, cliente, bibliotecas, Fabric y assets. Manifest y metadata usan solicitudes acotadas; la versión se comprueba con el SHA-1 publicado antes de guardar JSON válido. Artefactos sin SHA-1 dejan de considerarse listos, incluidos los JARs de Fabric: se consulta su `.sha1` Maven y se guarda junto al perfil para verificar la caché offline. Si falta o es inválido, se informa el fallo sin caer a Vanilla. Esc cancela la preparación; natives comprueba cancelación entre archivos y antes de publicar cada archivo. Play siempre verifica antes de salir de la TUI, aunque los archivos parezcan presentes. SHA-1 aquí es el formato publicado por Mojang/Maven, **no** una garantía criptográfica contra un proveedor comprometido.
+
+Pruebas locales: fallo de metadata, hash incorrecto, falta de hash, cancelación de una solicitud HTTP en curso y rechazo de Play tras cancelar. Pasan `go test ./...`, `go test -race ./...`, `go vet ./...`, `git diff --check` y compilación cruzada Windows amd64/macOS arm64; compilar no equivale a probar ejecución.
+
+Validación manual registrada en §9 (Arch Linux x86_64, OpenJDK 27): Vanilla 1.20.4, Vanilla 1.21.1 y Fabric 1.20.4 se probaron llegando al menú principal sin fallas en el log. Esto descarta una falla general reproducible en esas tres combinaciones, pero no acredita otras versiones o plataformas.
+
+**A07 continúa abierta:** faltan errores tipados por causa, revisión de reglas de arquitectura y versiones antiguas, interrupción durante la copia de un único archivo nativo y validación real de Fabric/Vanilla en las plataformas anunciadas. Un runtime con metadata antigua no verificable puede fallar explícitamente; no se lo convierte en éxito falso. A08 (resultado/proceso dentro de TUI) y conectar instancias gestionadas siguen pendientes.
+
 ## 11. Trazabilidad y seguimiento
 
 | Requisito original | Implementación rastreable |
@@ -455,7 +478,7 @@ Al cerrar tareas, sustituir «pendiente» por commit y evidencia. Documentar dif
 
 | Hito | Estado | Commit(s) | Evidencia / bloqueos |
 | --- | --- | --- | --- |
-| 5A | En curso (A01; A02/A03/A07 parciales) | `8e3c89d`, `c834078`, `e3079af`, este commit (índice/natives) | §10.1–10.4; TUI aún heredada, DEC-03/05 pendientes |
+| 5A | En curso (A01; A02/A03/A07 parciales) | `8e3c89d`, `c834078`, `e3079af`, `7c12b8a`, corte A07 (preparación cancelable y Fabric SHA-1) | §10.1–10.5; TUI aún heredada, DEC-03/05 pendientes |
 | 5B | Pendiente | — | Requiere 5A; DEC-04 |
 | 5C | Pendiente | — | Requiere 5A/5B; DEC-06/10 |
 | 5D | Pendiente | — | Requiere 5A–5C; DEC-07/10 |

@@ -1,6 +1,7 @@
 package launcher
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -24,19 +25,30 @@ type Prepared struct {
 // Prepare is the single preparation path used by both the TUI and Launch.
 // progress is serialized; its total is intentionally unknown.
 func Prepare(runtimeDir, version, modloader string, progress func(string)) (Prepared, error) {
+	return PrepareContext(context.Background(), runtimeDir, version, modloader, progress)
+}
+
+func PrepareContext(ctx context.Context, runtimeDir, version, modloader string, progress func(string)) (Prepared, error) {
+	if err := ctx.Err(); err != nil {
+		return Prepared{}, err
+	}
 	if !filepath.IsAbs(runtimeDir) || !filepath.IsLocal(version) || version != filepath.Base(version) || strings.ContainsAny(version, "/\\") || version == "." || version == ".." || (modloader != "Vanilla" && modloader != "Fabric") {
 		return Prepared{}, fmt.Errorf("invalid runtime, version or loader")
 	}
 	data, ok := mojang.CachedVersionData(runtimeDir, version)
 	if !ok {
-		data, ok = mojang.FetchVersionData(version, runtimeDir)
+		var err error
+		data, err = mojang.FetchVersionData(ctx, version, runtimeDir)
+		if err != nil {
+			return Prepared{}, fmt.Errorf("version metadata for %s: %w", version, err)
+		}
 	}
-	if !ok || data.Downloads.Client.URL == "" || data.Downloads.Client.SHA1 == "" || !filepath.IsLocal(data.AssetIndex.ID) || data.AssetIndex.ID != filepath.Base(data.AssetIndex.ID) {
+	if data.Downloads.Client.URL == "" || data.Downloads.Client.SHA1 == "" || !filepath.IsLocal(data.AssetIndex.ID) || data.AssetIndex.ID != filepath.Base(data.AssetIndex.ID) {
 		return Prepared{}, fmt.Errorf("version metadata unavailable or incomplete for %s", version)
 	}
 
 	var wg sync.WaitGroup
-	checked := mojang.Download(&wg)
+	checked := mojang.Download(ctx, &wg)
 	var mu sync.Mutex
 	var firstErr error
 	download := func(url, dest, hash string) error {
@@ -72,8 +84,12 @@ func Prepare(runtimeDir, version, modloader string, progress func(string)) (Prep
 			continue
 		}
 		artifact := lib.Downloads.Artifact
-		if artifact.URL == "" || artifact.Path == "" {
-			continue
+		if artifact.URL == "" && artifact.Path == "" && len(lib.Natives) > 0 {
+			continue // Native-only libraries are handled by DownloadAndExtractNatives.
+		}
+		if artifact.URL == "" || artifact.Path == "" || artifact.SHA1 == "" {
+			wg.Wait()
+			return Prepared{}, fmt.Errorf("missing verifiable artifact for %s", lib.Name)
 		}
 		if !filepath.IsLocal(artifact.Path) {
 			wg.Wait()
@@ -81,8 +97,13 @@ func Prepare(runtimeDir, version, modloader string, progress func(string)) (Prep
 		}
 		path := filepath.Join(librariesPath, artifact.Path)
 		classpath = append(classpath, path)
+		select {
+		case sem <- struct{}{}:
+		case <-ctx.Done():
+			wg.Wait()
+			return Prepared{}, ctx.Err()
+		}
 		wg.Add(1)
-		sem <- struct{}{}
 		go func() {
 			defer func() { <-sem }()
 			_ = download(artifact.URL, path, artifact.SHA1)
@@ -94,9 +115,9 @@ func Prepare(runtimeDir, version, modloader string, progress func(string)) (Prep
 
 	mainClass := "net.minecraft.client.main.Main"
 	if modloader == "Fabric" {
-		profile, ok := fabric.Resolve(version, runtimeDir, librariesPath, &wg, download, maxConcurrentDownloads)
-		if !ok {
-			return Prepared{}, fmt.Errorf("Fabric profile unavailable for %s; Vanilla will not be launched", version)
+		profile, err := fabric.Resolve(ctx, version, runtimeDir, librariesPath, &wg, download)
+		if err != nil {
+			return Prepared{}, fmt.Errorf("Fabric profile unavailable for %s; Vanilla will not be launched: %w", version, err)
 		}
 		mainClass = profile.MainClass
 		classpath = append(classpath, profile.ClasspathEntries...)
@@ -109,8 +130,11 @@ func Prepare(runtimeDir, version, modloader string, progress func(string)) (Prep
 	if err != nil {
 		return Prepared{}, err
 	}
-	nativesDir, err := mojang.DownloadAndExtractNatives(data, runtimeDir, version, &wg, download)
+	nativesDir, err := mojang.DownloadAndExtractNatives(ctx, data, runtimeDir, version, &wg, download)
 	if err != nil {
+		return Prepared{}, err
+	}
+	if err := ctx.Err(); err != nil {
 		return Prepared{}, err
 	}
 	classpath = append(classpath, clientPath)

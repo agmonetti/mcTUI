@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -11,9 +12,9 @@ import (
 
 // StartDownloadCmd prepares the requested version using the same engine as
 // Launch; the runtime and selection are fixed when the command starts.
-func StartDownloadCmd(version, modloader string) tea.Cmd {
+func StartDownloadCmd(ctx context.Context, version, modloader string) tea.Cmd {
 	return func() tea.Msg {
-		ch := startDownload(version, modloader)
+		ch := startDownload(ctx, version, modloader)
 		return downloadChanMsg{ch: ch, msg: <-ch}
 	}
 }
@@ -33,7 +34,7 @@ func nextDownloadCmd(ch <-chan interface{}) tea.Cmd {
 	}
 }
 
-func startDownload(version, modloader string) <-chan interface{} {
+func startDownload(ctx context.Context, version, modloader string) <-chan interface{} {
 	ch := make(chan interface{}, 64)
 	go func() {
 		defer close(ch)
@@ -43,11 +44,18 @@ func startDownload(version, modloader string) <-chan interface{} {
 			return
 		}
 		done := 0
-		_, err = launcher.Prepare(runtimeDir, version, modloader, func(file string) {
+		_, err = launcher.PrepareContext(ctx, runtimeDir, version, modloader, func(file string) {
 			done++
-			ch <- DownloadProgressMsg{Done: done, File: file}
+			select {
+			case ch <- DownloadProgressMsg{Done: done, File: file}:
+			case <-ctx.Done():
+			}
 		})
-		ch <- DownloadDoneMsg{Err: err}
+		select {
+		case ch <- DownloadDoneMsg{Err: err}:
+		case <-ctx.Done():
+			// The UI may have quit; never block a canceled worker.
+		}
 	}()
 	return ch
 }

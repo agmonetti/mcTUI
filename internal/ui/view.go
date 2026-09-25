@@ -9,7 +9,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"mcTUI/internal/config"
-	"mcTUI/internal/fabric"
 	"mcTUI/internal/java"
 	"mcTUI/internal/mojang"
 	"mcTUI/internal/resetconfigs"
@@ -40,8 +39,8 @@ func (m Model) View() string {
 	topBar := renderTopBar(m.cursorMenu, hasUpdate)
 
 	// ── Featured Banner ──────────────────────────────────────────────────────
-	ready := installationReady(m.versionSelect, m.modloader)
-	banner := renderFeaturedBanner(m.versionSelect, m.modloader, m.memoryMB, ready)
+	cached := filesCached(m.versionSelect, m.modloader)
+	banner := renderFeaturedBanner(m.versionSelect, m.modloader, m.memoryMB, cached)
 
 	// ── Panel izquierdo: Profile Card + menú ────────────────────────────────
 	profileCard := renderProfileCard(m.username, m.versionSelect, m.modloader)
@@ -151,10 +150,10 @@ func (m Model) View() string {
 
 	// ── Footer ───────────────────────────────────────────────────────────────
 	var statusPart string
-	if ready {
-		statusPart = lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("● READY")
+	if cached {
+		statusPart = lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("● FILES PRESENT · verify before Play")
 	} else {
-		statusPart = lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("● NEEDS SETUP")
+		statusPart = lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("● FILES MISSING")
 	}
 	userPart := lipgloss.NewStyle().Foreground(colorGray).
 		Render(fmt.Sprintf("[%s · %s]", m.username, m.versionSelect))
@@ -503,7 +502,7 @@ func (m Model) resetPanelContent() string {
 
 // ── Download Screen ───────────────────────────────────────────────────────────
 func (m Model) renderDownloadScreen() string {
-	title := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("DOWNLOADING FILES")
+	title := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("VERIFYING FILES")
 	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 60))
 
 	fileLabel := lipgloss.NewStyle().Foreground(colorGray).Render("FILE  ")
@@ -517,7 +516,7 @@ func (m Model) renderDownloadScreen() string {
 			Render("⚠ "+m.dlErr.Error())
 	}
 
-	hintText := "[Ctrl+C] Abort"
+	hintText := "[Esc] Cancel  [Ctrl+C] Quit"
 	if m.dlFinished && m.dlErr != nil {
 		hintText = "[Esc] Return to menu  [Ctrl+C] Quit"
 	}
@@ -657,10 +656,10 @@ func (m Model) renderActiveSession(c *strings.Builder) {
 
 	c.WriteString("\n")
 
-	if installationReady(m.versionSelect, m.modloader) {
-		c.WriteString(pad + lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("● READY — offline-capable"))
+	if filesCached(m.versionSelect, m.modloader) {
+		c.WriteString(pad + lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("● Files present — verify before Play"))
 	} else {
-		c.WriteString(pad + lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("● NOT INSTALLED — will need network"))
+		c.WriteString(pad + lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("● Files missing — network may be needed"))
 	}
 }
 
@@ -730,20 +729,11 @@ func (m Model) renderWorldsScreen(c *strings.Builder) {
 }
 
 func (m Model) renderConfirmScreen(c *strings.Builder) {
-	title := lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("⚠ MISSING FILES")
+	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("VERIFY INSTALLATION")
 	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 	c.WriteString(title + "\n" + div + "\n\n")
-
-	if m.modloader == "Fabric" && !fabric.ProfileExists(config.MinecraftDir(), m.versionSelect) {
-		c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(
-			fmt.Sprintf("Fabric libraries for %s are not yet\ncached on your system.", m.versionSelect)) + "\n\n")
-	} else {
-		c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(
-			fmt.Sprintf("The client.jar file (%s) is not\nfound on your system.", m.versionSelect)) + "\n\n")
-	}
-
 	c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(
-		"Would you like to download the missing\nfiles from the official Mojang/Fabric\nservers?") + "\n\n")
+		"Check files before Play; missing or corrupt\nfiles may be downloaded from Mojang/Fabric.") + "\n\n")
 
 	c.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("[y/Enter] YES") +
 		"   " +

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"os"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -77,6 +78,8 @@ type Model struct {
 	dlFile     string
 	dlErr      error
 	dlFinished bool
+	dlContext  context.Context
+	dlCancel   context.CancelFunc
 
 	resetDir         string
 	resetFound       []string

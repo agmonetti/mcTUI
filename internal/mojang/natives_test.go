@@ -3,6 +3,7 @@ package mojang
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"crypto/sha1"
 	"encoding/json"
 	"fmt"
@@ -41,13 +42,18 @@ func TestNativesRebuiltOfflineAndFailuresNeverPublished(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(body) }))
 	defer server.Close()
 	var data VersionData
+	// Mojang requires SHA-1 in its metadata; this is an integrity fixture, not a security primitive.
+	h := sha1.New() // nosemgrep: go.lang.security.audit.crypto.use_of_weak_crypto.use-of-sha1
+	_, _ = h.Write(body)
 	meta := fmt.Sprintf(`{"libraries":[{"name":%q,"downloads":{"artifact":{"path":"test/native.jar","url":%q,"sha1":"%x"}}}]}`,
-		"org.lwjgl:test:1:"+nativeClassifier(runtime.GOOS, runtime.GOARCH), server.URL, sha1.Sum(body)) // nosemgrep: go.lang.security.audit.crypto.use_of_weak_crypto.use-of-sha1 -- Mojang fixture.
+		"org.lwjgl:test:1:"+nativeClassifier(runtime.GOOS, runtime.GOARCH), server.URL, h.Sum(nil))
 	if err := json.Unmarshal([]byte(meta), &data); err != nil {
 		t.Fatal(err)
 	}
 	var wg sync.WaitGroup
-	prepare := func() (string, error) { return DownloadAndExtractNatives(data, root, "test", &wg, Download(&wg)) }
+	prepare := func() (string, error) {
+		return DownloadAndExtractNatives(context.Background(), data, root, "test", &wg, Download(context.Background(), &wg))
+	}
 	dir, err := prepare()
 	if err != nil || dir != NativeLibDir(root, "test") {
 		t.Fatalf("prepare: %q, %v", dir, err)

@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"context"
+
 	tea "github.com/charmbracelet/bubbletea"
 
 	"mcTUI/internal/config"
@@ -27,11 +29,9 @@ func validUsername(name string) bool {
 	return true
 }
 
-// installationReady reports whether everything needed to launch this
-// version + modloader combination already appears to be present locally,
-// so launcher.Launch can skip network calls entirely if the user is
-// offline.
-func installationReady(version, modloader string) bool {
+// filesCached is only a display hint. Nonempty files are not evidence of a
+// valid installation; Play always runs the shared verifier asynchronously.
+func filesCached(version, modloader string) bool {
 	mcDir := config.MinecraftDir()
 	if !mojang.ClientJarExists(mcDir, version) {
 		return false
@@ -95,6 +95,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nextDownloadCmd(msg.ch)
 		case DownloadDoneMsg:
 			m.dlFinished = true
+			if m.dlContext != nil && m.dlContext.Err() != nil {
+				inner.Err = m.dlContext.Err()
+			}
+			if m.dlCancel != nil {
+				m.dlCancel()
+				m.dlCancel = nil
+			}
 			if inner.Err != nil {
 				m.dlErr = inner.Err
 				return m, nil
@@ -112,8 +119,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.state == downloadScreen {
 			switch msg.String() {
 			case "ctrl+c":
+				if m.dlCancel != nil {
+					m.dlCancel()
+				}
 				return m, tea.Quit
 			case "esc":
+				if !m.dlFinished && m.dlCancel != nil {
+					m.dlCancel()
+				}
 				if m.dlFinished && m.dlErr != nil {
 					m.state = menuScreen
 				}
@@ -148,10 +161,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			if m.state == menuScreen {
 				if m.cursorMenu == 0 {
-					if installationReady(m.versionSelect, m.modloader) {
-						m.play = true
-						return m, tea.Quit
-					}
 					m.state = confirmScreen
 				} else if m.cursorMenu == 1 {
 					m.state = nameScreen
@@ -228,7 +237,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.dlFile = "Initializing..."
 				m.dlErr = nil
 				m.dlFinished = false
-				return m, StartDownloadCmd(m.versionSelect, m.modloader)
+				ctx, cancel := context.WithCancel(context.Background())
+				m.dlContext, m.dlCancel = ctx, cancel
+				return m, StartDownloadCmd(ctx, m.versionSelect, m.modloader)
 			}
 
 		case "y", "Y":
@@ -238,7 +249,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.dlFile = "Initializing..."
 				m.dlErr = nil
 				m.dlFinished = false
-				return m, StartDownloadCmd(m.versionSelect, m.modloader)
+				ctx, cancel := context.WithCancel(context.Background())
+				m.dlContext, m.dlCancel = ctx, cancel
+				return m, StartDownloadCmd(ctx, m.versionSelect, m.modloader)
 			}
 
 		case "n", "N":

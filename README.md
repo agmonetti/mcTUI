@@ -38,14 +38,16 @@ responsibility:
 
 Runtime preparation is shared by the TUI and launcher, but the TUI still uses
 the existing `.minecraft` installation. Managed instances and mod management
-are not yet available in the UI. See [the implementation plan](PHASE_5_IMPLEMENTATION_PLAN.md)
+are not yet available in the UI. Play verifies cached files first and can cancel
+preparation with Esc; a missing published hash blocks an artifact rather than
+accepting an unverifiable cache. See [the implementation plan](PHASE_5_IMPLEMENTATION_PLAN.md)
 for completed work and remaining safety checks.
 
 ## Features
 
 * **TUI Interface:** Smooth keyboard navigation using [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 * **Concurrent Downloads:** Maximize your bandwidth using *Goroutines* to download hundreds of assets and libraries in parallel.
-* **Download Integrity:** Validates HTTP responses, checks Mojang SHA-1 hashes when provided, and publishes completed files from temporary downloads. Some legacy assets without a published hash still need stronger validation.
+* **Download Integrity:** Validates HTTP responses, requires published SHA-1 for prepared artifacts, and publishes completed files from temporary downloads. Some legacy releases without a published hash cannot be prepared.
 * **Fabric Injection:** On-the-fly modloader integration. Parses Maven coordinates and seamlessly intercepts the vanilla boot process to load your `~/.minecraft/mods`.
 * **Cross-Platform:** Native path resolution and execution for Linux, macOS, and Windows.
 * **Secure LAN Multiplayer:** Generates dynamic v4 UUIDs in each session to avoid "duplicate name" conflicts on local servers.
