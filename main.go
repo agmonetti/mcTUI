@@ -41,6 +41,7 @@ func main() {
 	p := tea.NewProgram(
 		ui.New(validReleases, cfg, roadmapItems, javaMajor, latestRelease),
 		tea.WithAltScreen(),
+		tea.WithMouseCellMotion(),
 	)
 
 	finalModel, err := p.Run()

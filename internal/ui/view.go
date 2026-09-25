@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -20,10 +21,16 @@ func (m Model) View() string {
 	if m.state == downloadScreen {
 		return m.renderDownloadScreen()
 	}
-	if m.state >= resetModeScreen && m.state <= resetResultScreen {
-		return m.renderResetScreen()
+	resetActive := m.state >= resetModeScreen && m.state <= resetResultScreen
+	if resetActive && m.compactReset() {
+		content := m.resetPanelContent()
+		if m.state == resetPickerScreen {
+			content = m.pickerPanelContent()
+		}
+		header := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("  mcTUI  LAUNCHER") + "\n" +
+			lipgloss.NewStyle().Foreground(colorBlue).Render("  OPTIONS  ► Resets Configs") + "\n\n"
+		return lipgloss.Place(m.width, m.height, lipgloss.Left, lipgloss.Top, header+content)
 	}
-
 	hasUpdate := m.latestRelease.TagName != ""
 
 	// ── Logo ─────────────────────────────────────────────────────────────────
@@ -70,7 +77,7 @@ func (m Model) View() string {
 	}
 
 	leftBorderColor := colorBorder
-	if m.state == menuScreen {
+	if m.state == menuScreen || resetActive {
 		leftBorderColor = colorAccent
 	}
 	leftPanel := lipgloss.NewStyle().
@@ -86,6 +93,10 @@ func (m Model) View() string {
 	// ── Panel central: detalle ───────────────────────────────────────────────
 	contentStr := strings.Builder{}
 	switch {
+	case m.state == resetPickerScreen:
+		contentStr.WriteString(m.pickerPanelContent())
+	case resetActive:
+		contentStr.WriteString(m.resetPanelContent())
 	case m.state == menuScreen && m.cursorMenu == 5:
 		m.renderMemoryPanel(&contentStr)
 	case m.state == menuScreen && m.cursorMenu == 3:
@@ -101,7 +112,11 @@ func (m Model) View() string {
 	case m.state == confirmScreen:
 		m.renderConfirmScreen(&contentStr)
 	}
-	centerPanel := panelContent.Render(contentStr.String())
+	centerStyle := panelContent
+	if resetActive {
+		centerStyle = panelContent.Copy().Width(max(50, m.width-68)).Height(max(16, min(40, m.height-17)))
+	}
+	centerPanel := centerStyle.Render(contentStr.String())
 
 	// ── Panel derecho: roadmap ───────────────────────────────────────────────
 	newsStr := strings.Builder{}
@@ -124,7 +139,7 @@ func (m Model) View() string {
 
 	// ── Layout responsive ────────────────────────────────────────────────────
 	showNews := true
-	if m.width > 0 && m.width < 122 {
+	if resetActive || (m.width > 0 && m.width < 122) {
 		showNews = false
 	}
 
@@ -170,16 +185,20 @@ func (m Model) View() string {
 		)
 	}
 
-	fullInterface := lipgloss.JoinVertical(lipgloss.Left,
-		logo,
-		"",
-		topBar,
-		"",
-		banner,
-		"",
-		topPanels,
-		panelFooter.Render(footerContent),
-	)
+	sections := []string{logo}
+	if !resetActive || m.height >= 37 {
+		sections = append(sections, "")
+	}
+	sections = append(sections, topBar)
+	if !resetActive || m.height >= 36 {
+		sections = append(sections, "")
+	}
+	sections = append(sections, banner)
+	if !resetActive || m.height >= 35 {
+		sections = append(sections, "")
+	}
+	sections = append(sections, topPanels, panelFooter.Render(footerContent))
+	fullInterface := lipgloss.JoinVertical(lipgloss.Left, sections...)
 
 	if m.width > 0 && m.height > 0 {
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, fullInterface)
@@ -193,60 +212,136 @@ func (m Model) resetLines() []string {
 	worldsWarning := "Worlds are preserved, but do not load mod-dependent worlds until those mods are restored to prevent block/item loss."
 	switch m.state {
 	case resetModeScreen, resetConfirmScreen:
-		lines := []string{
-			"Minecraft directory: " + m.resetDir,
-			"Close Minecraft before resetting; open files may be locked.",
-			"Affected folders:",
-		}
-		for _, name := range m.resetFound {
-			lines = append(lines, "  - "+name+"/")
-		}
-		lines = append(lines, preserved, worldsWarning, "")
 		if m.resetErr != nil {
-			return append(lines, "Cannot reset: "+m.resetErr.Error(), "[Esc] Back")
+			return []string{"INSTALLATION", "Minecraft directory: " + m.resetDir, "", "Cannot inspect installation: " + m.resetErr.Error()}
 		}
+		var lines []string
 		if len(m.resetFound) == 0 {
-			return append(lines, "Nothing to reset.", "[Esc] Back")
+			lines = []string{
+				"INSTALLATION",
+				"Minecraft directory: " + m.resetDir,
+				"",
+				"STATUS",
+				"Nothing to reset (mods/ and config/ are empty or missing).",
+				"",
+			}
+		} else {
+			lines = []string{
+				"INSTALLATION",
+				"Minecraft directory: " + m.resetDir,
+				"Close Minecraft before resetting; open files may be locked.",
+				"",
+				"AFFECTED FOLDERS",
+			}
+			for _, name := range m.resetFound {
+				lines = append(lines, "  - "+name+"/")
+			}
+			lines = append(lines, "", preserved, worldsWarning, "")
 		}
 		if m.state == resetModeScreen {
-			selectedBackup, selectedPurge := "  ", "  "
-			if m.resetMode == resetconfigs.Backup {
-				selectedBackup = "> "
-			} else {
-				selectedPurge = "> "
+			lines = append(lines, "ACTIONS")
+			choices := []string{"Reset and create backup", "Reset without backup (delete permanently)", "Browse and restore backups"}
+			for i, choice := range choices {
+				prefix := "  "
+				if i == m.resetChoice {
+					prefix = "> "
+				}
+				lines = append(lines, prefix+choice)
 			}
-			return append(lines,
-				"How should Resets Configs handle the old files?",
-				selectedBackup+"Reset and create backup (move files; manual restore only)",
-				selectedPurge+"Reset without backup (delete permanently)",
-				"[↑/↓] Choose  [Enter] Continue  [Esc] Cancel")
+			return lines
 		}
 		if m.resetMode == resetconfigs.Purge {
-			return append(lines, "PERMANENT DELETION: the affected folders cannot be restored by mcTUI.",
-				"[y] Delete permanently  [n/Esc] Cancel (Enter does not confirm)")
+			return append([]string{"PERMANENT DELETION: the affected folders cannot be restored by mcTUI.", ""}, lines...)
 		}
-		return append(lines, "Move affected folders into a new timestamped backup?",
-			"[y] Move to backup  [n/Esc] Cancel (Enter does not confirm)")
+		dest := m.resetBackupDir
+		if dest == "" {
+			dest = filepath.Join(m.resetDir, "mctui-backups")
+		}
+		return append(lines, "Backup destination: "+dest, "Move affected folders into a new timestamped backup?")
+	case resetBackupListScreen:
+		lines := []string{"Backups in: " + filepath.Join(m.resetDir, "mctui-backups")}
+		if m.resetErr != nil {
+			return append(lines, "Cannot list backups: "+m.resetErr.Error())
+		}
+		if len(m.resetBackups) == 0 {
+			return append(lines, "No backups found.")
+		}
+		for i, backup := range m.resetBackups {
+			prefix := "  "
+			if i == m.resetBackupIndex {
+				prefix = "> "
+			}
+			lines = append(lines, fmt.Sprintf("%s%s  %s  [%s]", prefix, backup.Path, backup.Created.Format("2006-01-02 15:04:05"), strings.Join(backup.Folders, ", ")))
+		}
+		return lines
+	case resetReplaceConfirmScreen:
+		lines := []string{"Backup: " + m.resetBackup.Name, "Folders to restore: " + strings.Join(m.resetBackup.Folders, ", "),
+			"Existing content will be replaced in:"}
+		for _, folder := range m.resetConflicts {
+			lines = append(lines, "  - "+folder+"/")
+		}
+		return append(lines, "This permanently removes the current contents of those folders.")
+	case resetRetentionScreen:
+		lines := []string{"Restore backup: " + m.resetBackup.Name, "Folders: " + strings.Join(m.resetBackup.Folders, ", ")}
+		if m.resetReplace {
+			lines = append(lines, "Confirmed to replace current contents of: "+strings.Join(m.resetConflicts, ", "))
+		}
+		keep, consume := "  ", "  "
+		if m.resetRetention == resetconfigs.KeepBackup {
+			keep = "> "
+		} else if m.resetRetention == resetconfigs.ConsumeBackup {
+			consume = "> "
+		}
+		lines = append(lines, "After restoring this backup:", keep+"Keep original backup",
+			consume+"Move it into Minecraft and remove it from history")
+		return lines
+	case resetRestoreConfirmScreen:
+		text := "Keep the original backup after restoring?"
+		if m.resetRetention == resetconfigs.ConsumeBackup {
+			text = "The selected backup will be moved into Minecraft and removed from history."
+		}
+		return []string{"Restore: " + m.resetBackup.Name, "Folders: " + strings.Join(m.resetBackup.Folders, ", "), text}
 	case resetRunningScreen:
+		if m.resetIsRestore {
+			return []string{"Restoring " + m.resetBackup.Name + "...", "Please wait; do not close mcTUI."}
+		}
 		return []string{"Resetting " + m.resetDir + "...", "Please wait. Do not close mcTUI or Minecraft files may be left incomplete."}
 	case resetResultScreen:
 		lines := []string{"Minecraft directory: " + m.resetDir}
-		if m.resetMode == resetconfigs.Purge {
+		if m.resetIsRestore {
+			lines = append(lines, "Restore backup: "+m.resetBackup.Name)
+			if len(m.resetResult.Errors) == 0 && m.resetErr == nil {
+				if m.resetRetention == resetconfigs.KeepBackup {
+					lines = append(lines, "Original backup kept: "+m.resetBackup.Path)
+				} else {
+					lines = append(lines, "Original backup consumed and removed from history.")
+				}
+			}
+		} else if m.resetMode == resetconfigs.Purge {
 			lines = append(lines, "Mode: permanent deletion")
 		} else {
 			lines = append(lines, "Mode: backup")
 		}
 		if m.resetErr != nil {
-			lines = append(lines, "Reset could not start: "+m.resetErr.Error())
+			lines = append(lines, "Operation could not start: "+m.resetErr.Error())
 		} else if m.resetResult.NothingToReset {
 			lines = append(lines, "Nothing to reset; no backup was created.")
 		} else if len(m.resetResult.Errors) > 0 {
-			lines = append(lines, "Reset incomplete; check each folder below. No automatic rollback.")
+			operation := "Reset"
+			if m.resetIsRestore {
+				operation = "Restore"
+			}
+			lines = append(lines, operation+" incomplete; check each folder below.")
+		} else if m.resetIsRestore {
+			lines = append(lines, "Backup restored successfully.")
 		} else {
 			lines = append(lines, "Resets Configs completed successfully.")
 		}
+		for _, err := range m.resetResult.Errors {
+			lines = append(lines, "Error: "+err.Error())
+		}
 		for _, folder := range m.resetResult.Folders {
-			lines = append(lines, "", folder.Name+"/: "+string(folder.Status), "  Source: "+folder.Path)
+			lines = append(lines, "", folder.Name+"/: "+string(folder.Status), "  Path: "+folder.Path)
 			if folder.Err != nil {
 				lines = append(lines, "  Error: "+folder.Err.Error())
 			}
@@ -254,38 +349,53 @@ func (m Model) resetLines() []string {
 				lines = append(lines, "  Removed: "+path)
 			}
 		}
-		if m.resetResult.BackupPath != "" {
-			lines = append(lines, "", "Backup: "+m.resetResult.BackupPath, "Restore manually; mcTUI does not provide undo.")
+		if m.resetResult.BackupPath != "" && !m.resetIsRestore {
+			lines = append(lines, "", "Backup: "+m.resetResult.BackupPath)
 		}
-		return append(lines, "", preserved, worldsWarning)
+		return lines
 	}
 	return nil
 }
 
+func (m Model) compactReset() bool {
+	return m.width > 0 && m.height > 0 && (m.width < 122 || m.height < 34)
+}
+
 func (m Model) resetWidth() int {
-	if m.width > 0 {
-		return max(32, min(80, m.width-12))
+	if m.compactReset() {
+		return max(32, m.width-4)
 	}
-	return 80
+	if m.width > 0 {
+		return max(32, min(120, m.width-75))
+	}
+	return 50
 }
 
 func (m Model) resetVisibleLines() int {
-	if m.height > 0 {
+	if m.compactReset() {
 		return max(4, m.height-9)
 	}
-	return 18
+	return max(7, min(40, m.height-23))
 }
 
 // Long paths must remain visible, not be silently truncated by the panel.
 func (m Model) resetDisplayLines() []string {
+	return wrapResetLines(m.resetLines(), m.resetWidth())
+}
+
+func wrapResetLines(raw []string, width int) []string {
 	var lines []string
-	width := m.resetWidth()
-	for _, line := range m.resetLines() {
+	for _, line := range raw {
 		part := ""
 		for _, r := range line {
 			if lipgloss.Width(part+string(r)) > width {
-				lines = append(lines, part)
-				part = ""
+				if i := strings.LastIndexByte(part, ' '); i > 2 {
+					lines = append(lines, strings.TrimRight(part[:i], " "))
+					part = strings.TrimLeft(part[i+1:], " ")
+				} else {
+					lines = append(lines, part)
+					part = ""
+				}
 			}
 			part += string(r)
 		}
@@ -298,34 +408,97 @@ func (m Model) resetMaxScroll() int {
 	return max(0, len(m.resetDisplayLines())-m.resetVisibleLines())
 }
 
-func (m Model) renderResetScreen() string {
+func (m *Model) scrollToBackupSelection() {
+	for i, line := range m.resetDisplayLines() {
+		if strings.HasPrefix(line, "> ") {
+			if i < m.resetScroll {
+				m.resetScroll = i
+			} else if i >= m.resetScroll+m.resetVisibleLines() {
+				m.resetScroll = i - m.resetVisibleLines() + 1
+			}
+			m.resetScroll = max(0, min(m.resetMaxScroll(), m.resetScroll))
+			return
+		}
+	}
+}
+
+func (m Model) resetPanelContent() string {
 	title := "RESETS CONFIGS"
 	if m.state == resetResultScreen {
 		title = "RESET RESULT"
+		if m.resetIsRestore {
+			title = "RESTORE RESULT"
+		}
 	} else if m.state == resetRunningScreen {
 		title = "RESET IN PROGRESS"
+		if m.resetIsRestore {
+			title = "RESTORE IN PROGRESS"
+		}
 	} else if m.state == resetConfirmScreen {
 		title = "CONFIRM RESET"
+	} else if m.state == resetReplaceConfirmScreen || m.state == resetRestoreConfirmScreen {
+		title = "CONFIRM RESTORE"
+	} else if m.state == resetBackupListScreen {
+		title = "BACKUP HISTORY"
 	}
 	lines := m.resetDisplayLines()
 	start := min(m.resetScroll, m.resetMaxScroll())
 	end := min(len(lines), start+m.resetVisibleLines())
 	footer := "[Esc] Back"
-	if m.state == resetResultScreen {
+	if m.state == resetModeScreen {
+		footer = "[↑/↓] Choose  [Enter] Continue  [Esc] Cancel"
+	} else if m.state == resetBackupListScreen {
+		footer = "[↑/↓] Select backup  [Enter] Restore  [Esc] Back"
+	} else if m.state == resetResultScreen {
 		footer = "[↑/↓] Scroll  [Enter/Esc] Main menu"
 	} else if m.state == resetRunningScreen {
-		footer = "Waiting for reset to finish..."
+		footer = "Waiting for operation to finish..."
+	} else if m.state == resetConfirmScreen {
+		footer = "[y] Move to backup  [n/Esc] Cancel"
+		if m.resetMode == resetconfigs.Purge {
+			footer = "[y] Delete permanently  [n/Esc] Cancel"
+		}
+	} else if m.state == resetReplaceConfirmScreen {
+		footer = "[y] Confirm replacement  [n/Esc] Cancel"
+	} else if m.state == resetRestoreConfirmScreen {
+		footer = "[y] Confirm restore  [n/Esc] Cancel"
+	} else if m.state == resetRetentionScreen {
+		footer = "[↑/↓] Select  [Enter] Continue  [Esc] Cancel"
 	}
-	body := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(title) + "\n" +
-		lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", m.resetWidth())) + "\n\n" +
-		lipgloss.NewStyle().Foreground(colorWhite).Render(strings.Join(lines[start:end], "\n")) + "\n\n" +
+	if end < len(lines) {
+		key := "PgDn"
+		if m.state == resetResultScreen {
+			key = "↓"
+		}
+		footer = fmt.Sprintf("↓ %d more lines [%s]  %s", len(lines)-end, key, footer)
+	} else if start > 0 {
+		footer = fmt.Sprintf("↑ %d previous lines [PgUp]  %s", start, footer)
+	}
+	var styledLines []string
+	for _, line := range m.resetLines() {
+		style := lipgloss.NewStyle().Foreground(colorWhite)
+		switch {
+		case line == "INSTALLATION" || line == "AFFECTED FOLDERS" || line == "ACTIONS" || line == "STATUS":
+			style = style.Foreground(colorBlue).Bold(true)
+		case strings.Contains(line, "Reset without backup"):
+			style = style.Foreground(colorRed).Bold(strings.HasPrefix(line, "> "))
+		case strings.HasPrefix(line, "> "):
+			style = style.Foreground(colorAccent2).Bold(true)
+		case strings.Contains(line, "PERMANENT DELETION") || strings.Contains(line, "permanently removes") || strings.Contains(line, "incomplete") || strings.HasPrefix(line, "Error:") || strings.HasPrefix(line, "Cannot "):
+			style = style.Foreground(colorRed).Bold(true)
+		case strings.Contains(line, "completed successfully") || strings.Contains(line, "restored successfully") || strings.HasPrefix(line, "Nothing to reset") || strings.HasSuffix(line, "/: moved") || strings.HasSuffix(line, "/: restored") || strings.HasSuffix(line, "/: deleted"):
+			style = style.Foreground(colorGreen).Bold(true)
+		case strings.HasPrefix(line, "Preserved:") || strings.HasPrefix(line, "Worlds are preserved") || strings.HasPrefix(line, "Close Minecraft"):
+			style = style.Foreground(colorGray)
+		}
+		for _, part := range wrapResetLines([]string{line}, m.resetWidth()) {
+			styledLines = append(styledLines, style.Render(part))
+		}
+	}
+	return lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(title) + "\n" +
+		lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46)) + "\n\n" +
+		strings.Join(styledLines[start:end], "\n") + "\n\n" +
 		lipgloss.NewStyle().Foreground(colorAccent2).Render(footer)
-	panel := lipgloss.NewStyle().Width(m.resetWidth()+4).Border(lipgloss.NormalBorder()).
-		BorderForeground(colorAccent).Padding(1, 2).Render(body)
-	if m.width > 0 && m.height > 0 {
-		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, panel)
-	}
-	return "\n" + panel
 }
 
 // ── Download Screen ───────────────────────────────────────────────────────────
@@ -393,6 +566,16 @@ func (m Model) controlsHint() string {
 		return " [↑/↓] Move list  [Enter] Select  [Esc] Back"
 	case confirmScreen:
 		return " [y] Accept  [n] Cancel"
+	case resetModeScreen, resetBackupListScreen, resetRetentionScreen:
+		return " [↑/↓] Choose  [Enter] Continue  [Esc] Back"
+	case resetPickerScreen:
+		return " [←/→] Browse  [Ctrl+H] Hidden  [Enter] Select  [d] Default  [Esc] Back"
+	case resetResultScreen:
+		return " [↑/↓] Scroll  [Enter/Esc] Menu"
+	case resetRunningScreen:
+		return " Please wait…"
+	case resetConfirmScreen, resetReplaceConfirmScreen, resetRestoreConfirmScreen:
+		return " [y] Confirm  [n/Esc] Cancel"
 	default:
 		return " [↑/↓] Navigate  [Enter] Select  [q] Quit"
 	}

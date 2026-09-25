@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"os"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -21,7 +23,12 @@ const (
 	confirmScreen
 	downloadScreen // nueva pantalla: descarga en tiempo real dentro del TUI
 	resetModeScreen
+	resetPickerScreen
 	resetConfirmScreen
+	resetBackupListScreen
+	resetReplaceConfirmScreen
+	resetRetentionScreen
+	resetRestoreConfirmScreen
 	resetRunningScreen
 	resetResultScreen
 )
@@ -73,12 +80,26 @@ type Model struct {
 	dlFile  string
 	dlErr   error
 
-	resetDir    string
-	resetFound  []string
-	resetMode   resetconfigs.Mode
-	resetResult resetconfigs.Result
-	resetErr    error
-	resetScroll int
+	resetDir         string
+	resetFound       []string
+	resetMode        resetconfigs.Mode
+	resetBackupDir   string
+	pickerPath       string
+	pickerEntries    []os.DirEntry
+	pickerCursor     int
+	pickerShowHidden bool
+	pickerErr        error
+	resetChoice      int
+	resetBackups     []resetconfigs.BackupInfo
+	resetBackupIndex int
+	resetBackup      resetconfigs.BackupInfo
+	resetConflicts   []string
+	resetReplace     bool
+	resetRetention   resetconfigs.RestoreMode
+	resetIsRestore   bool
+	resetResult      resetconfigs.Result
+	resetErr         error
+	resetScroll      int
 
 	input textinput.Model
 	play  bool

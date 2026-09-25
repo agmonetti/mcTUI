@@ -59,6 +59,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case tea.MouseMsg:
+		if m.state >= resetModeScreen && m.state <= resetResultScreen {
+			switch msg.Button {
+			case tea.MouseButtonWheelUp, tea.MouseButtonWheelDown:
+				if m.state == resetPickerScreen {
+					key := "up"
+					if msg.Button == tea.MouseButtonWheelDown {
+						key = "down"
+					}
+					return m.updateResetPicker(key)
+				}
+				if msg.Button == tea.MouseButtonWheelUp {
+					m.resetScroll = max(0, m.resetScroll-1)
+				} else {
+					m.resetScroll = min(m.resetMaxScroll(), m.resetScroll+1)
+				}
+				return m, nil
+			}
+		}
+
 	// ── Mensajes de progreso de descarga ───────────────────────────────────
 	case downloadChanMsg:
 		// Procesa el mensaje portado y encadena la espera del siguiente.
@@ -161,6 +181,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else if m.cursorMenu == 6 {
 					m.resetDir, m.resetFound, m.resetErr = resetconfigs.Inspect()
 					m.resetMode = resetconfigs.Backup
+					m.resetBackupDir = ""
+					m.resetChoice = 0
+					m.resetIsRestore = false
 					m.resetScroll = 0
 					m.state = resetModeScreen
 				} else if m.cursorMenu == 7 {
@@ -231,44 +254,160 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // updateResetKey keeps a purge impossible without a mode choice and a fresh
 // explicit confirmation. Bubble Tea executes commands asynchronously.
 func (m Model) updateResetKey(key string) (tea.Model, tea.Cmd) {
+	if m.state != resetPickerScreen && m.state != resetRunningScreen {
+		switch key {
+		case "pgdown":
+			m.resetScroll = min(m.resetMaxScroll(), m.resetScroll+m.resetVisibleLines())
+			return m, nil
+		case "pgup":
+			m.resetScroll = max(0, m.resetScroll-m.resetVisibleLines())
+			return m, nil
+		}
+	}
+	if m.state == resetConfirmScreen || m.state == resetReplaceConfirmScreen || m.state == resetRestoreConfirmScreen || m.state == resetResultScreen {
+		switch key {
+		case "up", "k":
+			m.resetScroll = max(0, m.resetScroll-1)
+			return m, nil
+		case "down", "j":
+			m.resetScroll = min(m.resetMaxScroll(), m.resetScroll+1)
+			return m, nil
+		}
+	}
 	switch m.state {
 	case resetModeScreen:
 		switch key {
 		case "esc", "q":
 			m.state = menuScreen
-		case "up", "down", "k", "j":
-			if m.resetMode == resetconfigs.Backup {
-				m.resetMode = resetconfigs.Purge
-			} else {
-				m.resetMode = resetconfigs.Backup
+		case "up", "k":
+			if m.resetChoice > 0 {
+				m.resetChoice--
+				m.resetMode = []resetconfigs.Mode{resetconfigs.Backup, resetconfigs.Purge, resetconfigs.Backup}[m.resetChoice]
+				m.scrollToBackupSelection()
+			} else if m.resetScroll > 0 {
+				m.resetScroll--
+			}
+		case "down", "j":
+			if m.resetChoice < 2 {
+				m.resetChoice++
+				m.resetMode = []resetconfigs.Mode{resetconfigs.Backup, resetconfigs.Purge, resetconfigs.Backup}[m.resetChoice]
+				m.scrollToBackupSelection()
+			} else if m.resetScroll < m.resetMaxScroll() {
+				m.resetScroll++
 			}
 		case "enter":
-			if m.resetErr == nil && len(m.resetFound) > 0 {
-				m.state = resetConfirmScreen
+			if m.resetChoice == 2 {
+				m.resetBackups, m.resetErr = resetconfigs.ListBackups()
+				m.resetBackupIndex = 0
+				m.resetScroll = 0
+				m.state = resetBackupListScreen
+			} else if m.resetErr == nil && len(m.resetFound) > 0 {
+				m.resetIsRestore = false
+				if m.resetChoice == 0 {
+					m.resetMode = resetconfigs.Backup
+					m.openResetPicker()
+				} else {
+					m.resetMode = resetconfigs.Purge
+					m.state = resetConfirmScreen
+				}
 			}
 		}
+	case resetPickerScreen:
+		return m.updateResetPicker(key)
 	case resetConfirmScreen:
 		switch key {
 		case "esc", "n", "N":
 			m.state = resetModeScreen
 		case "y", "Y":
-			mode := m.resetMode
+			mode, base := m.resetMode, m.resetBackupDir
 			m.state = resetRunningScreen
 			return m, func() tea.Msg {
-				result, err := resetconfigs.Run(mode)
+				result, err := resetconfigs.RunTo(mode, base)
+				return ResetDoneMsg{Result: result, Err: err}
+			}
+		}
+	case resetBackupListScreen:
+		switch key {
+		case "esc", "q":
+			m.resetDir, m.resetFound, m.resetErr = resetconfigs.Inspect()
+			m.state = resetModeScreen
+		case "up", "k":
+			if m.resetBackupIndex > 0 {
+				m.resetBackupIndex--
+				m.scrollToBackupSelection()
+			} else if m.resetScroll > 0 {
+				m.resetScroll--
+			}
+		case "down", "j":
+			if m.resetBackupIndex+1 < len(m.resetBackups) {
+				m.resetBackupIndex++
+				m.scrollToBackupSelection()
+			} else if m.resetScroll < m.resetMaxScroll() {
+				m.resetScroll++
+			}
+		case "enter":
+			if m.resetErr == nil && len(m.resetBackups) > 0 {
+				var err error
+				m.resetBackup, m.resetConflicts, err = resetconfigs.RestorePlan(m.resetBackups[m.resetBackupIndex].Path)
+				m.resetErr = err
+				m.resetReplace = false
+				m.resetRetention = ""
+				m.resetScroll = 0
+				if err == nil && len(m.resetConflicts) > 0 {
+					m.state = resetReplaceConfirmScreen
+				} else if err == nil {
+					m.state = resetRetentionScreen
+				}
+			}
+		}
+	case resetReplaceConfirmScreen:
+		switch key {
+		case "esc", "n", "N":
+			m.state = resetBackupListScreen
+		case "y", "Y":
+			m.resetReplace = true
+			m.state = resetRetentionScreen
+		}
+	case resetRetentionScreen:
+		switch key {
+		case "esc", "q":
+			m.state = resetBackupListScreen
+		case "up", "k":
+			if m.resetRetention == resetconfigs.KeepBackup {
+				m.resetRetention = resetconfigs.ConsumeBackup
+			} else {
+				m.resetRetention = resetconfigs.KeepBackup
+			}
+		case "down", "j":
+			if m.resetRetention == resetconfigs.ConsumeBackup {
+				m.resetRetention = resetconfigs.KeepBackup
+			} else {
+				m.resetRetention = resetconfigs.ConsumeBackup
+			}
+		case "enter":
+			if m.resetRetention != "" {
+				m.state = resetRestoreConfirmScreen
+			}
+		}
+	case resetRestoreConfirmScreen:
+		switch key {
+		case "esc", "n", "N":
+			m.state = resetRetentionScreen
+		case "y", "Y":
+			name, mode := m.resetBackup.Path, m.resetRetention
+			var replaceFolders []string
+			if m.resetReplace {
+				replaceFolders = append(replaceFolders, m.resetConflicts...)
+			}
+			m.resetIsRestore = true
+			m.state = resetRunningScreen
+			return m, func() tea.Msg {
+				result, err := resetconfigs.Restore(name, mode, replaceFolders)
 				return ResetDoneMsg{Result: result, Err: err}
 			}
 		}
 	case resetResultScreen:
 		switch key {
-		case "up", "k":
-			if m.resetScroll > 0 {
-				m.resetScroll--
-			}
-		case "down", "j":
-			if m.resetScroll < m.resetMaxScroll() {
-				m.resetScroll++
-			}
 		case "esc", "enter", "q":
 			m.state = menuScreen
 		}

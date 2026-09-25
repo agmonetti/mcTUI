@@ -635,10 +635,17 @@ Referencias: [Win32_Process](https://learn.microsoft.com/en-us/windows/win32/cim
 
 ### Fase 4: historial y restauración
 
-- Listar respaldos existentes.
-- Permitir restaurar un respaldo.
-- Mostrar fecha y carpetas incluidas.
-- Evitar sobrescribir una configuración activa durante una restauración.
+- [x] Listar respaldos existentes.
+- [x] Permitir restaurar un respaldo.
+- [x] Mostrar fecha y carpetas incluidas.
+- [x] Si `mods/` o `config/` tienen contenido, informar cuáles y pedir confirmación explícita antes de reemplazarlos. La existencia de una carpeta vacía no cuenta como contenido que se vaya a perder.
+- [x] En cada restauración, preguntar si se conserva el respaldo original o si se consume al restaurar; exigir una selección explícita y no eliminar respaldos sin confirmación.
+- [x] No ofrecer una acción de borrar todos los respaldos. Cualquier eliminación de archivos locales requiere una decisión explícita y confirmada para ese caso.
+- [x] Al conservar el backup original, copiar su contenido; si contiene enlaces simbólicos, rechazar esa copia para evitar seguir enlaces fuera de `.minecraft`.
+- [x] Permitir elegir un directorio existente para el backup mediante el selector integrado en el panel central; la ruta predeterminada sigue siendo `.minecraft/mctui-backups`. Registrar directorios externos en `.minecraft/mctui-backups/locations.json` para que aparezcan en el historial y se puedan restaurar. Rechazar enlaces y destinos dentro de `mods/` o `config/`; los movimientos entre volúmenes no se copian y se informan como error.
+- [x] Conservar el dashboard durante el flujo de reset; separar información y acciones visualmente, indicar líneas ocultas y destacar estados de éxito y ausencia de carpetas.
+
+**Regla de decisión:** mcTUI no debe elegir por el usuario cuando una acción afecte archivos o directorios locales. Debe explicar qué se conservará, moverá o reemplazará, y pedir confirmación antes de ejecutar la operación destructiva. No se borran ni reemplazan carpetas activas o respaldos de forma implícita.
 
 ### Fase 5: gestor de mods
 
