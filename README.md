@@ -24,7 +24,7 @@ mcTUI is organized into focused internal packages, each with a single
 responsibility:
 
 - `internal/config` — settings persistence and OS-specific paths
-- `internal/roadmap` — fetches the "Future Changes" panel content
+- `internal/i18n` — embedded English and Spanish UI translations
 - `internal/nbt` / `internal/worlds` — reads level.dat to list saved worlds
 - `internal/java` — detects compatible JRE installations
 - `internal/mojang` — talks to Mojang's manifest and download servers
@@ -61,8 +61,7 @@ remaining safety checks.
   by each Minecraft version and locates a compatible JRE on your system
   (PATH, common install directories, or IDE-managed JDKs), even if it's not
   your system default.
-* **Live Roadmap:** The "Future Changes" panel fetches its content from this
-  repository, so you always see the latest plans without updating mcTUI.
+* **Language:** Switch between English and Spanish from the main menu; the choice is saved in your configuration.
 
 
 ## Requirements
