@@ -4,6 +4,7 @@ package mods
 import (
 	"archive/zip"
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -32,12 +34,23 @@ type Metadata struct {
 	Version     string `json:"version"`
 	Environment string `json:"environment"`
 }
+type Hashes struct {
+	SHA512 string `json:"sha512,omitempty"`
+	SHA256 string `json:"sha256,omitempty"`
+	SHA1   string `json:"sha1,omitempty"`
+}
 type Record struct {
-	File    string `json:"file"`
-	SHA256  string `json:"sha256"`
-	Enabled bool   `json:"enabled"`
-	Origin  string `json:"origin"`
-	Mtime   int64  `json:"mtime_ns"`
+	File        string   `json:"file"`
+	SHA256      string   `json:"sha256"`
+	Enabled     bool     `json:"enabled"`
+	Origin      string   `json:"origin"`
+	Mtime       int64    `json:"mtime_ns"`
+	ProjectID   string   `json:"project_id,omitempty"`
+	VersionID   string   `json:"version_id,omitempty"`
+	Channel     string   `json:"channel,omitempty"`
+	Hashes      Hashes   `json:"hashes,omitempty"`
+	RequiredBy  []string `json:"required_by,omitempty"`
+	InstalledAt string   `json:"installed_at,omitempty"`
 }
 type Mod struct {
 	Record
@@ -108,7 +121,7 @@ func readLimited(r io.Reader, limit int64) ([]byte, error) {
 	return b, nil
 }
 func (s Store) load() (registry, error) {
-	r := registry{SchemaVersion: 1}
+	r := registry{SchemaVersion: 2}
 	info, err := os.Lstat(s.Registry)
 	if os.IsNotExist(err) {
 		return r, nil
@@ -138,7 +151,7 @@ func (s Store) load() (registry, error) {
 	if err = json.Unmarshal(b, &r); err != nil {
 		return r, err
 	}
-	if r.SchemaVersion != 1 {
+	if r.SchemaVersion != 1 && r.SchemaVersion != 2 {
 		return r, fmt.Errorf("unsupported mods registry")
 	}
 	seen := map[string]bool{}
@@ -153,6 +166,7 @@ func (s Store) load() (registry, error) {
 	return r, nil
 }
 func (s Store) save(r registry) error {
+	r.SchemaVersion = 2
 	b, err := json.MarshalIndent(r, "", "  ")
 	if err != nil {
 		return err
@@ -273,8 +287,8 @@ func snapshot(filename string) (Record, error) {
 	if !os.SameFile(info, opened) {
 		return Record{}, fmt.Errorf("file changed")
 	}
-	h := sha256.New()
-	n, err := io.Copy(h, io.LimitReader(f, maxJar+1))
+	h, h512 := sha256.New(), sha512.New()
+	n, err := io.Copy(io.MultiWriter(h, h512), io.LimitReader(f, maxJar+1))
 	if err != nil {
 		return Record{}, err
 	}
@@ -285,10 +299,13 @@ func snapshot(filename string) (Record, error) {
 	if n > maxJar || !os.SameFile(info, after) || info.Size() != after.Size() || !info.ModTime().Equal(after.ModTime()) {
 		return Record{}, fmt.Errorf("file changed while reading")
 	}
-	return Record{File: filepath.Base(filename), SHA256: hex.EncodeToString(h.Sum(nil)), Enabled: strings.HasSuffix(filename, ".jar"), Mtime: info.ModTime().UnixNano(), Origin: "external"}, nil
+	return Record{File: filepath.Base(filename), SHA256: hex.EncodeToString(h.Sum(nil)), Enabled: strings.HasSuffix(filename, ".jar"), Mtime: info.ModTime().UnixNano(), Origin: "external", Hashes: Hashes{SHA512: hex.EncodeToString(h512.Sum(nil))}}, nil
 }
 func (s Store) Scan() ([]Mod, error) {
 	if err := s.validate(); err != nil {
+		return nil, err
+	}
+	if err := s.recoverIfPending(); err != nil {
 		return nil, err
 	}
 	r, err := s.load()
@@ -324,8 +341,9 @@ func (s Store) Scan() ([]Mod, error) {
 		for _, known := range r.Mods {
 			if known.File == name {
 				m.Managed = true
-				m.Origin = known.Origin
-				m.Changed = known.SHA256 != m.SHA256 || known.Mtime != m.Mtime
+				m.Record = known
+				m.Hashes.SHA512 = rec.Hashes.SHA512
+				m.Changed = known.SHA256 != rec.SHA256 || known.Mtime != rec.Mtime
 				break
 			}
 		}
@@ -349,7 +367,14 @@ func (s Store) acquire() (func() error, error) {
 	if err := os.MkdirAll(s.GameDir, 0700); err != nil {
 		return nil, err
 	}
-	return operationlock.Acquire(s.GameDir)
+	release, err := operationlock.Acquire(s.GameDir)
+	if err != nil {
+		return nil, err
+	}
+	if err = s.recoverInstall(); err != nil {
+		return nil, errors.Join(err, release())
+	}
+	return release, nil
 }
 
 // CheckBusy uses the same nonblocking lock as Play; it does not detect other launchers.
@@ -512,8 +537,16 @@ func (s Store) mutate(expected Mod, remove, confirmed bool) error {
 		}
 	}
 	if remove {
+		for _, known := range r.Mods {
+			if known.Enabled && known.ProjectID != expected.ProjectID && slices.Contains(expected.RequiredBy, known.ProjectID) {
+				return fmt.Errorf("mod %s is required by %s", expected.File, known.File)
+			}
+		}
 		if err = os.Remove(filename); err != nil {
 			return err
+		}
+		for i := range r.Mods {
+			r.Mods[i].RequiredBy = slices.DeleteFunc(r.Mods[i].RequiredBy, func(id string) bool { return id == expected.ProjectID })
 		}
 		put(&r, expected.File, nil)
 	} else {
@@ -539,6 +572,7 @@ func (s Store) mutate(expected Mod, remove, confirmed bool) error {
 		}
 		now.File = name
 		now.Enabled = !now.Enabled
+		now.ProjectID, now.VersionID, now.Channel, now.Hashes, now.RequiredBy, now.InstalledAt = expected.ProjectID, expected.VersionID, expected.Channel, expected.Hashes, expected.RequiredBy, expected.InstalledAt
 		now.Origin = expected.Origin
 		if now.Origin == "" {
 			now.Origin = "external"

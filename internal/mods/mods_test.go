@@ -101,7 +101,7 @@ func TestLocalLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	items, err := s.Scan()
-	if err != nil || len(items) != 1 || !items[0].Managed || items[0].Origin != "local" || items[0].SHA256 == "" {
+	if err != nil || len(items) != 1 || !items[0].Managed || items[0].Origin != "local" || items[0].SHA256 == "" || len(items[0].Hashes.SHA512) != 128 {
 		t.Fatalf("%+v %v", items, err)
 	}
 	for i := 0; i < 4; i++ {
@@ -284,6 +284,46 @@ func TestDeclaredZIPLimitAndInvalidImport(t *testing.T) {
 	}
 }
 
+func TestRequiredDependencyCannotBeRemoved(t *testing.T) {
+	s := store(t)
+	for _, name := range []string{"library.jar", "consumer.jar"} {
+		p := filepath.Join(t.TempDir(), name)
+		jar(t, p, nil)
+		if err := s.Add(p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r, err := s.load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range r.Mods {
+		if r.Mods[i].File == "library.jar" {
+			r.Mods[i].ProjectID = "library"
+			r.Mods[i].RequiredBy = []string{"consumer"}
+		}
+		if r.Mods[i].File == "consumer.jar" {
+			r.Mods[i].ProjectID = "consumer"
+		}
+	}
+	if err := s.save(r); err != nil {
+		t.Fatal(err)
+	}
+	items, err := s.Scan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range items {
+		if item.File == "library.jar" {
+			if err := s.Remove(item, true); err == nil || !strings.Contains(err.Error(), "required by") {
+				t.Fatalf("dependency removal allowed: %v", err)
+			}
+			return
+		}
+	}
+	t.Fatal("library not found")
+}
+
 func TestRegistryPersistsVersionedRecords(t *testing.T) {
 	s := store(t)
 	src := filepath.Join(t.TempDir(), "mod.jar")
@@ -293,7 +333,7 @@ func TestRegistryPersistsVersionedRecords(t *testing.T) {
 	}
 	var r registry
 	b, _ := os.ReadFile(s.Registry)
-	if err := json.Unmarshal(b, &r); err != nil || r.SchemaVersion != 1 || len(r.Mods) != 1 {
+	if err := json.Unmarshal(b, &r); err != nil || r.SchemaVersion != 2 || len(r.Mods) != 1 {
 		t.Fatalf("%+v %v", r, err)
 	}
 }
