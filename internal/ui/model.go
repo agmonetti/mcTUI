@@ -13,6 +13,7 @@ import (
 	"mcTUI/internal/instances"
 	"mcTUI/internal/java"
 	"mcTUI/internal/launcher"
+	"mcTUI/internal/mods"
 	"mcTUI/internal/resetconfigs"
 	"mcTUI/internal/updater"
 	"mcTUI/internal/worlds"
@@ -54,6 +55,10 @@ const (
 	gameStartingScreen
 	gameRunningScreen
 	gameResultScreen
+	modsScreen
+	modsPickerScreen
+	modsConfirmScreen
+	modsWorkingScreen
 )
 
 // menuOptionsCount must match len(menuOptions) in View(). Centralized
@@ -152,6 +157,14 @@ type Model struct {
 	removeFromTrash       bool
 	removeErr             error
 	pickerForJava         bool
+	pickerForMods         bool
+	modStore              mods.Store
+	modItems              []mods.Mod
+	modCursor             int
+	modErr                error
+	modBusy               error
+	modRequest            uint64
+	modTarget             mods.Mod
 	launch                LaunchConfig
 	latestRelease         updater.Release // zero value = no update available
 

@@ -15,6 +15,9 @@ import (
 )
 
 func (m Model) View() string {
+	if m.state >= modsScreen && m.state <= modsWorkingScreen {
+		return m.renderMods()
+	}
 	if m.state == javaPickerScreen {
 		return lipgloss.Place(m.width, m.height, lipgloss.Left, lipgloss.Top, m.pickerPanelContent())
 	}
@@ -609,7 +612,7 @@ func (m Model) renderGameScreen() string {
 
 func (m Model) controlsHint() string {
 	if m.state == menuScreen {
-		return " [i] Instances  [↑/↓] Navigate  [Enter] Select  [q] Quit"
+		return " [i] Instances  [m] Mods  [↑/↓] Navigate  [Enter] Select  [q] Quit"
 	}
 	switch m.state {
 	case nameScreen:

@@ -21,6 +21,7 @@ import (
 // with mcTUI colors and directory-only selection (no separate popup).
 func (m *Model) openResetPicker() {
 	m.pickerForJava = false
+	m.pickerForMods = false
 	m.pickerPath = m.resetDir
 	m.pickerShowHidden = false
 	m.pickerCursor = 0
@@ -36,6 +37,8 @@ func (m *Model) loadPickerDir() {
 		for _, entry := range entries {
 			if entry.IsDir() && (m.pickerShowHidden || !strings.HasPrefix(entry.Name(), ".")) { // excludes symlinks; engine checks ancestors again
 				m.pickerEntries = append(m.pickerEntries, entry)
+			} else if m.pickerForMods && entry.Type().IsRegular() && strings.HasSuffix(entry.Name(), ".jar") {
+				m.pickerEntries = append(m.pickerEntries, entry)
 			} else if m.pickerForJava && isJavaEntry(m.pickerPath, entry) {
 				m.pickerEntries = append(m.pickerEntries, entry)
 			}
@@ -46,6 +49,7 @@ func (m *Model) loadPickerDir() {
 
 func (m *Model) openJavaPicker() {
 	m.pickerForJava = true
+	m.pickerForMods = false
 	m.pickerShowHidden = true
 	if m.instance.JavaPath != "" {
 		m.pickerPath = filepath.Dir(m.instance.JavaPath)

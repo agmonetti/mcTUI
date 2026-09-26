@@ -69,6 +69,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case modsDoneMsg:
+		if msg.Request != m.modRequest || m.state != modsWorkingScreen {
+			return m, nil
+		}
+		m.modItems, m.modErr, m.modBusy = msg.Items, msg.Err, msg.Busy
+		m.modCursor = min(m.modCursor, max(0, len(m.modItems)-1))
+		m.state = modsScreen
+		return m, nil
 	case downloadAnimationTickMsg:
 		if m.state == downloadScreen && !m.dlFinished {
 			m.dlProgressFrame++
@@ -266,6 +274,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		if m.state >= modsScreen && m.state <= modsWorkingScreen {
+			return m.updateModsKey(msg.String())
+		}
 		if m.state == javaPickerScreen {
 			return m.updateJavaPicker(msg.String())
 		}
@@ -300,6 +311,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 
+		case "m":
+			if m.state == menuScreen {
+				return m.openMods()
+			}
 		case "i":
 			if m.state == menuScreen {
 				m.instanceList, m.instanceErr = instances.List(m.dataRoot)
