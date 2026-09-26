@@ -133,3 +133,77 @@ func TestFailedDownloadNeverStartsGame(t *testing.T) {
 		t.Fatal("late success launched after cancellation")
 	}
 }
+
+func TestGameRunningForcedCloseFlow(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell Java stub is Unix-only")
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/index" {
+			fmt.Fprint(w, `{"objects":{}}`)
+		} else {
+			fmt.Fprint(w, "client")
+		}
+	}))
+	defer server.Close()
+	game, runtimeDir := t.TempDir(), t.TempDir()
+	versionDir := filepath.Join(runtimeDir, "versions", "1.20.4")
+	if err := os.MkdirAll(versionDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	meta := fmt.Sprintf(`{"assetIndex":{"id":"test","url":%q,"sha1":"62ea787c1f800c091b98678b050453a5ae59d7bc"},"downloads":{"client":{"url":%q,"sha1":"d2a04d71301a8915217dd5faf81d12cffd6cd958"}}}`,
+		server.URL+"/index", server.URL+"/client")
+	if err := os.WriteFile(filepath.Join(versionDir, "version.json"), []byte(meta), 0600); err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := launcher.Prepare(runtimeDir, "1.20.4", "Vanilla", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	java := filepath.Join(t.TempDir(), "java")
+	if err := os.WriteFile(java, []byte("#!/bin/sh\nsleep 30\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	m := Model{state: downloadScreen, launch: LaunchConfig{GameDir: game, RuntimeDir: runtimeDir, Username: "Player", Version: "1.20.4", MemoryMB: 1024}}
+	updated, start := m.Update(DownloadDoneMsg{Prepared: prepared, JavaBinary: java})
+	m = updated.(Model)
+	updated, wait := m.Update(start())
+	m = updated.(Model)
+	if m.state != gameRunningScreen || wait == nil || m.activeGame == nil {
+		t.Fatalf("game not running: state=%v activeGame=%v", m.state, m.activeGame)
+	}
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	m = updated.(Model)
+	if !m.gameKillConfirm || !strings.Contains(m.View(), "Force close Java?") {
+		t.Fatalf("kill confirmation prompt not shown: confirm=%v view=%s", m.gameKillConfirm, m.View())
+	}
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	m = updated.(Model)
+	if m.gameKillConfirm || strings.Contains(m.View(), "Force close Java?") {
+		t.Fatal("confirmation was not canceled by 'n'")
+	}
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	m = updated.(Model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = updated.(Model)
+	if m.gameKillConfirm {
+		t.Fatal("confirmation was not canceled by 'esc'")
+	}
+
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	m = updated.(Model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = updated.(Model)
+	if m.gameKillConfirm {
+		t.Fatal("confirmation flag not cleared after confirming")
+	}
+	msg := wait()
+	updated, _ = m.Update(msg)
+	m = updated.(Model)
+	if m.state != gameResultScreen {
+		t.Fatalf("killed game did not transition to result screen: state=%v", m.state)
+	}
+}

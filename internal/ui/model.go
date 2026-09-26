@@ -185,10 +185,13 @@ type Model struct {
 	resetErr         error
 	resetScroll      int
 
-	input        textinput.Model
-	gameErr      error
-	gameExitCode int
-	gameLog      string
+	input           textinput.Model
+	gameErr         error
+	gameExitCode    int
+	gameLog         string
+	activeGame      *launcher.Game
+	gameKillConfirm bool
+	gameKillErr     error
 
 	width             int
 	height            int

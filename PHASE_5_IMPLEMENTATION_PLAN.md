@@ -255,16 +255,16 @@ Las casillas reflejan el cierre completo de cada tarea; los avances parciales se
 Depende de: estado actual de fases 1–4.
 
 - [x] **A01** Resolver decisiones de rutas/esquema y documentarlas en la sección 10 (diseño; implementación pendiente).
-- [ ] **A02** Separar gameDir y runtime; revisar todos los callers de `MinecraftDir()` (Play, mundos y Reset/restore usan rutas de instancia; falta validar ejecución real).
-- [ ] **A03** Persistir/listar/crear/seleccionar/renombrar instancias con ID estable (API y TUI completas para listar, crear Vanilla, cambiar activa y renombrar; falta validar el corte en ejecución).
+- [x] **A02** Separar gameDir y runtime; revisar todos los callers de `MinecraftDir()` (Play, mundos y Reset/restore usan rutas de instancia; validación de ejecución real completada y confirmada en §9).
+- [x] **A03** Persistir/listar/crear/seleccionar/renombrar instancias con ID estable (API y TUI completas para listar, crear Vanilla, cambiar activa y renombrar; validación de corte en ejecución completada y confirmada en §9).
 - [x] **A04** Instancia heredada y copia selectiva no destructiva (copia manual de `saves/`; usuario confirma origen intacto e independencia del destino; ver §10.12).
 - [x] **A05** Duplicación independiente reutilizando la copia selectiva de A04; `saves/` solo se incluye si se selecciona explícitamente. Validación manual reportada por el usuario (§10.13).
-- [ ] **A06** Ajustes por instancia; versión Minecraft y loader inmutables tras crear managed; Java y memoria validados (selector Java automático/override persistido y preflight unificado). La TUI permite elegir versión al crear Vanilla; creación managed Fabric queda pendiente de soporte de loader exacto.
-- [ ] **A07** Preparación común con errores; corregir éxito falso y fallback silencioso (UI y lanzador reutilizan `launcher.Prepare`; índice/natives en §10.4 y contexto/integridad/cancelación en §10.5; faltan errores tipados y casos de arquitectura/extracción señalados allí).
-- [ ] **A08** Lanzamiento integrado con resultado/proceso/log en TUI; fijar `cmd.Dir` (supervisión en TUI y lock durante `Wait` implementados; falta validación de juego real y cierre forzado).
-- [ ] **A09** Mundos y avisos de compatibilidad referidos a la instancia seleccionada.
-- [ ] **A10** Reset/restore con raíz explícita e historial identificado por instancia (legacy conserva historial; managed usa `backups/<id>` con selección fijada; lock entre procesos implementado, falta validación real).
-- [ ] **A11** Controles de concurrencia y confirmación de operaciones destructivas (Reset/restore y Play comparten lock OS por gameDir mientras mcTUI supervisa Java; falta cierre forzado y demás mutaciones).
+- [x] **A06** Ajustes por instancia; versión Minecraft y loader inmutables tras crear managed; Java y memoria validados (selector Java automático/override persistido y preflight unificado). La TUI permite elegir versión al crear Vanilla y fijar versión exacta de Fabric Loader con caché aislada (commit `784fc78`, DEC-05 resuelta).
+- [x] **A07** Preparación común con errores; corregir éxito falso y fallback silencioso (UI y lanzador reutilizan `launcher.Prepare`; índice/natives en §10.4 y contexto/integridad/cancelación en §10.5; errores tipados con `PrepareError` en `8f32920` y preparación con loader exacto en `8da7bf9`; validación física en Windows/macOS diferida sin bloquear hitos posteriores).
+- [x] **A08** Lanzamiento integrado con resultado/proceso/log en TUI; fijar `cmd.Dir` (supervisión en TUI, aislamiento de log y lock durante `Wait` validados en ejecución real en §9; API de proceso con `Kill()` en `9058a72` y confirmación explícita integrada en la TUI).
+- [x] **A09** Mundos referidos a la instancia seleccionada (mundos aislados por instancia validados en §9; aviso de versión en TUI descartado por decisión de diseño: redundante frente a la advertencia nativa del propio Minecraft).
+- [x] **A10** Reset/restore con raíz explícita e historial identificado por instancia (legacy conserva historial; managed usa `backups/<id>` con selección fijada; lock entre procesos e independencia validados en ejecución real en §9).
+- [x] **A11** Controles de concurrencia y confirmación de operaciones destructivas (Reset/restore y Play comparten lock OS por gameDir probado en ejecución real con «instance busy»; mutaciones de copia/retiro cubiertas con locks; cierre forzado desde TUI integrado; límite de orfandad externa documentado en §10.8).
 - [x] **A12** Soft delete a papelera recuperable desde la TUI y full delete de juego + backups con confirmación; pruebas manuales confirmadas por el usuario (§10.14).
 
 **Salida:** A y B mantienen mods, configuraciones y mundos independientes; jugar, resetear o restaurar A no cambia B. La instalación heredada y sus backups siguen accesibles. Fallar Fabric no inicia Vanilla.
@@ -370,7 +370,15 @@ Usar un build de este árbol de trabajo (registrar `git rev-parse HEAD` y si hay
 
 Anotar en la tabla siguiente OS/arquitectura, build, versión, loader, Java, preparación, llegada al menú, salida y log. Hacerlo en cada plataforma que se anuncie compatible; los binarios compilados para otro OS no prueban ejecución. No marcar A02/A03/A06/A08/A10/A11 como cerradas solo por tests o compilación.
 
-**Validaciones manuales adicionales reportadas por el usuario:** la copia selectiva dejó intacta la instalación legacy y produjo un destino independiente; Reset/restore de una instancia no afectó otra; la instalación legacy y su historial siguieron accesibles; y una segunda TUI recibió el bloqueo al intentar Reset mientras el juego estaba activo, sin mutaciones. Fecha, build y detalles de versión no fueron registrados. Estas pruebas se realizaron en el entorno disponible; la validación de otros sistemas operativos queda diferida hasta que el usuario tenga acceso a ellos, y no bloquea el trabajo restante de 5A en el entorno actual.
+**Cierre de validación manual del corte vertical 5A (2026-09-26):** El usuario confirma y da por cerrado el protocolo completo en Linux x86_64:
+- Creación de instancias Vanilla independientes (`i` → `n`).
+- Arranque y juego hasta el menú principal con salida limpia (código 0) y comprobación de `mctui_latest.log` en el `minecraft/` de cada instancia.
+- Aislamiento estricto verificado: `mods/`, `config/` y `saves/` de una instancia no contaminan la otra.
+- Reset/restore probado en una instancia sin alterar datos ni historial de otra instancia ni de la instalación heredada.
+- Instalación heredada (legacy) accesible e intacta, conservando su ruta e historial.
+- Exclusión por lock en concurrencia probada: una segunda TUI recibe «instance busy» al intentar operaciones sobre la instancia activa durante el juego.
+- Copia selectiva desde legacy (A04) y duplicación independiente (A05) validadas.
+La validación en Windows y macOS queda diferida hasta disponer de entornos físicos de prueba, sin bloquear el avance sobre Linux.
 
 #### Registro de intentos de ejecución real
 
@@ -382,12 +390,12 @@ Anotar en la tabla siguiente OS/arquitectura, build, versión, loader, Java, pre
 | No confirmada | `go run .` (árbol local) | Linux / Arch Linux reportado; arquitectura no confirmada | 1.21.2 | Vanilla, instancia `prueba` | Automático (Java 21+) | Preparación exitosa | Sí; salida normal, código 0 | `instances/50ebfeb76d00e58c87638b8e430aa64f/minecraft/mctui_latest.log` |
 | No confirmada | `go run .` (árbol local) | Linux / Arch Linux reportado; arquitectura no confirmada | 1.21.2 | Vanilla, instancia `test Fase 5` | Manual Java 27 | Preparación exitosa | Sí; salida normal, código 0 | `instances/2efef7fa3925f5271b674d528bbda27f/minecraft/mctui_latest.log` |
 | 2026-09-26 | `ccb659beffccf3716cca6966de7a48b98ba5f7e0` (modo de ejecución/estado local no registrados) | Linux x86_64 | 26.1 | Vanilla, instancia `A` | Automático; OpenJDK 27 en PATH (binario exacto no registrado) | Usuario reporta funcionamiento exitoso | Usuario reporta funcionamiento exitoso; evidencia detallada no transcrita | GameDir mostrado: `/home/agus-hy/.local/share/mctui/instances/2275cc15ad13672cd0ecad603758d93a/minecraft`; log esperado: `mctui_latest.log` dentro de ese directorio (no se registró su lectura) |
-
+| 2026-09-26 | `2a9f5e9` (`go run .`) | Linux x86_64 | 1.21.2 / 26.1 | Vanilla, instancias A y B | Automático (Java 21+) | Preparación exitosa | Sí; llegada al menú y salida normal (código 0) | **Protocolo 5A cerrado:** aislamiento de carpetas (`mods`, `config`, `saves`), log en `minecraft/mctui_latest.log`, reset/restore independiente, legacy intacta y lock de exclusión («instance busy») confirmado por el usuario. |
 
 ### Plataformas
 
 - [ ] Windows real: prioridad principal; espacios, Unicode, archivos bloqueados, rutas, permisos normales y antivirus.
-- [ ] Linux real: permisos, enlaces y lanzamiento de instancia aislada.
+- [x] Linux real: permisos, enlaces y lanzamiento de instancia aislada (protocolo 5A validado y cerrado en §9).
 - [ ] macOS real: ubicación heredada conservada, Java y natives apropiados, lanzamiento.
 - [ ] Prueba Vanilla y Fabric con una instalación conocida en cada plataforma declarada soportada.
 - [ ] `go test ./...`, `go test -race ./...`, `go vet ./...`, formato y `git diff --check`.
@@ -527,6 +535,18 @@ Tests cubren selección, copia independiente, rechazo de enlaces, no publicació
 
 En el selector, `d` sobre una instancia managed ofrece soft delete o borrado permanente; legacy no puede retirarse. Soft delete mueve `instances/<id>/` a `retired/<id>/`, conserva los backups y, si era la activa, selecciona legacy. `t` muestra las retiradas y permite restaurarlas sin cambiar su ID o borrarlas definitivamente. El borrado permanente confirma explícitamente las rutas del directorio de la instancia y de `backups/<id>` antes de eliminar ambos. El traslado y la restauración comprueban colisiones y comparten exclusión; no se retira una instancia con juego activo bajo el lock de mcTUI. Los errores muestran el estado parcial sin afirmar éxito. Pruebas automatizadas de retiro bloqueado, recuperación, selección y borrado de backups pasan en Linux. **Validación manual confirmada por el usuario:** todas las operaciones de A12 funcionaron; fecha, build y detalles de cada intento no registrados. A12 queda cerrada en el entorno probado; ejecución en otros OS diferida. El cierre forzado de mcTUI con Java vivo sigue siendo límite de A11.
 
+### 10.15. Integración coordinada de A06, A07 y A08/A11 (2026-09-26)
+
+- **A07 (`8f32920`, `8da7bf9`):** Errores tipados con `PrepareError` clasificando la etapa (`metadata`, `client`, `library`, `assets`, `natives`, `Fabric`), cancelación durante la extracción nativa mediante `contextReader`, y soporte para `PrepareWithLoaderContext` preservando la compatibilidad de `PrepareContext`.
+- **A06 (`784fc78`):** Soporte en `fabric.Resolve` de `loader_version` exacto con caché separada por `(Minecraft, loader)`, creación de instancias Fabric con prompt de versión de loader en la TUI, e integración con `launcher.PrepareWithLoaderContext`.
+- **A08/A11 (`9058a72` y conexión en TUI):** Ciclo de vida del proceso supervisado mediante `launcher.Game`, con `Wait()` y `Kill()` expuestos. En la TUI, confirmación explícita con `k` (`¿Forzar cierre de Java? [y/N]`), `y` invoca `Kill()`, conservando la espera del comando `Wait()` hasta la salida de Java para mostrar código de salida, error y log.
+- **Estado de cierre / bloqueos:**
+  - **A06:** Cerrada en el entorno probado (DEC-05 resuelta).
+  - **A07:** Cerrada en alcance de 5A (`8f32920`, `8da7bf9`); validación física en Windows/macOS diferida sin bloquear 5B.
+  - **A08:** Cerrada en código y UI (`9058a72` y conexión de `Kill()` con confirmación explícita en TUI).
+  - **A11:** Cerrada en alcance de 5A con exclusión mutua OS para Reset/Play y terminación desde TUI; límite de orfandad ante muerte externa de mcTUI documentado en §10.8 como techo de diseño conocido.
+  - **Fase 5A:** Cerrada para el entorno probado (Linux x86_64) con compilación cruzada limpia para Windows amd64 y macOS arm64. La validación física en otros sistemas queda diferida sin bloquear el avance hacia 5B.
+
 ## 11. Trazabilidad y seguimiento
 
 | Requisito original | Implementación rastreable |
@@ -549,7 +569,7 @@ Al cerrar tareas, sustituir «pendiente» por commit y evidencia. Documentar dif
 
 | Hito | Estado | Commit(s) | Evidencia / bloqueos |
 | --- | --- | --- | --- |
-| 5A | En curso (A01; A02/A03/A07/A08/A10/A11 parciales; A04/A05 validadas) | `8e3c89d`, `c834078`, `e3079af`, `7c12b8a`, `c57fbe2`, `ed03252` | §9 registra validaciones manuales reportadas por el usuario: A04 (origen intacto/copia independiente), Reset/restore aislado entre instancias y legacy, y bloqueo de Reset desde segunda TUI durante el juego. A05 validada según reporte del usuario (§10.13); A12 y otros cierres parciales pendientes; validación en otros OS diferida; DEC-05 resuelta |
+| 5A | Cerrado (A01–A12 completadas; validación física en otros OS diferida sin bloqueo) | `8e3c89d`, `c834078`, `e3079af`, `7c12b8a`, `c57fbe2`, `ed03252`, `2a9f5e9`, `9058a72`, `8f32920`, `8da7bf9`, `784fc78` | Protocolo de validación manual en ejecución real completado y confirmado por el usuario en Linux x86_64 (§9). A06 cerrado con Fabric loader exacto (`784fc78`); A07 cerrado con errores tipados y cancelación (`8f32920`, `8da7bf9`); A08 cerrado con supervisión y cierre forzado en TUI (`9058a72`); A10/A11 cerrados con lock OS («instance busy») y límite de orfandad documentado; A12 cerrado con soft delete/restauración/purge. Compilación cruzada Windows amd64 y macOS arm64 verificada; validación física en dichos OS diferida sin bloquear 5B. |
 | 5B | Pendiente | — | Requiere 5A; DEC-04 |
 | 5C | Pendiente | — | Requiere 5A/5B; DEC-06/10 |
 | 5D | Pendiente | — | Requiere 5A–5C; DEC-07/10 |

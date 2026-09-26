@@ -160,9 +160,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.Err != nil {
 			m.gameErr = msg.Err
+			m.activeGame = nil
 			m.state = gameResultScreen
 			return m, nil
 		}
+		m.activeGame = msg.Game
+		m.gameKillConfirm = false
+		m.gameKillErr = nil
 		m.gameLog = msg.Game.LogPath
 		m.state = gameRunningScreen
 		return m, func() tea.Msg {
@@ -172,6 +176,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case GameExitedMsg:
 		if m.state == gameRunningScreen {
+			m.activeGame = nil
+			m.gameKillConfirm = false
 			m.gameExitCode, m.gameErr = msg.Code, msg.Err
 			m.state = gameResultScreen
 		}
@@ -223,8 +229,36 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyMsg:
-		if m.state == gameStartingScreen || m.state == gameRunningScreen {
+		if m.state == gameStartingScreen {
 			return m, nil // wait for Java; never detach or kill it implicitly
+		}
+		if m.state == gameRunningScreen {
+			if m.gameKillConfirm {
+				switch msg.String() {
+				case "y", "Y":
+					m.gameKillConfirm = false
+					if m.activeGame != nil {
+						if err := m.activeGame.Kill(); err != nil {
+							m.gameKillErr = err
+						}
+					}
+					return m, nil
+				case "n", "N", "esc":
+					m.gameKillConfirm = false
+					return m, nil
+				default:
+					return m, nil
+				}
+			} else {
+				switch msg.String() {
+				case "k", "K":
+					m.gameKillConfirm = true
+					m.gameKillErr = nil
+					return m, nil
+				default:
+					return m, nil // wait for Java; never detach or kill it implicitly
+				}
+			}
 		}
 		if m.state == gameResultScreen {
 			if msg.String() == "enter" || msg.String() == "esc" {

@@ -580,6 +580,14 @@ func (m Model) renderGameScreen() string {
 	switch m.state {
 	case gameRunningScreen:
 		status = "Minecraft is running. Close the game to return to mcTUI."
+		if m.gameKillConfirm {
+			hint = "Force close Java? [y] Confirm  [n/Esc] Cancel"
+		} else {
+			hint = "[k] Force close Java\nmcTUI will not close or detach while the game is running."
+		}
+		if m.gameKillErr != nil {
+			hint = "Kill error: " + m.gameKillErr.Error() + "\n" + hint
+		}
 	case gameResultScreen:
 		status = fmt.Sprintf("Minecraft exited (code %d).", m.gameExitCode)
 		if m.gameErr != nil {
