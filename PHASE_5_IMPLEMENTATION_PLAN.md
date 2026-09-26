@@ -412,11 +412,11 @@ Registrar decisión, motivo, fecha/commit y consecuencias. Las recomendaciones s
 | DEC-03 | Comportamiento de TUI al cerrar con juego activo | Resuelto en §10.9: `q`/Ctrl+C no desacoplan ni matan Java; esperar salida del juego | A08 |
 | DEC-04 | Cómo desactivar archivos | Resuelta en §10.16: `.jar` ↔ `.jar.disabled` | B04 |
 | DEC-05 | Política de versión/canal | Resuelta en §10.11: Minecraft y loader managed fijos tras crear; versión se elige al crear. Cambio posterior requiere flujo explícito de compatibilidad. | A06/C08 |
-| DEC-06 | Recuperación/retención de actualizaciones | Proponer respaldo del conjunto reemplazado y explicitar consumo de disco | C11/D12 |
+| DEC-06 | Recuperación/retención de actualizaciones | Resuelta en §10.17: respaldo en backups/mods_replaced/ con cuota de 1 versión anterior y rollback en TUI | C11/D12 |
 | DEC-07 | Loaders/versions que se anuncian soportados | Vanilla/Fabric primero; ampliar con pruebas reales | D06/E03 |
 | DEC-08 | Alcance contractual CurseForge | No implementación de acceso hasta tener vía autorizada | E01/E02 |
 | DEC-09 | Autenticación oficial en esta entrega o siguiente | Mantener bloque separado; nunca confundir mods con autenticación | E04 |
-| DEC-10 | Límites de descargas/ZIP y política de hosts | Límites explícitos y verificables por tests | C07/D02 |
+| DEC-10 | Límites de descargas/ZIP y política de hosts | Resuelta en §10.18: dominios api.modrinth.com / cdn.modrinth.net, User-Agent canónico, tope 250 MiB y SHA-512 | C07/D02 |
 | DEC-11 | Java descargado y formatos externos | Decisión separada con origen, licencia y matriz de soporte | E05/E07 |
 
 ### 10.1. A01 — rutas y esquema (2026-09-25; base `c7e7af9`)
@@ -555,6 +555,35 @@ Registro versionado en `instances/<id>/mods.json` (incluido `instances/legacy/mo
 
 Fuentes: https://raw.githubusercontent.com/FabricMC/fabric-loader/master/src/main/java/net/fabricmc/loader/impl/discovery/DirectoryModCandidateFinder.java y https://raw.githubusercontent.com/PrismLauncher/PrismLauncher/develop/launcher/minecraft/mod/Mod.cpp .
 
+### 10.17. DEC-06 — Recuperación y retención de actualizaciones de mods (5C)
+
+**DEC-06, resuelta (2026-09-26):** Al actualizar un mod mediante Modrinth, el archivo `.jar` reemplazado no se destruye de inmediato ni se envía a la papelera del sistema operativo (lo cual en entornos headless/SSH o ciertos escritorios no garantiza persistencia predecible). En su lugar:
+1. **Directorio de respaldo por instancia:** El archivo anterior se traslada a:
+   `instances/<id>/backups/mods_replaced/<timestamp>_<archivo_anterior>.jar`
+2. **Metadata de reversión:** Se registra la procedencia en `history.json` dentro de dicho directorio con nombre, `project_id`, versión previa, versión nueva, hash SHA-512 y fecha del reemplazo.
+3. **Cuota de retención acotada:** Se conserva como máximo **1 versión anterior por mod** (o tope de 500 MiB por instancia). Versiones de respaldo previas para ese mismo mod se depuran automáticamente para no generar un consumo descontrolado de disco.
+4. **Rollback desde la TUI:** Si el juego crashea con la nueva versión, el usuario puede ejecutar una acción de rollback que restaura el JAR anterior y actualiza `mods.json`.
+5. **Detección de modificaciones manuales (C10):** Si un mod local o externo tiene hash alterado respecto de la metadata oficial, la TUI exige confirmación explícita diferenciada antes de sobreescribir.
+
+### 10.18. DEC-10 — Red, límites de descarga, staging y seguridad de Modrinth (5C)
+
+**DEC-10, resuelta (2026-09-26):** Definición de límites y políticas de red para la integración con la API de Modrinth y descarga de binarios:
+1. **Restricción estricta de dominios:** Solo se permiten conexiones HTTPS a:
+   - `https://api.modrinth.com/v2` (API REST)
+   - `https://cdn.modrinth.net` (Descarga de binarios `.jar`)
+   Cualquier redirección a otros dominios o protocolos inseguros (`http://`) debe abortar con error de seguridad inmediato.
+2. **User-Agent canónico estructurado:** Todas las solicitudes HTTP deben identificarse con:
+   `agmonetti/mcTUI/<version> (https://github.com/agmonetti/mcTUI)`
+   para cumplir con el contrato de servicio de Modrinth y evitar bloqueos por IP.
+3. **Manejo de rate limits (300 req/min):** Lectura e interpretación de `X-Ratelimit-Limit`, `X-Ratelimit-Remaining` y `X-Ratelimit-Reset`. Ante HTTP 429, se notifica en la TUI el tiempo de espera restante (`Retry-After`) y en tareas secundarias se aplica backoff exponencial acotado.
+4. **Límites de tamaño y memoria:** Máximo **250 MiB** por archivo `.jar` descargado (controlado con `io.LimitReader`) y **10 MiB** para payloads JSON de respuesta de la API.
+5. **Staging y Content-Addressing:** Las descargas se realizan en un archivo temporal (`.tmp`) en el mismo filesystem. El hashing SHA-512 se calcula en stream durante la descarga (`io.TeeReader`). Solo tras confirmar que el hash coincide exactamente con el publicado por Modrinth se renombra al destino final bajo el `operationlock` de la instancia. Si el hash no coincide o la descarga se corta, el temporal se purga inmediatamente.
+
+### 10.19. Especificación y arquitectura técnica de 5C
+
+Para evitar ambigüedades entre sesiones de trabajo, la arquitectura completa, modelos JSON, endpoints, algoritmo de resolución de dependencias, diseño de pantallas Bubble Tea y matriz de tests han sido documentados exhaustivamente en el archivo independiente:
+👉 [PHASE_5C_SPECIFICATION.md](PHASE_5C_SPECIFICATION.md).
+
 ## 11. Trazabilidad y seguimiento
 
 | Requisito original | Implementación rastreable |
@@ -579,7 +608,7 @@ Al cerrar tareas, sustituir «pendiente» por commit y evidencia. Documentar dif
 | --- | --- | --- | --- |
 | 5A | Cerrado (A01–A12 completadas; validación física en otros OS diferida sin bloqueo) | `8e3c89d`, `c834078`, `e3079af`, `7c12b8a`, `c57fbe2`, `ed03252`, `2a9f5e9`, `9058a72`, `8f32920`, `8da7bf9`, `784fc78` | Protocolo de validación manual en ejecución real completado y confirmado por el usuario en Linux x86_64 (§9). A06 cerrado con Fabric loader exacto (`784fc78`); A07 cerrado con errores tipados y cancelación (`8f32920`, `8da7bf9`); A08 cerrado con supervisión y cierre forzado en TUI (`9058a72`); A10/A11 cerrados con lock OS («instance busy») y límite de orfandad documentado; A12 cerrado con soft delete/restauración/purge. Compilación cruzada Windows amd64 y macOS arm64 verificada; validación física en dichos OS diferida sin bloquear 5B. |
 | 5B | Cerrado | árbol local | B01–B08 implementadas y verificadas con tests unitarios y de integración TUI. Escaneo y registro en `mods.json`, renombrado reversible `.jar` ↔ `.jar.disabled` (DEC-04), lectura segura de ZIP/`fabric.mod.json`, adición, toggle y borrado con confirmación explícita bajo lock OS (`operationlock`). Detección de colisiones, cambios externos y duplicados. Tests automatizados, `test -race`, `go vet`, compilación cruzada Windows amd64 y Darwin arm64 y `git diff --check` pasando limpiamente. Sin red ni dependencias externas (5C no iniciada). |
-| 5C | Pendiente | — | Requiere 5A/5B; DEC-06/10 |
+| 5C | Implementación parcial, no cerrada | Árbol local sin commit de cierre; `PHASE_5C_SPECIFICATION.md` | Cliente, resolutor, instalación y TUI presentes; en este corte se añadió revalidación bajo lock de versiones de todo el plan elegido y conflictos registrados, además de mostrar y exigir consentimiento para reemplazos modificados en opcionales. La TUI ya muestra bytes acumulados durante la instalación y `Esc` cancela esperando la limpieza; tests de cancelación durante descarga y tras el primer archivo de un lote sin publicación. Una prueba integrada cubre la publicación de una rama opcional transitiva; la ruta de backups legacy se comprobó bajo `instances/legacy/`. En este corte también se cancelan y descartan consultas obsoletas de búsqueda, detalle, plan y updates, y el cliente compartido conserva el rate limit entre operaciones. En el corte actual, una prueba integrada publica dos updates y su dependencia compartida, corrige la reconciliación de `required_by` al dejar de requerirla un mod y evita atribuir dependencias a opcionales omitidos. Se rechazan ediciones externas durante la descarga incluso con consentimiento previo; el journal verifica el hash real del JAR local consentido y el rollback restaura sus bytes. Los conflictos de ramas opcionales se conservan sin bloquear ramas omitidas y se validan bajo lock solo al elegirlas (instalados, targets y pares opcionales); la revisión TUI los anuncia/bloquea y distingue descendientes requeridos. La recuperación ahora hace preflight de todos los archivos del lote antes de modificar cualquiera; pruebas comprueban que un backup corrupto o un JAR modificado bloquean sin recuperación parcial. Una prueba con proceso hijo interrumpido tras publicar el primer JAR de dos comprueba recuperación al reiniciar en Linux. Se omite la caché de Modrinth por riesgo de resultados obsoletos hasta que exista evidencia de necesidad. Por pedido del usuario se omiten pruebas Windows/macOS en este corte. Pasan `go test ./...`, `go test -race ./internal/mods ./internal/modrinth ./internal/ui`, `go vet ./...` y `git diff --check`; los siete fallos anteriores de UI ya no se reproducen. La evidencia y las brechas restantes están en §11 de la especificación. Brechas de C01–C12, integración y validación manual detalladas en §11 de la especificación; no marcar casillas aún. |
 | 5D | Pendiente | — | Requiere 5A–5C; DEC-07/10 |
 | 5E | Pendiente por bloque | — | Aprobaciones y decisiones DEC-07/08/09/11 |
 
