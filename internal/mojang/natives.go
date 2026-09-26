@@ -100,7 +100,7 @@ func DownloadAndExtractNatives(ctx context.Context, data VersionData, mcDir, ver
 		if err := download(info.URL, jarPath, info.SHA1); err != nil {
 			return "", err
 		}
-		if err := extractJar(jarPath, stage, seen); err != nil {
+		if err := extractJar(ctx, jarPath, stage, seen); err != nil {
 			return "", fmt.Errorf("extract native %s: %w", lib.Name, err)
 		}
 	}
@@ -150,9 +150,21 @@ func nativePath(root, relative string) (string, error) {
 	return path, nil
 }
 
+type contextReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (r contextReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.r.Read(p)
+}
+
 // extractJar reads native files to EOF (including ZIP CRC verification), with
 // bounded expansion, and refuses links, traversal and flattened-name collisions.
-func extractJar(jarPath, destDir string, seen map[string]bool) error {
+func extractJar(ctx context.Context, jarPath, destDir string, seen map[string]bool) error {
 	r, err := zip.OpenReader(jarPath)
 	if err != nil {
 		return err
@@ -166,6 +178,9 @@ func extractJar(jarPath, destDir string, seen map[string]bool) error {
 	var expanded uint64
 	count := 0
 	for _, f := range r.File {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		name := strings.TrimSuffix(f.Name, "/")
 		if !fs.ValidPath(name) || !filepath.IsLocal(name) || strings.ContainsAny(name, "\\:") || name == "." {
 			return fmt.Errorf("invalid native archive path %q", f.Name)
@@ -199,8 +214,12 @@ func extractJar(jarPath, destDir string, seen map[string]bool) error {
 			in.Close()
 			return err
 		}
-		n, copyErr := io.Copy(out, io.LimitReader(in, int64(f.UncompressedSize64)+1))
+		n, copyErr := io.Copy(out, contextReader{ctx, io.LimitReader(in, int64(f.UncompressedSize64)+1)})
 		in.Close()
+		if err := ctx.Err(); err != nil {
+			out.Close()
+			return err
+		}
 		closeErr := out.Close()
 		if copyErr != nil {
 			return copyErr

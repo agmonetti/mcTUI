@@ -14,6 +14,14 @@ import (
 
 // Prepared contains the launch artifacts verified for one runtime and version.
 // The paths are local to this runtime, not portable instance metadata.
+type PrepareError struct {
+	Stage string
+	Err   error
+}
+
+func (e *PrepareError) Error() string { return e.Stage + ": " + e.Err.Error() }
+func (e *PrepareError) Unwrap() error { return e.Err }
+
 type Prepared struct {
 	classpath    string
 	mainClass    string
@@ -40,7 +48,7 @@ func PrepareContext(ctx context.Context, runtimeDir, version, modloader string, 
 		var err error
 		data, err = mojang.FetchVersionData(ctx, version, runtimeDir)
 		if err != nil {
-			return Prepared{}, fmt.Errorf("version metadata for %s: %w", version, err)
+			return Prepared{}, &PrepareError{Stage: "metadata", Err: fmt.Errorf("version %s: %w", version, err)}
 		}
 	}
 	if data.Downloads.Client.URL == "" || data.Downloads.Client.SHA1 == "" || !filepath.IsLocal(data.AssetIndex.ID) || data.AssetIndex.ID != filepath.Base(data.AssetIndex.ID) {
@@ -73,7 +81,7 @@ func PrepareContext(ctx context.Context, runtimeDir, version, modloader string, 
 	clientPath := mojang.ClientJarPath(runtimeDir, version)
 	wg.Add(1)
 	if err := download(data.Downloads.Client.URL, clientPath, data.Downloads.Client.SHA1); err != nil {
-		return Prepared{}, err
+		return Prepared{}, &PrepareError{Stage: "client", Err: err}
 	}
 
 	var classpath []string
@@ -89,11 +97,11 @@ func PrepareContext(ctx context.Context, runtimeDir, version, modloader string, 
 		}
 		if artifact.URL == "" || artifact.Path == "" || artifact.SHA1 == "" {
 			wg.Wait()
-			return Prepared{}, fmt.Errorf("missing verifiable artifact for %s", lib.Name)
+			return Prepared{}, &PrepareError{Stage: "library", Err: fmt.Errorf("missing verifiable artifact for %s", lib.Name)}
 		}
 		if !filepath.IsLocal(artifact.Path) {
 			wg.Wait()
-			return Prepared{}, fmt.Errorf("invalid library path %q", artifact.Path)
+			return Prepared{}, &PrepareError{Stage: "library", Err: fmt.Errorf("invalid library path %q", artifact.Path)}
 		}
 		path := filepath.Join(librariesPath, artifact.Path)
 		classpath = append(classpath, path)
@@ -110,14 +118,14 @@ func PrepareContext(ctx context.Context, runtimeDir, version, modloader string, 
 		}()
 	}
 	if err := check(); err != nil {
-		return Prepared{}, err
+		return Prepared{}, &PrepareError{Stage: "library", Err: err}
 	}
 
 	mainClass := "net.minecraft.client.main.Main"
 	if modloader == "Fabric" {
 		profile, err := fabric.Resolve(ctx, version, runtimeDir, librariesPath, &wg, download)
 		if err != nil {
-			return Prepared{}, fmt.Errorf("Fabric profile unavailable for %s; Vanilla will not be launched: %w", version, err)
+			return Prepared{}, &PrepareError{Stage: "Fabric", Err: fmt.Errorf("profile unavailable for %s; Vanilla will not be launched: %w", version, err)}
 		}
 		mainClass = profile.MainClass
 		classpath = append(classpath, profile.ClasspathEntries...)
@@ -125,14 +133,14 @@ func PrepareContext(ctx context.Context, runtimeDir, version, modloader string, 
 
 	assetIndexID, err := validateAssets(runtimeDir, data, &wg, download)
 	if downloadErr := check(); downloadErr != nil {
-		return Prepared{}, downloadErr
+		return Prepared{}, &PrepareError{Stage: "assets", Err: downloadErr}
 	}
 	if err != nil {
-		return Prepared{}, err
+		return Prepared{}, &PrepareError{Stage: "assets", Err: err}
 	}
 	nativesDir, err := mojang.DownloadAndExtractNatives(ctx, data, runtimeDir, version, &wg, download)
 	if err != nil {
-		return Prepared{}, err
+		return Prepared{}, &PrepareError{Stage: "natives", Err: err}
 	}
 	if err := ctx.Err(); err != nil {
 		return Prepared{}, err

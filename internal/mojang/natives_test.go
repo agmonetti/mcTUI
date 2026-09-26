@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -90,6 +91,43 @@ func TestNativesRebuiltOfflineAndFailuresNeverPublished(t *testing.T) {
 	wg.Wait()
 }
 
+type cancelAfterRead struct {
+	cancel context.CancelFunc
+	read   bool
+}
+
+func (r *cancelAfterRead) Read(p []byte) (int, error) {
+	if r.read {
+		return 0, errors.New("underlying reader should not be reached after cancel")
+	}
+	r.read = true
+	r.cancel()
+	return copy(p, "x"), nil
+}
+
+func TestNativeExtractionHonorsCancellationMidFile(t *testing.T) {
+	root := t.TempDir()
+	jar := filepath.Join(root, "native.jar")
+	if err := os.WriteFile(jar, nativeZIP(t, "lib.so"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	reader := contextReader{ctx, &cancelAfterRead{cancel: cancel}}
+	buf := make([]byte, 2)
+	if n, err := reader.Read(buf); n != 1 || err != nil {
+		t.Fatalf("first file read = %d, %v", n, err)
+	}
+	if _, err := reader.Read(buf); !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancellation during file copy error = %v", err)
+	}
+	if err := extractJar(ctx, jar, root, make(map[string]bool)); !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled extraction error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "lib.so")); !os.IsNotExist(err) {
+		t.Fatalf("canceled extraction published output: %v", err)
+	}
+}
+
 func TestNativeArchiveRejectsUnsafeOrCorruptContent(t *testing.T) {
 	corrupt := nativeZIP(t, "lib.so")
 	corrupt = bytes.Replace(corrupt, []byte("native contents"), []byte("broken contents"), 1)
@@ -108,7 +146,7 @@ func TestNativeArchiveRejectsUnsafeOrCorruptContent(t *testing.T) {
 			if err := os.WriteFile(jar, body, 0600); err != nil {
 				t.Fatal(err)
 			}
-			if err := extractJar(jar, root, make(map[string]bool)); err == nil {
+			if err := extractJar(context.Background(), jar, root, make(map[string]bool)); err == nil {
 				t.Fatal("invalid archive accepted")
 			}
 		})
