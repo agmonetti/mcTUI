@@ -37,7 +37,7 @@ func validUsername(name string) bool {
 
 // filesCached is only a display hint. Nonempty files are not evidence of a
 // valid installation; Play always runs the shared verifier asynchronously.
-func filesCached(runtimeDir, version, modloader string) bool {
+func filesCached(runtimeDir, version, modloader string, loaderVersion ...string) bool {
 	mcDir := runtimeDir
 	if !mojang.ClientJarExists(mcDir, version) {
 		return false
@@ -45,10 +45,24 @@ func filesCached(runtimeDir, version, modloader string) bool {
 	if data, ok := mojang.CachedVersionData(mcDir, version); !ok || data.Downloads.Client.URL == "" || data.AssetIndex.ID == "" {
 		return false
 	}
-	if modloader == "Fabric" && !fabric.ProfileExists(mcDir, version) {
+	if modloader == "Fabric" && !fabric.ProfileExists(mcDir, version, loaderVersion...) {
 		return false
 	}
 	return true
+}
+
+func startLaunchDownload(ctx context.Context, launch LaunchConfig) tea.Cmd {
+	if launch.LoaderVersion == "" {
+		return StartDownloadCmd(ctx, launch.RuntimeDir, launch.Version, launch.Modloader, launch.JavaPath)
+	}
+	return func() tea.Msg {
+		prepared, err := launcher.PrepareWithLoaderContext(ctx, launch.RuntimeDir, launch.Version, launch.Modloader, launch.LoaderVersion, nil)
+		var javaBinary string
+		if err == nil {
+			javaBinary, err = launcher.ResolvePreparedJava(launch.RuntimeDir, prepared, launch.JavaPath)
+		}
+		return DownloadDoneMsg{Prepared: prepared, JavaBinary: javaBinary, Err: err}
+	}
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -308,6 +322,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if selected {
 					m.state = instanceCopyConfirmScreen
 				}
+			} else if m.state == instanceLoaderScreen {
+				loaderVersion := strings.TrimSpace(m.input.Value())
+				if loaderVersion == "" {
+					m.instanceErr = fmt.Errorf("enter an exact Fabric Loader version")
+				} else {
+					m.creationLoaderVersion = loaderVersion
+					m.instanceErr = nil
+					m.state = instanceNameScreen
+					m.input.SetValue("")
+					m.input.Placeholder = "Instance name"
+				}
 			} else if m.state == instanceNameScreen {
 				name := strings.TrimSpace(m.input.Value())
 				if m.copyingInstance {
@@ -340,7 +365,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.state = instancesScreen
 					}
 				} else {
-					in, err := instances.Create(m.dataRoot, name, m.creationVersion, "Vanilla", "", m.memoryMB)
+					loader := "Vanilla"
+					if m.creationLoaderVersion != "" {
+						loader = "Fabric"
+					}
+					in, err := instances.Create(m.dataRoot, name, m.creationVersion, loader, m.creationLoaderVersion, m.memoryMB)
 					if err != nil {
 						m.instanceErr = err
 					} else if err = m.setInstance(in); err != nil {
@@ -350,7 +379,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.input.Placeholder = "Type your name..."
 						m.instanceList, m.instanceErr = instances.List(m.dataRoot)
 						m.creatingInstance = false
-						m.creationVersion = ""
+						m.creationVersion, m.creationLoaderVersion = "", ""
 						m.state = menuScreen
 					}
 				}
@@ -474,6 +503,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				version := m.versions[m.cursorVersions]
 				if m.creatingInstance || m.copyingInstance {
 					m.creationVersion = version
+					m.creationLoaderVersion = ""
 					m.state = instanceNameScreen
 					m.instanceErr = nil
 					m.input.SetValue("")
@@ -513,7 +543,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.dlFinished = false
 				ctx, cancel := context.WithCancel(context.Background())
 				m.dlContext, m.dlCancel = ctx, cancel
-				return m, tea.Batch(downloadAnimationTickCmd(), StartDownloadCmd(ctx, launch.RuntimeDir, launch.Version, launch.Modloader, launch.JavaPath))
+				return m, tea.Batch(downloadAnimationTickCmd(), startLaunchDownload(ctx, launch))
 			}
 
 		case "y", "Y":
@@ -539,7 +569,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.dlFinished = false
 				ctx, cancel := context.WithCancel(context.Background())
 				m.dlContext, m.dlCancel = ctx, cancel
-				return m, tea.Batch(downloadAnimationTickCmd(), StartDownloadCmd(ctx, launch.RuntimeDir, launch.Version, launch.Modloader, launch.JavaPath))
+				return m, tea.Batch(downloadAnimationTickCmd(), startLaunchDownload(ctx, launch))
+			}
+
+		case "f", "F":
+			if m.state == versionsScreen && m.creatingInstance && len(m.versions) > 0 {
+				m.creationVersion = m.versions[m.cursorVersions]
+				m.creationLoaderVersion = ""
+				m.instanceErr = nil
+				m.input.SetValue("")
+				m.input.CharLimit = 100
+				m.input.Placeholder = "Exact Fabric Loader version (e.g. 0.15.11)"
+				m.input.Focus()
+				m.state = instanceLoaderScreen
+				return m, nil
 			}
 
 		case "n", "N":
@@ -554,6 +597,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.instanceRenameID = ""
 				m.copyingInstance = false
 				m.creatingInstance = true
+				m.creationLoaderVersion = ""
 				m.state = versionsScreen
 				for i, version := range m.versions {
 					if version == m.versionSelect {
@@ -675,13 +719,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if m.state == instancesScreen {
 				m.state = menuScreen
 				m.instanceErr = nil
+			} else if m.state == instanceLoaderScreen {
+				m.state = versionsScreen
+				m.instanceErr = nil
 			} else if m.state == instanceNameScreen {
 				m.state = instancesScreen
 				m.instanceErr = nil
 				m.instanceRenameID = ""
 				m.creatingInstance = false
 				m.copyingInstance = false
-				m.creationVersion = ""
+				m.creationVersion, m.creationLoaderVersion = "", ""
 				m.input.CharLimit = 16
 				m.input.Placeholder = "Type your name..."
 			} else if m.state == versionsScreen {
@@ -698,7 +745,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	if m.state == nameScreen || m.state == instanceNameScreen {
+	if m.state == nameScreen || m.state == instanceNameScreen || m.state == instanceLoaderScreen {
 		m.input, cmd = m.input.Update(msg)
 	}
 

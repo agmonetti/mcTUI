@@ -39,6 +39,7 @@ const (
 	javaPickerScreen
 	instancesScreen
 	instanceNameScreen
+	instanceLoaderScreen
 	instanceCopyInspectScreen
 	instanceCopySelectScreen
 	instanceCopyConfirmScreen
@@ -105,6 +106,7 @@ type InstanceRemovalDoneMsg struct {
 type LaunchConfig struct {
 	GameDir, RuntimeDir          string
 	Username, Version, Modloader string
+	LoaderVersion                string
 	MemoryMB                     int
 	JavaPath                     string
 }
@@ -115,42 +117,43 @@ type Model struct {
 	cursorVersions int
 	cursorWorlds   int
 
-	username         string
-	versionSelect    string
-	memoryMB         int
-	modloader        string
-	versions         []string
-	worlds           []worlds.Info
-	roadmap          []string
-	dataRoot         string
-	instanceList     []instances.Instance
-	instance         instances.Instance
-	instanceErr      error
-	instanceCursor   int
-	instanceRenameID string
-	creatingInstance bool
-	copyingInstance  bool
-	creationVersion  string
-	copySource       string
-	copySourceID     string
-	copyLoader       string
-	copyItems        []instances.CopyItem
-	copySelected     map[string]bool
-	copyCursor       int
-	copyName         string
-	copyStage        string
-	copyErr          error
-	copyResult       instances.CopyResult
-	copyCleaning     bool
-	retiredList      []instances.Instance
-	retiredCursor    int
-	removeTarget     instances.Instance
-	removeAction     string
-	removeFromTrash  bool
-	removeErr        error
-	pickerForJava    bool
-	launch           LaunchConfig
-	latestRelease    updater.Release // zero value = no update available
+	username              string
+	versionSelect         string
+	memoryMB              int
+	modloader             string
+	versions              []string
+	worlds                []worlds.Info
+	roadmap               []string
+	dataRoot              string
+	instanceList          []instances.Instance
+	instance              instances.Instance
+	instanceErr           error
+	instanceCursor        int
+	instanceRenameID      string
+	creatingInstance      bool
+	copyingInstance       bool
+	creationVersion       string
+	creationLoaderVersion string
+	copySource            string
+	copySourceID          string
+	copyLoader            string
+	copyItems             []instances.CopyItem
+	copySelected          map[string]bool
+	copyCursor            int
+	copyName              string
+	copyStage             string
+	copyErr               error
+	copyResult            instances.CopyResult
+	copyCleaning          bool
+	retiredList           []instances.Instance
+	retiredCursor         int
+	removeTarget          instances.Instance
+	removeAction          string
+	removeFromTrash       bool
+	removeErr             error
+	pickerForJava         bool
+	launch                LaunchConfig
+	latestRelease         updater.Release // zero value = no update available
 
 	// Download progress (usado en downloadScreen)
 	dlProgressFrame int
@@ -293,8 +296,8 @@ func (m Model) launchConfig() (LaunchConfig, error) {
 	if err != nil {
 		return LaunchConfig{}, err
 	}
-	if m.instance.Kind == "managed" && m.instance.Loader == "Fabric" {
-		return LaunchConfig{}, fmt.Errorf("managed Fabric instances require exact loader-version preparation, not available yet")
+	if m.isManaged() && (m.versionSelect != m.instance.MinecraftVersion || m.modloader != m.instance.Loader || m.instance.Loader == "Fabric" && m.instance.LoaderVersion == "") {
+		return LaunchConfig{}, fmt.Errorf("managed Minecraft and loader versions must match instance metadata")
 	}
-	return LaunchConfig{GameDir: gameDir, RuntimeDir: runtimeDir, Username: m.username, Version: m.versionSelect, Modloader: m.modloader, MemoryMB: m.memoryMB, JavaPath: m.instance.JavaPath}, nil
+	return LaunchConfig{GameDir: gameDir, RuntimeDir: runtimeDir, Username: m.username, Version: m.versionSelect, Modloader: m.modloader, LoaderVersion: m.instance.LoaderVersion, MemoryMB: m.memoryMB, JavaPath: m.instance.JavaPath}, nil
 }

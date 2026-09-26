@@ -19,6 +19,8 @@ import (
 
 // Profile records both the launch classpath and hashes for offline verification.
 type Profile struct {
+	MinecraftVersion string
+	LoaderVersion    string
 	MainClass        string
 	ClasspathEntries []string
 	Hashes           map[string]string
@@ -27,12 +29,16 @@ type Profile struct {
 
 type Downloader func(url, destination, expectedSHA1 string) error
 
-func ProfilePath(mcDir, version string) string {
-	return filepath.Join(mcDir, "versions", version, "fabric-profile.json")
+func ProfilePath(mcDir, version string, loaderVersion ...string) string {
+	name := "fabric-profile.json"
+	if len(loaderVersion) > 0 && loaderVersion[0] != "" {
+		name = "fabric-profile-" + loaderVersion[0] + ".json"
+	}
+	return filepath.Join(mcDir, "versions", version, name)
 }
 
-func ProfileExists(mcDir, version string) bool {
-	info, err := os.Stat(ProfilePath(mcDir, version))
+func ProfileExists(mcDir, version string, loaderVersion ...string) bool {
+	info, err := os.Stat(ProfilePath(mcDir, version, loaderVersion...))
 	return err == nil && info.Size() > 0
 }
 
@@ -75,10 +81,17 @@ func sha1For(ctx context.Context, url string) (string, error) {
 }
 
 // Resolve never falls back to Vanilla or trusts a nonempty, unverified cache.
-func Resolve(ctx context.Context, targetVersion, mcDir, librariesPath string, wg *sync.WaitGroup, download Downloader) (Profile, error) {
-	cachePath := ProfilePath(mcDir, targetVersion)
+func Resolve(ctx context.Context, targetVersion, mcDir, librariesPath string, wg *sync.WaitGroup, download Downloader, loaderVersion ...string) (Profile, error) {
+	if len(loaderVersion) > 1 || !validVersion(targetVersion) || len(loaderVersion) == 1 && !validVersion(loaderVersion[0]) {
+		return Profile{}, fmt.Errorf("invalid Fabric version or loader version")
+	}
+	requested := ""
+	if len(loaderVersion) == 1 {
+		requested = loaderVersion[0]
+	}
+	cachePath := ProfilePath(mcDir, targetVersion, requested)
 	var result Profile
-	if cached, err := os.ReadFile(cachePath); err == nil && json.Unmarshal(cached, &result) == nil && result.MainClass != "" && len(result.ClasspathEntries) > 0 && len(result.Hashes) == len(result.ClasspathEntries) && len(result.URLs) == len(result.ClasspathEntries) {
+	if cached, err := os.ReadFile(cachePath); err == nil && json.Unmarshal(cached, &result) == nil && result.LoaderVersion == requested && (result.MinecraftVersion == targetVersion || requested == "" && result.MinecraftVersion == "") && result.MainClass != "" && len(result.ClasspathEntries) > 0 && len(result.Hashes) == len(result.ClasspathEntries) && len(result.URLs) == len(result.ClasspathEntries) {
 		valid := true
 		for _, path := range result.ClasspathEntries {
 			rel, err := filepath.Rel(librariesPath, path)
@@ -98,32 +111,42 @@ func Resolve(ctx context.Context, targetVersion, mcDir, librariesPath string, wg
 		}
 	}
 
-	loaderURL := fmt.Sprintf("https://meta.fabricmc.net/v2/versions/loader/%s", targetVersion)
-	body, err := get(ctx, loaderURL, 2<<20)
-	if err != nil {
-		return Profile{}, err
+	if requested == "" { // Legacy installations continue to follow the default loader.
+		loaderURL := fmt.Sprintf("https://meta.fabricmc.net/v2/versions/loader/%s", targetVersion)
+		body, err := get(ctx, loaderURL, 2<<20)
+		if err != nil {
+			return Profile{}, err
+		}
+		var loaders []struct {
+			Loader struct {
+				Version string `json:"version"`
+			} `json:"loader"`
+		}
+		if err := json.Unmarshal(body, &loaders); err != nil || len(loaders) == 0 || !validVersion(loaders[0].Loader.Version) {
+			return Profile{}, fmt.Errorf("no valid Fabric loader for %s", targetVersion)
+		}
+		requested = loaders[0].Loader.Version
 	}
-	var loaders []struct {
-		Loader struct {
-			Version string `json:"version"`
-		} `json:"loader"`
-	}
-	if err := json.Unmarshal(body, &loaders); err != nil || len(loaders) == 0 || loaders[0].Loader.Version == "" {
-		return Profile{}, fmt.Errorf("no valid Fabric loader for %s", targetVersion)
-	}
-	profileURL := fmt.Sprintf("https://meta.fabricmc.net/v2/versions/loader/%s/%s/profile/json", targetVersion, loaders[0].Loader.Version)
-	body, err = get(ctx, profileURL, 2<<20)
+	profileURL := fmt.Sprintf("https://meta.fabricmc.net/v2/versions/loader/%s/%s/profile/json", targetVersion, requested)
+	body, err := get(ctx, profileURL, 2<<20)
 	if err != nil {
 		return Profile{}, err
 	}
 	var raw struct {
+		ID        string                       `json:"id"`
 		MainClass string                       `json:"mainClass"`
 		Libraries []struct{ Name, URL string } `json:"libraries"`
 	}
-	if err := json.Unmarshal(body, &raw); err != nil || raw.MainClass == "" {
-		return Profile{}, fmt.Errorf("invalid Fabric profile: %v", err)
+	if err := json.Unmarshal(body, &raw); err != nil {
+		return Profile{}, fmt.Errorf("invalid Fabric profile for %s / %s: %w", targetVersion, requested, err)
 	}
-	result = Profile{MainClass: raw.MainClass, Hashes: make(map[string]string), URLs: make(map[string]string)}
+	if raw.MainClass == "" || len(loaderVersion) == 1 && raw.ID != "fabric-loader-"+requested+"-"+targetVersion {
+		return Profile{}, fmt.Errorf("Fabric profile does not match %s / %s", targetVersion, requested)
+	}
+	result = Profile{MinecraftVersion: targetVersion, MainClass: raw.MainClass, Hashes: make(map[string]string), URLs: make(map[string]string)}
+	if len(loaderVersion) == 1 {
+		result.LoaderVersion = requested
+	}
 	for _, lib := range raw.Libraries {
 		parts := strings.Split(lib.Name, ":")
 		if len(parts) != 3 {
@@ -178,4 +201,16 @@ func Resolve(ctx context.Context, targetVersion, mcDir, librariesPath string, wg
 		return Profile{}, err
 	}
 	return result, nil
+}
+
+func validVersion(version string) bool {
+	if version == "" || version == "." || version == ".." || len(version) > 100 {
+		return false
+	}
+	for _, r := range version {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-') {
+			return false
+		}
+	}
+	return true
 }

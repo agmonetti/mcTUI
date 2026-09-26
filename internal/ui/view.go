@@ -24,6 +24,9 @@ func (m Model) View() string {
 	if m.state == instanceNameScreen {
 		return m.renderInstanceNameScreen()
 	}
+	if m.state == instanceLoaderScreen {
+		return m.renderInstanceLoaderScreen()
+	}
 	if m.state >= instanceCopyInspectScreen && m.state <= instanceCopyCleanupConfirmScreen {
 		return m.renderInstanceCopyScreen()
 	}
@@ -56,7 +59,7 @@ func (m Model) View() string {
 	topBar := renderTopBar(m.cursorMenu, hasUpdate)
 
 	// ── Featured Banner ──────────────────────────────────────────────────────
-	cached := filesCached(m.runtimeDir(), m.versionSelect, m.modloader)
+	cached := filesCached(m.runtimeDir(), m.versionSelect, m.modloader, m.instance.LoaderVersion)
 	banner := renderFeaturedBanner(m.versionSelect, m.modloader, m.memoryMB, cached)
 
 	// ── Panel izquierdo: Profile Card + menú ────────────────────────────────
@@ -76,12 +79,16 @@ func (m Model) View() string {
 			javaLabel = "Manual (unavailable)"
 		}
 	}
+	loaderLabel := m.modloader
+	if m.isManaged() && m.instance.LoaderVersion != "" {
+		loaderLabel += " " + m.instance.LoaderVersion
+	}
 	menuOptions := []string{
 		fmt.Sprintf("Play (%s)", m.versionSelect),
 		"Change Name",
 		versionOption(m.instance, m.versionSelect),
 		"Worlds",
-		fmt.Sprintf("Modloader: %s", lipgloss.NewStyle().Foreground(colorAccent2).Render(m.modloader)),
+		fmt.Sprintf("Modloader: %s", lipgloss.NewStyle().Foreground(colorAccent2).Render(loaderLabel)),
 		fmt.Sprintf("Memory: %d MB", m.memoryMB),
 		"Resets Configs",
 		"Java: " + javaLabel,
@@ -730,7 +737,7 @@ func (m Model) renderActiveSession(c *strings.Builder) {
 
 	c.WriteString("\n")
 
-	if filesCached(runtimeDir, m.versionSelect, m.modloader) {
+	if filesCached(runtimeDir, m.versionSelect, m.modloader, m.instance.LoaderVersion) {
 		c.WriteString(pad + lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("● Files present — verify before Play"))
 	} else {
 		c.WriteString(pad + lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("● Files missing — network may be needed"))
@@ -773,6 +780,9 @@ func (m Model) renderVersionsScreen(c *strings.Builder) {
 		} else {
 			c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(fmt.Sprintf("  %s", m.versions[i])) + "\n")
 		}
+	}
+	if m.creatingInstance {
+		c.WriteString("\n[Enter] New Vanilla  [f] New Fabric (exact loader version)")
 	}
 }
 
@@ -889,7 +899,7 @@ func (m Model) renderInstancesScreen() string {
 			fmt.Fprintf(&b, "%s%s — %s %s%s\n", marker, in.Name, in.MinecraftVersion, loader, selected)
 		}
 	}
-	b.WriteString("\n[↑/↓] Move  [Enter] Select  [n] New Vanilla  [c] Copy  [r] Rename  [d] Remove  [t] Retired  [Esc] Back\n")
+	b.WriteString("\n[↑/↓] Move  [Enter] Select  [n] New (Vanilla/Fabric)  [c] Copy  [r] Rename  [d] Remove  [t] Retired  [Esc] Back\n")
 	b.WriteString("\nNew instances use the shared runtime and private game data.")
 	return lipgloss.NewStyle().Padding(1, 2).Render(b.String())
 }
@@ -1001,8 +1011,21 @@ func formatCopySize(size int64) string {
 	return fmt.Sprintf("%.1f MiB", float64(size)/(1<<20))
 }
 
+func (m Model) renderInstanceLoaderScreen() string {
+	var b strings.Builder
+	b.WriteString("FABRIC LOADER VERSION\n────────────────────────────────────────\n\nMinecraft: " + m.creationVersion + "\nLoader version: " + m.input.View() + "\n")
+	if m.instanceErr != nil {
+		b.WriteString("\nError: " + m.instanceErr.Error() + "\n")
+	}
+	b.WriteString("\n[Enter] Continue  [Esc] Cancel")
+	return lipgloss.NewStyle().Padding(1, 2).Render(b.String())
+}
+
 func (m Model) renderInstanceNameScreen() string {
 	title := "NEW VANILLA INSTANCE"
+	if m.creationLoaderVersion != "" {
+		title = "NEW FABRIC INSTANCE"
+	}
 	if m.copyingInstance {
 		title = "COPY FROM EXISTING INSTALLATION"
 		if m.copySourceID != instances.LegacyID {
@@ -1021,7 +1044,11 @@ func (m Model) renderInstanceNameScreen() string {
 	} else if m.copyingInstance {
 		b.WriteString("\nMinecraft: " + m.creationVersion + " (" + m.copyLoader + ")\n[Enter] Choose content  [Esc] Cancel")
 	} else {
-		b.WriteString("\nMinecraft: " + m.creationVersion + "\n[Enter] Create  [Esc] Cancel")
+		loader := "Vanilla"
+		if m.creationLoaderVersion != "" {
+			loader = "Fabric " + m.creationLoaderVersion
+		}
+		b.WriteString("\nMinecraft: " + m.creationVersion + " (" + loader + ")\n[Enter] Create  [Esc] Cancel")
 	}
 	return lipgloss.NewStyle().Padding(1, 2).Render(b.String())
 }

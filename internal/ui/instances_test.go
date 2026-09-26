@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -401,14 +402,44 @@ echo 'openjdk version "21.0.1"' >&2
 	}
 }
 
-func TestManagedFabricLaunchIsBlockedUntilExactLoaderSupport(t *testing.T) {
-	root := t.TempDir()
-	in, err := instances.Create(root, "Fabric", "1.20.4", "Fabric", "0.15.11", 2048)
-	if err != nil {
-		t.Fatal(err)
+func TestPinnedLoaderRejectsVanillaBeforePreparation(t *testing.T) {
+	launch := LaunchConfig{RuntimeDir: t.TempDir(), Version: "1.20.4", Modloader: "Vanilla", LoaderVersion: "0.15.11"}
+	msg, ok := startLaunchDownload(context.Background(), launch)().(DownloadDoneMsg)
+	if !ok || msg.Err == nil || msg.JavaBinary != "" {
+		t.Fatalf("unsupported loader combination accepted: %+v", msg)
 	}
-	m := Model{dataRoot: root, instance: in, versionSelect: in.MinecraftVersion, modloader: in.Loader, memoryMB: in.MemoryMB}
+}
+
+func TestManagedFabricCreationAndExactLaunchSnapshot(t *testing.T) {
+	root := t.TempDir()
+	m := Model{state: instancesScreen, dataRoot: root, versions: []string{"1.20.4"}, memoryMB: 2048, input: textinput.New()}
+	press := func(key tea.KeyMsg) { updated, _ := m.Update(key); m = updated.(Model) }
+	press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")})
+	if m.state != instanceLoaderScreen || m.creationVersion != "1.20.4" {
+		t.Fatalf("Fabric loader prompt missing: state=%v version=%q", m.state, m.creationVersion)
+	}
+	m.input.SetValue("0.15.11")
+	press(tea.KeyMsg{Type: tea.KeyEnter})
+	if m.state != instanceNameScreen || m.creationLoaderVersion != "0.15.11" {
+		t.Fatalf("loader version not captured: state=%v loader=%q", m.state, m.creationLoaderVersion)
+	}
+	m.input.SetValue("Fabric instance")
+	press(tea.KeyMsg{Type: tea.KeyEnter})
+	stored, err := instances.Read(root, m.instance.ID)
+	if err != nil || stored.Loader != "Fabric" || stored.LoaderVersion != "0.15.11" || stored.MinecraftVersion != "1.20.4" {
+		t.Fatalf("incorrect managed Fabric identity: %+v, %v", stored, err)
+	}
+	launch, err := m.launchConfig()
+	if err != nil || launch.LoaderVersion != "0.15.11" || launch.Modloader != "Fabric" || launch.Version != "1.20.4" {
+		t.Fatalf("Fabric launch snapshot = %+v, %v", launch, err)
+	}
+	m.versionSelect = "1.20.5"
 	if _, err := m.launchConfig(); err == nil {
-		t.Fatal("managed Fabric launched without honoring its exact loader version")
+		t.Fatal("changed managed Minecraft version accepted")
+	}
+	m.versionSelect, m.modloader = stored.MinecraftVersion, "Vanilla"
+	if _, err := m.launchConfig(); err == nil {
+		t.Fatal("Fabric instance silently launched as Vanilla")
 	}
 }

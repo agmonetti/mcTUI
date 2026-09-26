@@ -128,6 +128,43 @@ func TestUpdateSettingsKeepsManagedMinecraftAndLoaderFixed(t *testing.T) {
 	}
 }
 
+func TestManagedFabricPinsVersionsAndPersistsRuntimeSettings(t *testing.T) {
+	root := t.TempDir()
+	in, err := Create(root, "Fabric", "1.20.4", "Fabric", "0.15.11", 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.JavaPath = filepath.Join(root, "java")
+	in.MemoryMB = 4096
+	if err := UpdateSettings(root, in); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := Read(root, in.ID)
+	if err != nil || stored != in {
+		t.Fatalf("settings not persisted: %+v, %v", stored, err)
+	}
+	for _, change := range []func(*Instance){
+		func(i *Instance) { i.MinecraftVersion = "1.20.5" },
+		func(i *Instance) { i.LoaderVersion = "0.15.12" },
+		func(i *Instance) { i.Loader = "Vanilla"; i.LoaderVersion = "" },
+	} {
+		modified := stored
+		change(&modified)
+		if err := UpdateSettings(root, modified); err == nil {
+			t.Fatalf("managed identity changed: %+v", modified)
+		}
+	}
+	if _, err := Create(root, "No loader", "1.20.4", "Fabric", "", 2048); err == nil {
+		t.Fatal("Fabric without loader version accepted")
+	}
+	if _, err := Create(root, "Vanilla loader", "1.20.4", "Vanilla", "0.15.11", 2048); err == nil {
+		t.Fatal("Vanilla with Fabric loader version accepted")
+	}
+	if _, err := Create(root, "Unsupported loader", "1.20.4", "Forge", "1", 2048); err == nil {
+		t.Fatal("unsupported loader accepted")
+	}
+}
+
 func TestRejectInvalidPathsAndMetadata(t *testing.T) {
 	root := t.TempDir()
 	for _, version := range []string{"../escape", "C:drive", "control\n"} {
