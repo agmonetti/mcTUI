@@ -11,6 +11,7 @@ import (
 
 	"mcTUI/internal/config"
 	"mcTUI/internal/fabric"
+	"mcTUI/internal/i18n"
 	"mcTUI/internal/instances"
 	"mcTUI/internal/launcher"
 	"mcTUI/internal/mojang"
@@ -89,7 +90,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state = instanceNameScreen
 		m.input.SetValue("")
 		m.input.CharLimit = 80
-		m.input.Placeholder = "Instance name"
+		m.input.Placeholder = i18n.T("input.instance_placeholder")
 		m.input.Focus()
 		return m, nil
 	case modsDoneMsg:
@@ -404,7 +405,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				name := strings.TrimSpace(m.input.Value())
 				if m.copyingInstance {
 					if name == "" || len(name) > 80 {
-						m.instanceErr = fmt.Errorf("instance name must be 1-80 characters")
+						m.instanceErr = fmt.Errorf("%s", i18n.T("error.instance_name_length"))
 					} else {
 						m.copyName = name
 						m.copyErr = nil
@@ -443,7 +444,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.instanceErr = err
 					} else {
 						m.input.CharLimit = 16
-						m.input.Placeholder = "Type your name..."
+						m.input.Placeholder = i18n.T("input.username_placeholder")
 						m.instanceList, m.instanceErr = instances.List(m.dataRoot)
 						m.creatingInstance = false
 						m.creationVersion, m.creationLoaderVersion = "", ""
@@ -463,11 +464,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else if m.cursorMenu == 1 {
 					m.state = nameScreen
 					m.input.CharLimit = 16
-					m.input.Placeholder = "Type your name..."
+					m.input.Placeholder = i18n.T("input.username_placeholder")
 					m.input.SetValue(m.username)
 				} else if m.cursorMenu == 2 {
 					if m.isManaged() {
-						m.instanceErr = fmt.Errorf("Minecraft version is fixed for this managed instance")
+						m.instanceErr = fmt.Errorf("%s", i18n.T("error.version_fixed"))
 					} else {
 						m.state = versionsScreen
 						for i, v := range m.versions {
@@ -488,7 +489,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.cursorWorlds = 0
 				} else if m.cursorMenu == 4 {
 					if m.isManaged() {
-						m.instanceErr = fmt.Errorf("managed Fabric selection requires exact loader-version support")
+						m.instanceErr = fmt.Errorf("%s", i18n.T("error.fabric_version_required"))
 					} else if m.modloader == "Vanilla" {
 						m.modloader = "Fabric"
 					} else {
@@ -523,7 +524,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.resetDir, m.resetBackupRoot, m.resetErr = "", "", nil
 					m.resetInstance = m.instance.Name
 					if m.resetInstance == "" {
-						m.resetInstance = "Instalación existente"
+						m.resetInstance = i18n.T("instances.legacy_name")
 					}
 					if m.instance.ID == "" { // legacy-only models used before instance selection is loaded
 						m.resetDir, m.resetErr = config.MinecraftDirChecked()
@@ -554,9 +555,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if m.isManaged() {
 						m.openJavaPicker()
 					} else {
-						m.instanceErr = fmt.Errorf("Java override is available for managed instances only")
+						m.instanceErr = fmt.Errorf("%s", i18n.T("error.java_managed_only"))
 					}
 				} else if m.cursorMenu == 8 {
+					i18n.NextLanguage()
+					cfg := config.Load()
+					cfg.Language = i18n.CurrentLanguage()
+					config.Save(cfg)
+				} else if m.cursorMenu == 9 {
 					return m, tea.Quit
 				}
 			} else if m.state == nameScreen {
@@ -575,7 +581,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.instanceErr = nil
 					m.input.SetValue("")
 					m.input.CharLimit = 80
-					m.input.Placeholder = "Instance name"
+					m.input.Placeholder = i18n.T("input.instance_placeholder")
 					m.input.Focus()
 				} else {
 					m.versionSelect = version
@@ -675,7 +681,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "c", "C":
 			if m.state == instancesScreen {
 				if m.instanceCursor < 0 || m.instanceCursor >= len(m.instanceList) {
-					m.instanceErr = fmt.Errorf("select an instance before copying")
+					m.instanceErr = fmt.Errorf("%s", i18n.T("error.select_instance_copy"))
 					return m, nil
 				}
 				in, err := instances.Read(m.dataRoot, m.instanceList[m.instanceCursor].ID)
@@ -693,7 +699,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.copyingInstance = true
 				m.input.SetValue("")
 				m.input.CharLimit = 80
-				m.input.Placeholder = "Instance name"
+				m.input.Placeholder = i18n.T("input.instance_placeholder")
 				m.input.Focus()
 				if in.ID == instances.LegacyID {
 					m.copyLoader = "Vanilla"
@@ -726,14 +732,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.state == instancesScreen && len(m.instanceList) > 0 {
 				in := m.instanceList[m.instanceCursor]
 				if in.Kind != "managed" {
-					m.instanceErr = fmt.Errorf("the existing installation cannot be renamed")
+					m.instanceErr = fmt.Errorf("%s", i18n.T("error.legacy_rename"))
 				} else {
 					m.instanceErr = nil
 					m.instanceRenameID = in.ID
 					m.state = instanceNameScreen
 					m.input.SetValue(in.Name)
 					m.input.CharLimit = 80
-					m.input.Placeholder = "Instance name"
+					m.input.Placeholder = i18n.T("input.instance_placeholder")
 					m.input.Focus()
 				}
 				return m, nil
@@ -753,7 +759,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.state == instancesScreen && m.instanceCursor >= 0 && m.instanceCursor < len(m.instanceList) {
 				in := m.instanceList[m.instanceCursor]
 				if in.ID == instances.LegacyID {
-					m.instanceErr = fmt.Errorf("the existing installation cannot be removed")
+					m.instanceErr = fmt.Errorf("%s", i18n.T("error.legacy_remove"))
 				} else {
 					m.removeTarget = in
 					m.removeFromTrash = false
@@ -794,7 +800,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.copyingInstance = false
 				m.creationVersion, m.creationLoaderVersion = "", ""
 				m.input.CharLimit = 16
-				m.input.Placeholder = "Type your name..."
+				m.input.Placeholder = i18n.T("input.username_placeholder")
 			} else if m.state == versionsScreen {
 				if m.creatingInstance || m.copyingInstance {
 					m.creatingInstance = false

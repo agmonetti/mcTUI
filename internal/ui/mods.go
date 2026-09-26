@@ -2,7 +2,6 @@ package ui
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"mcTUI/internal/i18n"
 	"mcTUI/internal/instances"
 	"mcTUI/internal/mods"
 )
@@ -147,38 +147,38 @@ func modText(s string) string {
 func (m Model) renderMods() string {
 	var b strings.Builder
 
-	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("LOCAL MODS")
+	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("mods.title"))
 	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 	b.WriteString(title + "\n" + div + "\n\n")
 
-	b.WriteString(labelStyle.Render("INSTANCE  ") + "  " +
+	b.WriteString(labelStyle.Render(i18n.T("common.instance_label")) + "  " +
 		lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(modText(m.instance.Name)) + "\n")
-	b.WriteString(labelStyle.Render("VERSION   ") + "  " +
+	b.WriteString(labelStyle.Render(i18n.T("common.version_label")) + "  " +
 		lipgloss.NewStyle().Foreground(colorGray).Render(modText(m.instance.MinecraftVersion+" / "+m.instance.Loader+" "+m.instance.LoaderVersion)) + "\n")
-	b.WriteString(labelStyle.Render("PATH      ") + "  " +
+	b.WriteString(labelStyle.Render(i18n.T("common.path_label")) + "  " +
 		lipgloss.NewStyle().Foreground(colorDimGray).Render(modText(m.modStore.GameDir)) + "\n\n")
 
 	switch m.state {
 	case modsWorkingScreen:
-		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("Processing local files…") + "\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(i18n.T("mods.processing")) + "\n")
 
 	case modsConfirmScreen:
 		warn := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 		b.WriteString(warn + "\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("CONFIRM DELETE") + "\n\n")
-		b.WriteString(labelStyle.Render("File: ") + lipgloss.NewStyle().Foreground(colorWhite).Render(modText(m.modTarget.File)) + "\n\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Config and dependencies are preserved.") + "\n\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("[y] Delete") +
-			"   " + lipgloss.NewStyle().Foreground(colorGray).Render("[n/Esc] Cancel"))
+		b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render(i18n.T("mods.confirm_delete_title")) + "\n\n")
+		b.WriteString(labelStyle.Render(i18n.T("mods.file_label")) + lipgloss.NewStyle().Foreground(colorWhite).Render(modText(m.modTarget.File)) + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("mods.confirm_delete_desc")) + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render(i18n.T("mods.delete_hint")) +
+			"   " + lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("common.cancel")))
 
 	case modsPickerScreen:
 		warn := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 		b.WriteString(warn + "\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("ADD MOD (.jar)") + "\n\n")
-		b.WriteString(labelStyle.Render("PATH  ") + "  " +
+		b.WriteString(lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("mods.add_title")) + "\n\n")
+		b.WriteString(labelStyle.Render(i18n.T("mods.picker_path")) + "  " +
 			lipgloss.NewStyle().Foreground(colorGray).Render(modText(m.pickerPath)) + "\n\n")
 		if m.pickerErr != nil {
-			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+modText(m.pickerErr.Error())) + "\n\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+modText(displayError(m.pickerErr))) + "\n\n")
 		}
 		count := max(1, m.height-12)
 		start := max(0, m.pickerCursor-count+1)
@@ -190,36 +190,36 @@ func (m Model) renderMods() string {
 				b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("  "+modText(entry.Name())) + "\n")
 			}
 		}
-		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render("[↑/↓] Navigate  [→/Enter] Open/Select  [←] Parent  [Ctrl+H] Hidden  [Esc] Back"))
+		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("mods.picker_hint")))
 
 	default:
 		if m.modBusy != nil {
-			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("⚠ LOCKED: "+modText(m.modBusy.Error())) + "\n\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render(i18n.T("mods.locked", modText(displayError(m.modBusy)))) + "\n\n")
 		}
 		if m.modErr != nil {
-			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+modText(m.modErr.Error())) + "\n\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+modText(displayError(m.modErr))) + "\n\n")
 		}
 		count := max(1, m.height-14)
 		start := max(0, m.modCursor-count+1)
 		for i := start; i < min(len(m.modItems), start+count); i++ {
 			item := m.modItems[i]
 
-			stateStr := lipgloss.NewStyle().Foreground(colorRed).Render("Disabled")
+			stateStr := lipgloss.NewStyle().Foreground(colorRed).Render(i18n.T("mods.disabled"))
 			if item.Enabled {
-				stateStr = lipgloss.NewStyle().Foreground(colorGreen).Render("Enabled")
+				stateStr = lipgloss.NewStyle().Foreground(colorGreen).Render(i18n.T("mods.enabled"))
 			}
 			var flags []string
 			if item.Metadata.ID == "" {
-				flags = append(flags, lipgloss.NewStyle().Foreground(colorGray).Render("Unknown"))
+				flags = append(flags, lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("mods.unknown")))
 			}
 			if item.Problem != "" {
-				flags = append(flags, lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("Corrupt"))
+				flags = append(flags, lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render(i18n.T("mods.corrupt")))
 			}
 			if item.Duplicate {
-				flags = append(flags, lipgloss.NewStyle().Foreground(colorRed).Render("Duplicate"))
+				flags = append(flags, lipgloss.NewStyle().Foreground(colorRed).Render(i18n.T("mods.duplicate")))
 			}
 			if item.Changed {
-				flags = append(flags, lipgloss.NewStyle().Foreground(colorAccent).Render("Modified"))
+				flags = append(flags, lipgloss.NewStyle().Foreground(colorAccent).Render(i18n.T("mods.modified")))
 			}
 
 			nameStr := item.Metadata.Name
@@ -237,8 +237,7 @@ func (m Model) renderMods() string {
 			}
 		}
 		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render(
-			fmt.Sprintf("%d files · [Space/Enter] Toggle  [a] Add  [d] Remove  [r] Refresh  [Esc] Back",
-				len(m.modItems))))
+			i18n.T("mods.footer", len(m.modItems))))
 	}
 
 	return b.String()

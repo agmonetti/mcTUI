@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"mcTUI/internal/i18n"
 	"mcTUI/internal/instances"
 	"mcTUI/internal/mojang"
 	"mcTUI/internal/resetconfigs"
@@ -32,7 +33,7 @@ func (m Model) View() string {
 			content = m.pickerPanelContent()
 		}
 		header := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("  mcTUI  LAUNCHER") + "\n" +
-			lipgloss.NewStyle().Foreground(colorBlue).Render("  OPTIONS  ► Resets Configs") + "\n\n"
+			lipgloss.NewStyle().Foreground(colorBlue).Render("  "+i18n.T("menu.options")+"  ► "+i18n.T("menu.reset")) + "\n\n"
 		return lipgloss.Place(m.width, m.height, lipgloss.Left, lipgloss.Top, header+content)
 	}
 
@@ -48,43 +49,45 @@ func (m Model) View() string {
 	logo := getAsciiArt()
 
 	// ── Topbar de tabs ───────────────────────────────────────────────────────
-	topBar := renderTopBar(m.cursorMenu, hasUpdate, m.state)
+	topBar := renderTopBar(m.cursorMenu, hasUpdate, m.state, m.width)
 
 	// ── Featured Banner ──────────────────────────────────────────────────────
 	cached := filesCached(m.runtimeDir(), m.versionSelect, m.modloader, m.instance.LoaderVersion)
-	banner := renderFeaturedBanner(m.versionSelect, m.modloader, m.memoryMB, cached)
+	banner := renderFeaturedBanner(m.versionSelect, m.modloader, m.memoryMB, cached, m.width)
 
 	// ── Panel izquierdo: Profile Card + menú ────────────────────────────────
 	profileCard := renderProfileCard(m.username, m.versionSelect, m.modloader)
 
 	menuStr := strings.Builder{}
 	header := lipgloss.NewStyle().
-		Foreground(colorBlue).Bold(true).Render("OPTIONS")
+		Foreground(colorBlue).Bold(true).Render(i18n.T("menu.options"))
 	divLine := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 24))
-	menuStr.WriteString(header + "\n" + divLine + "\n\n")
+	menuStr.WriteString(header + "\n" + divLine + "\n")
 
-	javaLabel := "Automatic"
+	javaLabel := i18n.T("menu.java_automatic")
 	if m.instance.JavaPath != "" {
 		if m.javaOverrideMajor > 0 {
-			javaLabel = fmt.Sprintf("Manual Java %d", m.javaOverrideMajor)
+			javaLabel = i18n.T("menu.java_manual", m.javaOverrideMajor)
 		} else {
-			javaLabel = "Manual (unavailable)"
+			javaLabel = i18n.T("menu.java_unavailable")
 		}
 	}
 	loaderLabel := m.modloader
 	if m.isManaged() && m.instance.LoaderVersion != "" {
 		loaderLabel += " " + m.instance.LoaderVersion
 	}
+	versionLabel := versionOption(m.instance, m.versionSelect)
 	menuOptions := []string{
-		fmt.Sprintf("Play (%s)", m.versionSelect),
-		"Change Name",
-		versionOption(m.instance, m.versionSelect),
-		"Worlds",
-		fmt.Sprintf("Modloader: %s", lipgloss.NewStyle().Foreground(colorAccent2).Render(loaderLabel)),
-		fmt.Sprintf("Memory: %d MB", m.memoryMB),
-		"Resets Configs",
-		"Java: " + javaLabel,
-		"Quit",
+		i18n.T("menu.play", m.versionSelect),
+		i18n.T("menu.change_name"),
+		versionLabel,
+		i18n.T("menu.worlds"),
+		i18n.T("menu.modloader", lipgloss.NewStyle().Foreground(colorAccent2).Render(loaderLabel)),
+		i18n.T("menu.memory", m.memoryMB),
+		i18n.T("menu.reset"),
+		i18n.T("menu.java", javaLabel),
+		i18n.T("menu.language", i18n.T("menu.language_name")),
+		i18n.T("menu.quit"),
 	}
 
 	for i, option := range menuOptions {
@@ -92,11 +95,11 @@ func (m Model) View() string {
 			line := lipgloss.NewStyle().
 				Foreground(colorAccent).Bold(true).
 				Render(fmt.Sprintf("► %s", option))
-			menuStr.WriteString(line + "\n")
+			menuStr.WriteString(lipgloss.NewStyle().MaxWidth(27).Render(line) + "\n")
 		} else {
 			line := lipgloss.NewStyle().Foreground(colorGray).
 				Render(fmt.Sprintf("  %s", option))
-			menuStr.WriteString(line + "\n")
+			menuStr.WriteString(lipgloss.NewStyle().MaxWidth(27).Render(line) + "\n")
 		}
 	}
 
@@ -150,43 +153,12 @@ func (m Model) View() string {
 	}
 	centerPanel := centerStyle.Render(contentStr.String())
 
-	// ── Panel derecho: roadmap ───────────────────────────────────────────────
-	newsStr := strings.Builder{}
-	newsHeader := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("FUTURE CHANGES")
-	newsDivLine := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 31))
-	newsStr.WriteString(newsHeader + "\n" + newsDivLine + "\n\n")
-
-	const newsContentWidth = 32
-	for _, item := range m.roadmap {
-		for _, line := range wrapText(item, newsContentWidth) {
-			newsStr.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("· "+line) + "\n")
-		}
-	}
-	if hasUpdate {
-		newsStr.WriteString("\n" + lipgloss.NewStyle().
-			Foreground(colorAccent2).Bold(true).
-			Render(fmt.Sprintf("⬆ %s available!", m.latestRelease.TagName)) + "\n")
-	}
-	newsStr.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render("Stay tuned..."))
-
-	// ── Layout responsive ────────────────────────────────────────────────────
-	showNews := true
-	if resetActive || instancesActive || modsActive || (m.width > 0 && m.width < 122) {
-		showNews = false
-	}
-
-	separatorWidth := 118
-	if !showNews {
-		separatorWidth = 82
-	}
-	separator := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", separatorWidth))
-
 	// ── Footer ───────────────────────────────────────────────────────────────
 	var statusPart string
 	if cached {
-		statusPart = lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("● FILES PRESENT · verify before Play")
+		statusPart = lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render(i18n.T("status.files_present"))
 	} else {
-		statusPart = lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("● FILES MISSING")
+		statusPart = lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render(i18n.T("status.files_missing"))
 	}
 	userPart := lipgloss.NewStyle().Foreground(colorGray).
 		Render(fmt.Sprintf("[%s · %s]", m.username, m.versionSelect))
@@ -196,26 +168,17 @@ func (m Model) View() string {
 	var updatePart string
 	if hasUpdate {
 		updatePart = "   " + lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(
-			fmt.Sprintf("⬆ %s — github.com/agmonetti/mcTUI/releases", m.latestRelease.TagName),
+			i18n.T("footer.update", m.latestRelease.TagName),
 		)
 	}
-	footerContent := fmt.Sprintf("%s\n%s   %s   %s%s",
-		separator, statusPart, userPart, controlsPart, updatePart)
+	footerContent := fmt.Sprintf("%s   %s\n%s%s",
+		statusPart, userPart, controlsPart, updatePart)
+	if m.width > 0 {
+		footerContent = lipgloss.NewStyle().MaxWidth(m.width).Render(footerContent)
+	}
 
 	// ── Composición de paneles ────────────────────────────────────────────────
-	var topPanels string
-	if showNews {
-		topPanels = lipgloss.JoinHorizontal(lipgloss.Top,
-			leftColumn,
-			centerPanel,
-			panelNews.Render(newsStr.String()),
-		)
-	} else {
-		topPanels = lipgloss.JoinHorizontal(lipgloss.Top,
-			leftColumn,
-			centerPanel,
-		)
-	}
+	topPanels := lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, centerPanel)
 
 	sections := []string{logo}
 	if !resetActive || m.height >= 37 {
@@ -240,32 +203,32 @@ func (m Model) View() string {
 
 // ── Reset screens ────────────────────────────────────────────────────────────
 func (m Model) resetLines() []string {
-	preserved := "Preserved: saves/, versions/, assets/, libraries/, shaderpacks/"
-	worldsWarning := "Worlds are preserved, but do not load mod-dependent worlds until those mods are restored to prevent block/item loss."
+	preserved := i18n.T("reset.preserved")
+	worldsWarning := i18n.T("reset.worlds_warning")
 	switch m.state {
 	case resetModeScreen, resetConfirmScreen:
 		if m.resetErr != nil {
-			return []string{"INSTALLATION", "Instance: " + m.resetInstance, "Minecraft directory: " + m.resetDir, "", "Cannot inspect installation: " + m.resetErr.Error()}
+			return []string{i18n.T("reset.installation"), i18n.T("reset.instance", m.resetInstance), i18n.T("reset.directory", m.resetDir), "", i18n.T("reset.cannot_inspect", displayError(m.resetErr))}
 		}
 		var lines []string
 		if len(m.resetFound) == 0 {
 			lines = []string{
-				"INSTALLATION",
-				"Instance: " + m.resetInstance,
-				"Minecraft directory: " + m.resetDir,
+				i18n.T("reset.installation"),
+				i18n.T("reset.instance", m.resetInstance),
+				i18n.T("reset.directory", m.resetDir),
 				"",
-				"STATUS",
-				"Nothing to reset (mods/ and config/ are empty or missing).",
+				i18n.T("reset.status"),
+				i18n.T("reset.nothing_found"),
 				"",
 			}
 		} else {
 			lines = []string{
-				"INSTALLATION",
-				"Instance: " + m.resetInstance,
-				"Minecraft directory: " + m.resetDir,
-				"Close Minecraft before resetting; open files may be locked.",
+				i18n.T("reset.installation"),
+				i18n.T("reset.instance", m.resetInstance),
+				i18n.T("reset.directory", m.resetDir),
+				i18n.T("reset.close_game"),
 				"",
-				"AFFECTED FOLDERS",
+				i18n.T("reset.affected"),
 			}
 			for _, name := range m.resetFound {
 				lines = append(lines, "  - "+name+"/")
@@ -273,8 +236,8 @@ func (m Model) resetLines() []string {
 			lines = append(lines, "", preserved, worldsWarning, "")
 		}
 		if m.state == resetModeScreen {
-			lines = append(lines, "ACTIONS")
-			choices := []string{"Reset and create backup", "Reset without backup (delete permanently)", "Browse and restore backups"}
+			lines = append(lines, i18n.T("reset.actions"))
+			choices := []string{i18n.T("reset.backup_action"), i18n.T("reset.purge_action"), i18n.T("reset.browse_action")}
 			for i, choice := range choices {
 				prefix := "  "
 				if i == m.resetChoice {
@@ -285,20 +248,20 @@ func (m Model) resetLines() []string {
 			return lines
 		}
 		if m.resetMode == resetconfigs.Purge {
-			return append([]string{"PERMANENT DELETION: the affected folders cannot be restored by mcTUI.", ""}, lines...)
+			return append([]string{i18n.T("reset.permanent_warning"), ""}, lines...)
 		}
 		dest := m.resetBackupDir
 		if dest == "" {
 			dest = m.resetBackupRoot
 		}
-		return append(lines, "Backup destination: "+dest, "Move affected folders into a new timestamped backup?")
+		return append(lines, i18n.T("reset.backup_destination", dest), i18n.T("reset.move_question"))
 	case resetBackupListScreen:
-		lines := []string{"Instance: " + m.resetInstance, "Backups in: " + m.resetBackupRoot}
+		lines := []string{i18n.T("reset.instance", m.resetInstance), i18n.T("reset.backups_in", m.resetBackupRoot)}
 		if m.resetErr != nil {
-			return append(lines, "Cannot list backups: "+m.resetErr.Error())
+			return append(lines, i18n.T("reset.cannot_list", displayError(m.resetErr)))
 		}
 		if len(m.resetBackups) == 0 {
-			return append(lines, "No backups found.")
+			return append(lines, i18n.T("reset.no_backups"))
 		}
 		for i, backup := range m.resetBackups {
 			prefix := "  "
@@ -309,16 +272,16 @@ func (m Model) resetLines() []string {
 		}
 		return lines
 	case resetReplaceConfirmScreen:
-		lines := []string{"Instance: " + m.resetInstance, "Minecraft directory: " + m.resetDir, "Backup: " + m.resetBackup.Name, "Folders to restore: " + strings.Join(m.resetBackup.Folders, ", "),
-			"Existing content will be replaced in:"}
+		lines := []string{i18n.T("reset.instance", m.resetInstance), i18n.T("reset.directory", m.resetDir), i18n.T("reset.backup", m.resetBackup.Name), i18n.T("reset.folders_to_restore", strings.Join(m.resetBackup.Folders, ", ")),
+			i18n.T("reset.replaced_in")}
 		for _, folder := range m.resetConflicts {
 			lines = append(lines, "  - "+folder+"/")
 		}
-		return append(lines, "This permanently removes the current contents of those folders.")
+		return append(lines, i18n.T("reset.removes_current"))
 	case resetRetentionScreen:
-		lines := []string{"Instance: " + m.resetInstance, "Minecraft directory: " + m.resetDir, "Restore backup: " + m.resetBackup.Name, "Folders: " + strings.Join(m.resetBackup.Folders, ", ")}
+		lines := []string{i18n.T("reset.instance", m.resetInstance), i18n.T("reset.directory", m.resetDir), i18n.T("reset.restore_backup", m.resetBackup.Name), i18n.T("reset.folders", strings.Join(m.resetBackup.Folders, ", "))}
 		if m.resetReplace {
-			lines = append(lines, "Confirmed to replace current contents of: "+strings.Join(m.resetConflicts, ", "))
+			lines = append(lines, i18n.T("reset.confirmed_replace", strings.Join(m.resetConflicts, ", ")))
 		}
 		keep, consume := "  ", "  "
 		if m.resetRetention == resetconfigs.KeepBackup {
@@ -326,65 +289,65 @@ func (m Model) resetLines() []string {
 		} else if m.resetRetention == resetconfigs.ConsumeBackup {
 			consume = "> "
 		}
-		lines = append(lines, "After restoring this backup:", keep+"Keep original backup",
-			consume+"Move it into Minecraft and remove it from history")
+		lines = append(lines, i18n.T("reset.after_restore"), keep+i18n.T("reset.keep_backup"),
+			consume+i18n.T("reset.consume_backup"))
 		return lines
 	case resetRestoreConfirmScreen:
-		text := "Keep the original backup after restoring?"
+		text := i18n.T("reset.keep_question")
 		if m.resetRetention == resetconfigs.ConsumeBackup {
-			text = "The selected backup will be moved into Minecraft and removed from history."
+			text = i18n.T("reset.consume_warning")
 		}
-		return []string{"Instance: " + m.resetInstance, "Minecraft directory: " + m.resetDir, "Restore: " + m.resetBackup.Name, "Folders: " + strings.Join(m.resetBackup.Folders, ", "), text}
+		return []string{i18n.T("reset.instance", m.resetInstance), i18n.T("reset.directory", m.resetDir), i18n.T("reset.restore", m.resetBackup.Name), i18n.T("reset.folders", strings.Join(m.resetBackup.Folders, ", ")), text}
 	case resetRunningScreen:
 		if m.resetIsRestore {
-			return []string{"Restoring " + m.resetBackup.Name + "...", "Please wait; do not close mcTUI."}
+			return []string{i18n.T("reset.restoring", m.resetBackup.Name), i18n.T("instances.wait")}
 		}
-		return []string{"Resetting " + m.resetDir + "...", "Please wait. Do not close mcTUI or Minecraft files may be left incomplete."}
+		return []string{i18n.T("reset.resetting", m.resetDir), i18n.T("reset.wait_safe")}
 	case resetResultScreen:
-		lines := []string{"Minecraft directory: " + m.resetDir}
+		lines := []string{i18n.T("reset.directory", m.resetDir)}
 		if m.resetIsRestore {
-			lines = append(lines, "Restore backup: "+m.resetBackup.Name)
+			lines = append(lines, i18n.T("reset.restore_backup", m.resetBackup.Name))
 			if len(m.resetResult.Errors) == 0 && m.resetErr == nil {
 				if m.resetRetention == resetconfigs.KeepBackup {
-					lines = append(lines, "Original backup kept: "+m.resetBackup.Path)
+					lines = append(lines, i18n.T("reset.original_kept", m.resetBackup.Path))
 				} else {
-					lines = append(lines, "Original backup consumed and removed from history.")
+					lines = append(lines, i18n.T("reset.original_consumed"))
 				}
 			}
 		} else if m.resetMode == resetconfigs.Purge {
-			lines = append(lines, "Mode: permanent deletion")
+			lines = append(lines, i18n.T("reset.mode_purge"))
 		} else {
-			lines = append(lines, "Mode: backup")
+			lines = append(lines, i18n.T("reset.mode_backup"))
 		}
 		if m.resetErr != nil {
-			lines = append(lines, "Operation could not start: "+m.resetErr.Error())
+			lines = append(lines, i18n.T("reset.cannot_start", displayError(m.resetErr)))
 		} else if m.resetResult.NothingToReset {
-			lines = append(lines, "Nothing to reset; no backup was created.")
+			lines = append(lines, i18n.T("reset.nothing_created"))
 		} else if len(m.resetResult.Errors) > 0 {
-			operation := "Reset"
+			operation := "reset.incomplete"
 			if m.resetIsRestore {
-				operation = "Restore"
+				operation = "reset.restore_incomplete"
 			}
-			lines = append(lines, operation+" incomplete; check each folder below.")
+			lines = append(lines, i18n.T(operation))
 		} else if m.resetIsRestore {
-			lines = append(lines, "Backup restored successfully.")
+			lines = append(lines, i18n.T("reset.restored_success"))
 		} else {
-			lines = append(lines, "Resets Configs completed successfully.")
+			lines = append(lines, i18n.T("reset.completed_success"))
 		}
 		for _, err := range m.resetResult.Errors {
-			lines = append(lines, "Error: "+err.Error())
+			lines = append(lines, i18n.T("reset.error", displayError(err)))
 		}
 		for _, folder := range m.resetResult.Folders {
-			lines = append(lines, "", folder.Name+"/: "+string(folder.Status), "  Path: "+folder.Path)
+			lines = append(lines, "", folder.Name+"/: "+i18n.T("reset.folder_"+string(folder.Status)), i18n.T("reset.path", folder.Path))
 			if folder.Err != nil {
-				lines = append(lines, "  Error: "+folder.Err.Error())
+				lines = append(lines, i18n.T("reset.indented_error", displayError(folder.Err)))
 			}
 			for _, path := range folder.Removed {
-				lines = append(lines, "  Removed: "+path)
+				lines = append(lines, i18n.T("reset.removed", path))
 			}
 		}
 		if m.resetResult.BackupPath != "" && !m.resetIsRestore {
-			lines = append(lines, "", "Backup: "+m.resetResult.BackupPath)
+			lines = append(lines, "", i18n.T("reset.backup", m.resetResult.BackupPath))
 		}
 		return lines
 	}
@@ -457,72 +420,72 @@ func (m *Model) scrollToBackupSelection() {
 }
 
 func (m Model) resetPanelContent() string {
-	title := "RESETS CONFIGS"
+	title := i18n.T("reset.title")
 	if m.state == resetResultScreen {
-		title = "RESET RESULT"
+		title = i18n.T("reset.result_title")
 		if m.resetIsRestore {
-			title = "RESTORE RESULT"
+			title = i18n.T("reset.restore_result_title")
 		}
 	} else if m.state == resetRunningScreen {
-		title = "RESET IN PROGRESS"
+		title = i18n.T("reset.running_title")
 		if m.resetIsRestore {
-			title = "RESTORE IN PROGRESS"
+			title = i18n.T("reset.restore_running_title")
 		}
 	} else if m.state == resetConfirmScreen {
-		title = "CONFIRM RESET"
+		title = i18n.T("reset.confirm_title")
 	} else if m.state == resetReplaceConfirmScreen || m.state == resetRestoreConfirmScreen {
-		title = "CONFIRM RESTORE"
+		title = i18n.T("reset.confirm_restore_title")
 	} else if m.state == resetBackupListScreen {
-		title = "BACKUP HISTORY"
+		title = i18n.T("reset.history_title")
 	}
 	lines := m.resetDisplayLines()
 	start := min(m.resetScroll, m.resetMaxScroll())
 	end := min(len(lines), start+m.resetVisibleLines())
-	footer := "[Esc] Back"
+	footer := i18n.T("common.back")
 	if m.state == resetModeScreen {
-		footer = "[↑/↓] Choose  [Enter] Continue  [Esc] Cancel"
+		footer = i18n.T("reset.mode_hint")
 	} else if m.state == resetBackupListScreen {
-		footer = "[↑/↓] Select backup  [Enter] Restore  [Esc] Back"
+		footer = i18n.T("reset.history_hint")
 	} else if m.state == resetResultScreen {
-		footer = "[↑/↓] Scroll  [Enter/Esc] Main menu"
+		footer = i18n.T("reset.result_hint")
 	} else if m.state == resetRunningScreen {
-		footer = "Waiting for operation to finish..."
+		footer = i18n.T("reset.wait_hint")
 	} else if m.state == resetConfirmScreen {
-		footer = "[y] Move to backup  [n/Esc] Cancel"
+		footer = i18n.T("reset.move_hint")
 		if m.resetMode == resetconfigs.Purge {
-			footer = "[y] Delete permanently  [n/Esc] Cancel"
+			footer = i18n.T("reset.purge_hint")
 		}
 	} else if m.state == resetReplaceConfirmScreen {
-		footer = "[y] Confirm replacement  [n/Esc] Cancel"
+		footer = i18n.T("reset.replace_hint")
 	} else if m.state == resetRestoreConfirmScreen {
-		footer = "[y] Confirm restore  [n/Esc] Cancel"
+		footer = i18n.T("reset.restore_hint")
 	} else if m.state == resetRetentionScreen {
-		footer = "[↑/↓] Select  [Enter] Continue  [Esc] Cancel"
+		footer = i18n.T("reset.retention_hint")
 	}
 	if end < len(lines) {
 		key := "PgDn"
 		if m.state == resetResultScreen {
 			key = "↓"
 		}
-		footer = fmt.Sprintf("↓ %d more lines [%s]  %s", len(lines)-end, key, footer)
+		footer = i18n.T("reset.more_lines", len(lines)-end, key, footer)
 	} else if start > 0 {
-		footer = fmt.Sprintf("↑ %d previous lines [PgUp]  %s", start, footer)
+		footer = i18n.T("reset.previous_lines", start, footer)
 	}
 	var styledLines []string
 	for _, line := range m.resetLines() {
 		style := lipgloss.NewStyle().Foreground(colorWhite)
 		switch {
-		case line == "INSTALLATION" || line == "AFFECTED FOLDERS" || line == "ACTIONS" || line == "STATUS":
+		case line == i18n.T("reset.installation") || line == i18n.T("reset.affected") || line == i18n.T("reset.actions") || line == i18n.T("reset.status"):
 			style = style.Foreground(colorBlue).Bold(true)
-		case strings.Contains(line, "Reset without backup"):
+		case strings.Contains(line, i18n.T("reset.purge_action")):
 			style = style.Foreground(colorRed).Bold(strings.HasPrefix(line, "> "))
 		case strings.HasPrefix(line, "> "):
 			style = style.Foreground(colorAccent2).Bold(true)
-		case strings.Contains(line, "PERMANENT DELETION") || strings.Contains(line, "permanently removes") || strings.Contains(line, "incomplete") || strings.HasPrefix(line, "Error:") || strings.HasPrefix(line, "Cannot "):
+		case strings.HasPrefix(line, i18n.T("reset.permanent_warning")) || line == i18n.T("reset.removes_current") || line == i18n.T("reset.incomplete") || line == i18n.T("reset.restore_incomplete") || strings.HasPrefix(line, i18n.T("reset.error", "")) || strings.HasPrefix(line, i18n.T("reset.cannot_inspect", "")) || strings.HasPrefix(line, i18n.T("reset.cannot_start", "")):
 			style = style.Foreground(colorRed).Bold(true)
-		case strings.Contains(line, "completed successfully") || strings.Contains(line, "restored successfully") || strings.HasPrefix(line, "Nothing to reset") || strings.HasSuffix(line, "/: moved") || strings.HasSuffix(line, "/: restored") || strings.HasSuffix(line, "/: deleted"):
+		case line == i18n.T("reset.completed_success") || line == i18n.T("reset.restored_success") || line == i18n.T("reset.nothing_created") || strings.HasSuffix(line, "/: "+i18n.T("reset.folder_moved")) || strings.HasSuffix(line, "/: "+i18n.T("reset.folder_restored")) || strings.HasSuffix(line, "/: "+i18n.T("reset.folder_deleted")):
 			style = style.Foreground(colorGreen).Bold(true)
-		case strings.HasPrefix(line, "Preserved:") || strings.HasPrefix(line, "Worlds are preserved") || strings.HasPrefix(line, "Close Minecraft"):
+		case line == i18n.T("reset.preserved") || line == i18n.T("reset.worlds_warning") || line == i18n.T("reset.close_game"):
 			style = style.Foreground(colorGray)
 		}
 		for _, part := range wrapResetLines([]string{line}, m.resetWidth()) {
@@ -537,7 +500,7 @@ func (m Model) resetPanelContent() string {
 
 // ── Download Screen ───────────────────────────────────────────────────────────
 func (m Model) renderDownloadScreen() string {
-	title := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("VERIFYING FILES")
+	title := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(i18n.T("status.verifying"))
 	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 60))
 
 	const width, segment = 36, 8
@@ -549,17 +512,17 @@ func (m Model) renderDownloadScreen() string {
 	var errLine string
 	if m.dlErr != nil {
 		errLine = "\n" + lipgloss.NewStyle().Foreground(colorRed).Bold(true).
-			Render("⚠ "+m.dlErr.Error())
+			Render("⚠ "+displayError(m.dlErr))
 	}
 
-	hintText := "[Esc] Cancel  [Ctrl+C] Quit"
+	hintText := i18n.T("status.download_hint")
 	if m.dlFinished && m.dlErr != nil {
-		hintText = "[Esc] Return to menu  [Ctrl+C] Quit"
+		hintText = i18n.T("status.download_error_hint")
 	}
 	hint := lipgloss.NewStyle().Foreground(colorDimGray).Render(hintText)
 
-	body := fmt.Sprintf("%s\n%s\n\nPreparing game files...\n%s%s\n\n%s",
-		title, div, progress, errLine, hint)
+	body := fmt.Sprintf("%s\n%s\n\n%s\n%s%s\n\n%s",
+		title, div, i18n.T("status.preparing"), progress, errLine, hint)
 
 	panel := lipgloss.NewStyle().
 		Width(64).
@@ -575,29 +538,29 @@ func (m Model) renderDownloadScreen() string {
 }
 
 func (m Model) renderGameScreen() string {
-	status := "Starting Minecraft..."
-	hint := "Please wait; mcTUI will not close or detach while the game is running."
+	status := i18n.T("status.starting")
+	hint := i18n.T("status.game_wait")
 	switch m.state {
 	case gameRunningScreen:
-		status = "Minecraft is running. Close the game to return to mcTUI."
+		status = i18n.T("status.game_running")
 		if m.gameKillConfirm {
-			hint = "Force close Java? [y] Confirm  [n/Esc] Cancel"
+			hint = i18n.T("status.force_close_question")
 		} else {
-			hint = "[k] Force close Java\nmcTUI will not close or detach while the game is running."
+			hint = i18n.T("status.force_close_hint")
 		}
 		if m.gameKillErr != nil {
-			hint = "Kill error: " + m.gameKillErr.Error() + "\n" + hint
+			hint = i18n.T("status.kill_error", displayError(m.gameKillErr)) + "\n" + hint
 		}
 	case gameResultScreen:
-		status = fmt.Sprintf("Minecraft exited (code %d).", m.gameExitCode)
+		status = i18n.T("status.game_exited", m.gameExitCode)
 		if m.gameErr != nil {
-			status = "Minecraft could not start or exited with an error: " + m.gameErr.Error()
+			status = i18n.T("status.game_failed", displayError(m.gameErr))
 		}
-		hint = "[Enter/Esc] Return to menu"
+		hint = i18n.T("status.game_back")
 	}
-	body := "INSTANCE: " + m.launch.GameDir + "\n" + status
+	body := i18n.T("status.instance", m.launch.GameDir) + "\n" + status
 	if m.gameLog != "" {
-		body += "\nLog: " + m.gameLog
+		body += "\n" + i18n.T("status.log", m.gameLog)
 	}
 	body += "\n\n" + hint
 	panel := lipgloss.NewStyle().Width(64).Border(lipgloss.NormalBorder()).BorderForeground(colorAccent).Padding(1, 3).Render(body)
@@ -609,73 +572,73 @@ func (m Model) renderGameScreen() string {
 
 func (m Model) controlsHint() string {
 	if m.state == menuScreen {
-		return " [i] Instances  [m] Mods  [↑/↓] Navigate  [Enter] Select  [q] Quit"
+		return " " + i18n.T("footer.controls")
 	}
 	switch m.state {
 	case nameScreen:
-		return " [Enter] Save  [Esc] Cancel"
+		return i18n.T("footer.save")
 	case versionsScreen:
-		return " [↑/↓] Move list  [Enter] Choose  [Esc] Back"
+		return i18n.T("footer.choose")
 	case worldsScreen:
-		return " [↑/↓] Move list  [Enter] Select  [Esc] Back"
+		return i18n.T("footer.select")
 	case confirmScreen:
-		return " [y] Accept  [n] Cancel"
+		return i18n.T("footer.accept")
 	case resetModeScreen, resetBackupListScreen, resetRetentionScreen:
-		return " [↑/↓] Choose  [Enter] Continue  [Esc] Back"
+		return i18n.T("footer.continue")
 	case resetPickerScreen:
-		return " [←/→] Browse  [Ctrl+H] Hidden  [Enter] Select  [d] Default  [Esc] Back"
+		return i18n.T("footer.picker")
 	case javaPickerScreen:
-		return " [↑/↓] Navigate  [←/→] Browse  [Enter] Choose Java  [Esc] Back"
+		return i18n.T("footer.java")
 	case resetResultScreen:
-		return " [↑/↓] Scroll  [Enter/Esc] Menu"
+		return i18n.T("footer.scroll")
 	case resetRunningScreen:
-		return " Please wait…"
+		return i18n.T("footer.wait")
 	case resetConfirmScreen, resetReplaceConfirmScreen, resetRestoreConfirmScreen:
-		return " [y] Confirm  [n/Esc] Cancel"
+		return " " + i18n.T("common.confirm") + "  " + i18n.T("common.cancel")
 	default:
-		return " [↑/↓] Navigate  [Enter] Select  [q] Quit"
+		return i18n.T("footer.default")
 	}
 }
 
 func (m Model) renderMemoryPanel(c *strings.Builder) {
-	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("MEMORY CONFIGURATION")
+	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("menu.memory_title"))
 	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 	c.WriteString(title + "\n" + div + "\n\n")
 
-	c.WriteString(labelStyle.Render("CURRENT ALLOCATION  ") +
+	c.WriteString(labelStyle.Render(i18n.T("menu.allocation")) +
 		valueStyle.Render(fmt.Sprintf("%d MB", m.memoryMB)) + "\n\n")
 
-	c.WriteString(labelStyle.Render("RECOMMENDED RAM") + "\n")
+	c.WriteString(labelStyle.Render(i18n.T("menu.recommended_ram")) + "\n")
 	rows := []struct{ label, gb, mb string }{
 		{"Vanilla 1.20.x", "1-2 GB", "1024-2048 MB"},
-		{"Fabric/light mods", "2-4 GB", "2048-4096 MB"},
-		{"Heavy modpacks", "4-8 GB", "4096-8192 MB"},
+		{i18n.T("menu.light_mods"), "2-4 GB", "2048-4096 MB"},
+		{i18n.T("menu.heavy_modpacks"), "4-8 GB", "4096-8192 MB"},
 	}
 	for _, r := range rows {
 		line := fmt.Sprintf("  %-18s %-6s (%s)", r.label, r.gb, r.mb)
 		c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(line) + "\n")
 	}
-	c.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render("Press [Enter] to cycle values; saved for this installation."))
+	c.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("menu.memory_hint")))
 }
 
 func (m Model) renderWorldsHint(c *strings.Builder) {
-	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("LOCAL WORLDS")
+	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("menu.worlds_title"))
 	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 	c.WriteString(title + "\n" + div + "\n\n")
 
-	text := "View and manage your saved singleplayer\nworlds.\n\n"
+	text := i18n.T("menu.worlds_intro")
 	if m.isManaged() {
-		text += "World selection does not change this\ninstance's version. Check compatibility\nbefore opening a modded world."
+		text += i18n.T("menu.worlds_managed")
 	} else {
-		text += "Selecting a world changes the legacy\ninstallation version to match its last\nplayed version."
+		text += i18n.T("menu.worlds_legacy")
 	}
 
 	c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(text) + "\n\n")
-	c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("Press [Enter] to browse saves."))
+	c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("menu.worlds_hint")))
 }
 
 func (m Model) renderActiveSession(c *strings.Builder) {
-	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("ACTIVE SESSION")
+	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("menu.session_title"))
 	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 	c.WriteString(title + "\n" + div + "\n\n")
 
@@ -698,18 +661,18 @@ func (m Model) renderActiveSession(c *strings.Builder) {
 
 	runtimeDir := m.runtimeDir()
 	required := mojang.RequiredJavaVersion(runtimeDir, m.versionSelect)
-	javaLine := "Automatic (checks before Play)"
+	javaLine := i18n.T("menu.java_auto_check")
 	if required > 0 {
-		javaLine = fmt.Sprintf("Automatic (Java %d+)", required)
+		javaLine = i18n.T("menu.java_auto_required", required)
 	}
 	javaColor := colorWhite
 	javaIncompatible := false
 	if m.instance.JavaPath != "" {
 		if m.javaOverrideMajor == 0 {
-			javaLine = "Manual (unavailable)"
+			javaLine = i18n.T("menu.java_unavailable")
 			javaIncompatible = true
 		} else {
-			javaLine = fmt.Sprintf("Manual: Java %d", m.javaOverrideMajor)
+			javaLine = i18n.T("menu.java_manual_session", m.javaOverrideMajor)
 			javaIncompatible = required > 0 && m.javaOverrideMajor < required
 		}
 	}
@@ -721,13 +684,13 @@ func (m Model) renderActiveSession(c *strings.Builder) {
 		label, val string
 		vc         lipgloss.Color
 	}{
-		{"INSTANCE  ", m.instance.Name, colorWhite},
-		{"USER      ", m.username, colorWhite},
+		{i18n.T("common.instance_label"), m.instance.Name, colorWhite},
+		{i18n.T("menu.user_label"), m.username, colorWhite},
 
-		{"VERSION   ", verString, colorWhite},
-		{"AUTH      ", "Offline (LAN Mode)", colorGray},
-		{"OS        ", osName, colorWhite},
-		{"JAVA      ", javaLine, javaColor},
+		{i18n.T("common.version_label"), verString, colorWhite},
+		{i18n.T("menu.auth_label"), i18n.T("menu.offline_auth"), colorGray},
+		{i18n.T("menu.os_label"), osName, colorWhite},
+		{i18n.T("menu.java_label"), javaLine, javaColor},
 	}
 
 	for _, r := range rows {
@@ -740,32 +703,32 @@ func (m Model) renderActiveSession(c *strings.Builder) {
 
 	if javaIncompatible && required > 0 {
 		c.WriteString(pad + "          " +
-			lipgloss.NewStyle().Foreground(colorDimGray).Render(fmt.Sprintf("Selected Java is below Java %d+", required)) + "\n")
+			lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("menu.java_too_old", required)) + "\n")
 	}
 
 	c.WriteString("\n")
 
 	if filesCached(runtimeDir, m.versionSelect, m.modloader, m.instance.LoaderVersion) {
-		c.WriteString(pad + lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("● Files present — verify before Play"))
+		c.WriteString(pad + lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render(i18n.T("menu.files_present")))
 	} else {
-		c.WriteString(pad + lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("● Files missing — network may be needed"))
+		c.WriteString(pad + lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render(i18n.T("menu.files_missing")))
 	}
-	c.WriteString("\n\n" + pad + lipgloss.NewStyle().Foreground(colorDimGray).Render("GAME DATA: "+m.gameDir()))
+	c.WriteString("\n\n" + pad + lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("menu.game_data", m.gameDir())))
 	if m.instanceErr != nil {
-		c.WriteString("\n\n" + lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+m.instanceErr.Error()))
+		c.WriteString("\n\n" + lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+displayError(m.instanceErr)))
 	}
 }
 
 func (m Model) renderNameScreen(c *strings.Builder) {
-	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("CHANGE NAME")
+	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("menu.change_name_title"))
 	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 	c.WriteString(title + "\n" + div + "\n\n")
 
-	c.WriteString(labelStyle.Render("NEW LAN USERNAME") + "\n\n")
+	c.WriteString(labelStyle.Render(i18n.T("menu.username_title")) + "\n\n")
 	c.WriteString(m.input.View())
 	c.WriteString("\n\n")
 
-	hint := "Letters, numbers, and underscore only (1-16 chars)"
+	hint := i18n.T("menu.username_hint")
 	if m.input.Value() != "" && !validUsername(m.input.Value()) {
 		c.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("⚠ " + hint))
 	} else {
@@ -774,9 +737,9 @@ func (m Model) renderNameScreen(c *strings.Builder) {
 }
 
 func (m Model) renderVersionsScreen(c *strings.Builder) {
-	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("SELECT VERSION")
+	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("menu.select_version"))
 	if m.creatingInstance {
-		title = lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("SELECT VERSION FOR NEW INSTANCE")
+		title = lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("menu.select_new_version"))
 	}
 	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 	c.WriteString(title + "\n" + div + "\n\n")
@@ -790,17 +753,17 @@ func (m Model) renderVersionsScreen(c *strings.Builder) {
 		}
 	}
 	if m.creatingInstance {
-		c.WriteString("\n[Enter] New Vanilla  [f] New Fabric (automatic loader)")
+		c.WriteString("\n" + i18n.T("menu.new_version_hint"))
 	}
 }
 
 func (m Model) renderWorldsScreen(c *strings.Builder) {
-	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("SELECT WORLD")
+	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("menu.select_world"))
 	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 	c.WriteString(title + "\n" + div + "\n\n")
 
 	if len(m.worlds) == 0 {
-		c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("No worlds found in this instance's saves/"))
+		c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("menu.no_worlds")))
 		return
 	}
 
@@ -828,30 +791,30 @@ func (m Model) renderWorldsScreen(c *strings.Builder) {
 }
 
 func (m Model) renderConfirmScreen(c *strings.Builder) {
-	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("VERIFY INSTALLATION")
+	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("menu.verify_installation"))
 	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 	c.WriteString(title + "\n" + div + "\n\n")
 	launch, err := m.launchConfig()
 	if err != nil {
-		c.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render(err.Error()) + "\n\n")
+		c.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render(displayError(err)) + "\n\n")
 	} else {
-		javaLabel := "Automatic"
+		javaLabel := i18n.T("menu.java_automatic")
 		if launch.JavaPath != "" && m.javaOverrideMajor > 0 {
-			javaLabel = fmt.Sprintf("Manual Java %d", m.javaOverrideMajor)
+			javaLabel = i18n.T("menu.java_manual", m.javaOverrideMajor)
 		} else if launch.JavaPath != "" {
-			javaLabel = "Manual (unavailable)"
+			javaLabel = i18n.T("menu.java_unavailable")
 		}
-		c.WriteString(fmt.Sprintf("Instance: %s\nGame data: %s\nShared runtime: %s\nJava: %s\n\n", m.instance.Name, launch.GameDir, launch.RuntimeDir, javaLabel))
+		c.WriteString(i18n.T("menu.verify_details", m.instance.Name, launch.GameDir, launch.RuntimeDir, javaLabel))
 	}
 	if m.dlErr != nil {
-		c.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render(m.dlErr.Error()) + "\n\n")
+		c.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render(displayError(m.dlErr)) + "\n\n")
 	}
 	c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(
-		"Check files before Play; missing or corrupt\nfiles may be downloaded from Mojang/Fabric.") + "\n\n")
+		i18n.T("menu.verify_hint")) + "\n\n")
 
-	c.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("[y/Enter] YES") +
+	c.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render(i18n.T("menu.yes_hint")) +
 		"   " +
-		lipgloss.NewStyle().Foreground(colorGray).Render("[n/Esc] Cancel"))
+		lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("common.cancel")))
 }
 
 // windowAround computes a [start, end) slice window of size windowSize
@@ -875,9 +838,9 @@ func windowAround(cursor, total, before, windowSize int) (int, int) {
 
 func versionOption(in instances.Instance, version string) string {
 	if in.Kind == "managed" {
-		return "Minecraft: " + version + " (fixed)"
+		return i18n.T("menu.version_fixed", version)
 	}
-	return "Change Version"
+	return i18n.T("menu.change_version")
 }
 
 // renderInstancesContent is the unified dispatcher for all instance sub-screens.
@@ -900,14 +863,14 @@ func (m Model) renderInstancesContent() string {
 
 func (m Model) renderInstancesListContent() string {
 	var b strings.Builder
-	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("SELECT INSTANCE")
+	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("instances.select_title"))
 	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 	b.WriteString(title + "\n" + div + "\n\n")
 	if m.instanceErr != nil {
-		b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+m.instanceErr.Error()) + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+displayError(m.instanceErr)) + "\n\n")
 	}
 	if len(m.instanceList) == 0 {
-		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("No instances available.") + "\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("instances.empty")) + "\n")
 	} else {
 		start, end := windowAround(m.instanceCursor, len(m.instanceList), 3, 8)
 		for i := start; i < end; i++ {
@@ -919,7 +882,7 @@ func (m Model) renderInstancesListContent() string {
 			line := fmt.Sprintf("%s — %s %s", in.Name, in.MinecraftVersion, loader)
 			var suffix string
 			if in.ID == m.instance.ID {
-				suffix = "  " + lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("[active]")
+				suffix = "  " + lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render(i18n.T("instances.active"))
 			}
 			if i == m.instanceCursor {
 				b.WriteString(cursorStyle.Render("► "+line) + suffix + "\n")
@@ -929,91 +892,91 @@ func (m Model) renderInstancesListContent() string {
 		}
 	}
 	b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render(
-		"[↑/↓] Move  [Enter] Select  [n] New  [c] Copy  [r] Rename  [d] Remove  [t] Retired  [Esc] Back",
+		i18n.T("instances.list_hint"),
 	))
-	b.WriteString("\n\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render("New instances use shared runtime and private game data."))
+	b.WriteString("\n\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("instances.private_data")))
 	return b.String()
 }
 
 func (m Model) renderInstanceNameContent() string {
-	title := "NEW VANILLA INSTANCE"
+	title := i18n.T("instances.new_vanilla")
 	if m.creationLoaderVersion != "" {
-		title = "NEW FABRIC INSTANCE"
+		title = i18n.T("instances.new_fabric")
 	}
 	if m.copyingInstance {
-		title = "COPY FROM EXISTING INSTALLATION"
+		title = i18n.T("instances.copy_from_legacy")
 		if m.copySourceID != instances.LegacyID {
-			title = "DUPLICATE INSTANCE"
+			title = i18n.T("instances.duplicate")
 		}
 	} else if m.instanceRenameID != "" {
-		title = "RENAME INSTANCE"
+		title = i18n.T("instances.rename")
 	}
 	var b strings.Builder
 	styledTitle := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(title)
 	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 	b.WriteString(styledTitle + "\n" + div + "\n\n")
-	b.WriteString(labelStyle.Render("NAME  ") + "  " + m.input.View() + "\n")
+	b.WriteString(labelStyle.Render(i18n.T("instances.name_label")) + "  " + m.input.View() + "\n")
 	if m.instanceErr != nil {
-		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+m.instanceErr.Error()) + "\n")
+		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+displayError(m.instanceErr)) + "\n")
 	}
 	if m.instanceRenameID != "" {
-		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render("[Enter] Save name  [Esc] Cancel"))
+		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("instances.save_hint")))
 	} else if m.copyingInstance {
-		b.WriteString("\n" + labelStyle.Render("MINECRAFT  ") + "  " +
+		b.WriteString("\n" + labelStyle.Render(i18n.T("instances.minecraft_label")) + "  " +
 			lipgloss.NewStyle().Foreground(colorAccent2).Render(m.creationVersion+" ("+m.copyLoader+")") + "\n")
-		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render("[Enter] Choose content  [Esc] Cancel"))
+		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("instances.choose_hint")))
 	} else {
 		loader := "Vanilla"
 		if m.creationLoaderVersion != "" {
 			loader = "Fabric " + m.creationLoaderVersion
 		}
-		b.WriteString("\n" + labelStyle.Render("MINECRAFT  ") + "  " +
+		b.WriteString("\n" + labelStyle.Render(i18n.T("instances.minecraft_label")) + "  " +
 			lipgloss.NewStyle().Foreground(colorAccent2).Render(m.creationVersion+" ("+loader+")") + "\n")
-		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render("[Enter] Create  [Esc] Cancel"))
+		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("instances.create_hint")))
 	}
 	return b.String()
 }
 
 func (m Model) renderInstanceLoaderContent() string {
 	var b strings.Builder
-	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("FINDING FABRIC LOADER")
+	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("instances.finding_loader"))
 	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 	b.WriteString(title + "\n" + div + "\n\n")
-	b.WriteString(labelStyle.Render("MINECRAFT  ") + "  " +
+	b.WriteString(labelStyle.Render(i18n.T("instances.minecraft_label")) + "  " +
 		lipgloss.NewStyle().Foreground(colorAccent2).Render(m.creationVersion) + "\n\n")
 	if m.instanceErr != nil {
-		b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+m.instanceErr.Error()) + "\n\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("[Enter] Retry  [Esc] Cancel"))
+		b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+displayError(m.instanceErr)) + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("instances.retry_hint")))
 	} else {
-		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Checking Fabric Meta…") + "\n\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("[Esc] Cancel"))
+		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("instances.checking_fabric")) + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("instances.esc_cancel")))
 	}
 	return b.String()
 }
 
 func (m Model) renderInstanceCopyContent() string {
 	var b strings.Builder
-	title := "COPY FROM EXISTING INSTALLATION"
+	title := i18n.T("instances.copy_from_legacy")
 	if m.copySourceID != instances.LegacyID {
-		title = "DUPLICATE INSTANCE"
+		title = i18n.T("instances.duplicate")
 	}
 	styledTitle := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(title)
 	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
-	footer := lipgloss.NewStyle().Foreground(colorDimGray).Render("[Esc] Back")
+	footer := lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("common.back"))
 
 	switch m.state {
 	case instanceCopyInspectScreen:
 		b.WriteString(styledTitle + "\n" + div + "\n\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Calculating folder sizes and checking file types…") + "\n\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Render("Please wait."))
-		footer = lipgloss.NewStyle().Foreground(colorDimGray).Render("Inspection in progress…")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("instances.inspect_copy")) + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Render(i18n.T("instances.please_wait")))
+		footer = lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("instances.inspection"))
 
 	case instanceCopySelectScreen:
 		b.WriteString(styledTitle + "\n" + div + "\n\n")
-		b.WriteString(labelStyle.Render("SOURCE   ") + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(safeCopyText(m.copySource)) + "\n")
-		b.WriteString(labelStyle.Render("DEST     ") + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(safeCopyText(m.dataRoot)+"/instances/<new-id>/minecraft") + "\n")
-		b.WriteString(labelStyle.Render("MINECRAFT") + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Render(m.creationVersion+" ("+m.copyLoader+")") + "\n\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Choose items to copy (saves/ included only if wanted):") + "\n")
+		b.WriteString(labelStyle.Render(i18n.T("instances.source_label")) + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(safeCopyText(m.copySource)) + "\n")
+		b.WriteString(labelStyle.Render(i18n.T("instances.dest_label")) + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(safeCopyText(m.dataRoot)+"/instances/<new-id>/minecraft") + "\n")
+		b.WriteString(labelStyle.Render(i18n.T("instances.minecraft_plain")) + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Render(m.creationVersion+" ("+m.copyLoader+")") + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("instances.choose_items")) + "\n")
 		selected := false
 		for i, item := range m.copyItems {
 			selected = selected || m.copySelected[item.Name]
@@ -1023,9 +986,9 @@ func (m Model) renderInstanceCopyContent() string {
 			}
 			status := formatCopySize(item.Bytes)
 			if item.Error != "" {
-				status = "unavailable: " + item.Error
+				status = i18n.T("instances.unavailable", item.Error)
 			} else if !item.Exists {
-				status = "not present"
+				status = i18n.T("instances.not_present")
 			}
 			nameStr := item.Name + "  " + lipgloss.NewStyle().Foreground(colorDimGray).Render("("+status+")")
 			if i == m.copyCursor {
@@ -1035,17 +998,17 @@ func (m Model) renderInstanceCopyContent() string {
 			}
 		}
 		if !selected {
-			b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorRed).Render("Select at least one available item to continue."))
+			b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorRed).Render(i18n.T("instances.select_item")))
 		}
-		footer = lipgloss.NewStyle().Foreground(colorDimGray).Render("[↑/↓] Navigate  [Space] Toggle  [Enter] Review  [Esc] Cancel")
+		footer = lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("instances.copy_select_hint"))
 
 	case instanceCopyConfirmScreen:
-		cTitle := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("CONFIRM SELECTIVE COPY")
+		cTitle := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("instances.confirm_copy"))
 		b.WriteString(cTitle + "\n" + div + "\n\n")
-		b.WriteString(labelStyle.Render("SOURCE") + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(safeCopyText(m.copySource)) + "\n")
-		b.WriteString(labelStyle.Render("NAME  ") + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(m.copyName) + "\n")
-		b.WriteString(labelStyle.Render("VER   ") + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Render(m.creationVersion+" ("+m.copyLoader+")") + "\n\n")
-		b.WriteString(labelStyle.Render("CONTENT") + "\n")
+		b.WriteString(labelStyle.Render(i18n.T("instances.source_plain")) + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(safeCopyText(m.copySource)) + "\n")
+		b.WriteString(labelStyle.Render(i18n.T("instances.name_label")) + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(m.copyName) + "\n")
+		b.WriteString(labelStyle.Render(i18n.T("instances.ver_label")) + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Render(m.creationVersion+" ("+m.copyLoader+")") + "\n\n")
+		b.WriteString(labelStyle.Render(i18n.T("instances.content_label")) + "\n")
 		var total int64
 		for _, item := range m.copyItems {
 			if m.copySelected[item.Name] {
@@ -1054,59 +1017,58 @@ func (m Model) renderInstanceCopyContent() string {
 				total += item.Bytes
 			}
 		}
-		b.WriteString("\n" + labelStyle.Render("TOTAL  ") + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Render(formatCopySize(total)) + "\n")
-		sourceLabel := "Source"
+		b.WriteString("\n" + labelStyle.Render(i18n.T("instances.total_label")) + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Render(formatCopySize(total)) + "\n")
+		sourceLabel := i18n.T("instances.source_name")
 		if m.copySourceID == instances.LegacyID {
-			sourceLabel = "Legacy"
+			sourceLabel = i18n.T("instances.legacy_name")
 		}
 		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorGray).Render(
-			sourceLabel+" data will not be moved or overwritten; mcTUI creates/reuses .mctui-operation.lock there."))
-		footer = lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("[y] Confirm copy") +
-			"   " + lipgloss.NewStyle().Foreground(colorGray).Render("[n/Esc] Back")
-
+			i18n.T("instances.source_safe", sourceLabel)))
+		footer = lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render(i18n.T("instances.copy_confirm_hint")) +
+			"   " + lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("instances.no_back"))
 
 	case instanceCopyRunningScreen:
-		opTitle := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("COPYING INSTANCE DATA")
+		opTitle := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(i18n.T("instances.copying"))
 		if m.copyCleaning {
-			opTitle = lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("REMOVING PARTIAL COPY")
+			opTitle = lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render(i18n.T("instances.removing_partial"))
 		}
 		b.WriteString(opTitle + "\n" + div + "\n\n")
-		b.WriteString(labelStyle.Render("STAGE  ") + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(safeCopyText(m.copyStage)) + "\n")
-		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorGray).Render("Do not close mcTUI."))
-		footer = lipgloss.NewStyle().Foreground(colorDimGray).Render("Operation in progress…")
+		b.WriteString(labelStyle.Render(i18n.T("instances.stage_label")) + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(safeCopyText(m.copyStage)) + "\n")
+		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("instances.do_not_close")))
+		footer = lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("instances.operation_progress"))
 
 	case instanceCopyResultScreen:
-		resTitle := lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("COPY RESULT")
+		resTitle := lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render(i18n.T("instances.copy_result"))
 		b.WriteString(resTitle + "\n" + div + "\n\n")
 		if m.copyResult.Instance.ID != "" {
 			gameDir, _ := instances.GameDir(m.dataRoot, m.copyResult.Instance)
-			b.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Render("Copy completed.") + "\n\n")
-			b.WriteString(labelStyle.Render("INSTANCE") + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Render(m.copyResult.Instance.Name) + "\n")
-			b.WriteString(labelStyle.Render("GAME DIR") + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(safeCopyText(gameDir)) + "\n")
-			b.WriteString(labelStyle.Render("COPIED  ") + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(strings.Join(m.copyResult.Copied, ", ")) + "\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Render(i18n.T("instances.copy_completed")) + "\n\n")
+			b.WriteString(labelStyle.Render(i18n.T("instances.instance_plain")) + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Render(m.copyResult.Instance.Name) + "\n")
+			b.WriteString(labelStyle.Render(i18n.T("instances.game_dir_label")) + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(safeCopyText(gameDir)) + "\n")
+			b.WriteString(labelStyle.Render(i18n.T("instances.copied_label")) + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(strings.Join(m.copyResult.Copied, ", ")) + "\n")
 			if m.copyErr != nil {
-				b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorRed).Render("⚠ Could not select instance: "+m.copyErr.Error()) + "\n")
+				b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorRed).Render(i18n.T("instances.select_failed", displayError(m.copyErr))) + "\n")
 			}
 		} else if m.copyErr != nil {
-			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+m.copyErr.Error()) + "\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+displayError(m.copyErr)) + "\n")
 		} else {
-			b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Partial staging data removed.") + "\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("instances.partial_removed")) + "\n")
 		}
 		if m.copyStage != "" {
-			b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorGray).Render("Partial copy retained at:\n"+safeCopyText(m.copyStage)) + "\n")
-			footer = lipgloss.NewStyle().Foreground(colorDimGray).Render("[d] Discard partial copy  [Enter/Esc] Back")
+			b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("instances.partial_retained", safeCopyText(m.copyStage))) + "\n")
+			footer = lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("instances.discard_hint"))
 		} else {
-			footer = lipgloss.NewStyle().Foreground(colorDimGray).Render("[Enter/Esc] Continue")
+			footer = lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("instances.continue_hint"))
 		}
 
 	case instanceCopyCleanupConfirmScreen:
-		cTitle := lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("CONFIRM CLEANUP")
+		cTitle := lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render(i18n.T("instances.confirm_cleanup"))
 		b.WriteString(cTitle + "\n" + div + "\n\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Permanently remove partial staging data?") + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("instances.remove_partial_question")) + "\n\n")
 		b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(safeCopyText(m.copyStage)) + "\n\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Only this temporary migration directory will be removed."))
-		footer = lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("[y] Delete partial data") +
-			"   " + lipgloss.NewStyle().Foreground(colorGray).Render("[n/Esc] Keep it")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("instances.remove_partial_desc")))
+		footer = lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render(i18n.T("instances.delete_partial_hint")) +
+			"   " + lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("instances.keep_hint"))
 	}
 
 	b.WriteString("\n\n" + footer)
@@ -1130,68 +1092,4 @@ func formatCopySize(size int64) string {
 		return fmt.Sprintf("%.1f KiB", float64(size)/(1<<10))
 	}
 	return fmt.Sprintf("%.1f MiB", float64(size)/(1<<20))
-}
-
-func (m Model) renderInstanceLoaderScreen() string {
-	var b strings.Builder
-	b.WriteString("FINDING FABRIC LOADER\n────────────────────────────────────────\n\nMinecraft: " + m.creationVersion + "\n")
-	if m.instanceErr != nil {
-		b.WriteString("\nError: " + m.instanceErr.Error() + "\n\n[Enter] Retry  [Esc] Cancel")
-	} else {
-		b.WriteString("\nChecking Fabric Meta...\n\n[Esc] Cancel")
-	}
-	return lipgloss.NewStyle().Padding(1, 2).Render(b.String())
-}
-
-func (m Model) renderInstanceNameScreen() string {
-	title := "NEW VANILLA INSTANCE"
-	if m.creationLoaderVersion != "" {
-		title = "NEW FABRIC INSTANCE"
-	}
-	if m.copyingInstance {
-		title = "COPY FROM EXISTING INSTALLATION"
-		if m.copySourceID != instances.LegacyID {
-			title = "DUPLICATE INSTANCE"
-		}
-	} else if m.instanceRenameID != "" {
-		title = "RENAME INSTANCE"
-	}
-	var b strings.Builder
-	b.WriteString(title + "\n────────────────────────────────────────\n\nName: " + m.input.View() + "\n")
-	if m.instanceErr != nil {
-		b.WriteString("\nError: " + m.instanceErr.Error() + "\n")
-	}
-	if m.instanceRenameID != "" {
-		b.WriteString("\n[Enter] Save name  [Esc] Cancel")
-	} else if m.copyingInstance {
-		b.WriteString("\nMinecraft: " + m.creationVersion + " (" + m.copyLoader + ")\n[Enter] Choose content  [Esc] Cancel")
-	} else {
-		loader := "Vanilla"
-		if m.creationLoaderVersion != "" {
-			loader = "Fabric " + m.creationLoaderVersion
-		}
-		b.WriteString("\nMinecraft: " + m.creationVersion + " (" + loader + ")\n[Enter] Create  [Esc] Cancel")
-	}
-	return lipgloss.NewStyle().Padding(1, 2).Render(b.String())
-}
-
-// wrapText breaks s into lines of at most width characters at spaces.
-func wrapText(s string, width int) []string {
-	words := strings.Fields(s)
-	if len(words) == 0 {
-		return []string{s}
-	}
-
-	var lines []string
-	current := words[0]
-	for _, w := range words[1:] {
-		if len(current)+1+len(w) <= width {
-			current += " " + w
-		} else {
-			lines = append(lines, current)
-			current = w
-		}
-	}
-	lines = append(lines, current)
-	return lines
 }

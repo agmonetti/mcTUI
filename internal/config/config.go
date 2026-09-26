@@ -1,5 +1,5 @@
 // Package config handles persistence of user settings (username, selected
-// version, modloader, memory allocation) and resolves OS-specific paths
+// version, modloader, memory allocation, language) and resolves OS-specific paths
 // for config files and the Minecraft directory.
 package config
 
@@ -18,6 +18,7 @@ type Data struct {
 	Version   string `json:"version"`
 	Modloader string `json:"modloader"`
 	MemoryMB  int    `json:"memory_mb"`
+	Language  string `json:"language"`
 }
 
 // defaults returns the configuration used when no config file exists yet,
@@ -28,6 +29,7 @@ func defaults() Data {
 		Version:   "1.20.4",
 		Modloader: "Vanilla",
 		MemoryMB:  2048,
+		Language:  "en",
 	}
 }
 
@@ -136,6 +138,9 @@ func Load() Data {
 	}
 	if cfg.MemoryMB == 0 {
 		cfg.MemoryMB = def.MemoryMB
+	}
+	if cfg.Language == "" {
+		cfg.Language = def.Language
 	}
 	return cfg
 }

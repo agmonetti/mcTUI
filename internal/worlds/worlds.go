@@ -8,11 +8,11 @@ package worlds
 import (
 	"bufio"
 	"compress/gzip"
-	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
+	"mcTUI/internal/i18n"
 	"mcTUI/internal/nbt"
 )
 
@@ -150,8 +150,8 @@ func isPath(path []string, want ...string) bool {
 	return true
 }
 
-// FormatRelativeTime converts a Unix timestamp in milliseconds to a short
-// human-readable "time ago" string (e.g. "2h ago", "3d ago"). Returns ""
+// FormatRelativeTime converts a Unix timestamp in milliseconds to a localized
+// relative time string. Returns ""
 // if ms is 0 (LastPlayed not present in level.dat). Falls back to an
 // absolute date ("Jan 2, 2006") for timestamps older than 30 days.
 func FormatRelativeTime(ms int64) string {
@@ -163,14 +163,14 @@ func FormatRelativeTime(ms int64) string {
 
 	switch {
 	case d < time.Minute:
-		return "just now"
+		return i18n.T("worlds.just_now")
 	case d < time.Hour:
-		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+		return i18n.T("worlds.minutes_ago", int(d.Minutes()))
 	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh ago", int(d.Hours()))
+		return i18n.T("worlds.hours_ago", int(d.Hours()))
 	case d < 30*24*time.Hour:
-		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+		return i18n.T("worlds.days_ago", int(d.Hours()/24))
 	default:
-		return t.Format("Jan 2, 2006")
+		return t.Format("2006-01-02")
 	}
 }

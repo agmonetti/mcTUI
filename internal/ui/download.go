@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"mcTUI/internal/i18n"
 	"mcTUI/internal/launcher"
 )
 
@@ -20,7 +21,7 @@ func downloadAnimationTickCmd() tea.Cmd {
 func StartDownloadCmd(ctx context.Context, runtimeDir, version, modloader, javaPath string) tea.Cmd {
 	return func() tea.Msg {
 		if runtimeDir == "" {
-			return DownloadDoneMsg{Err: fmt.Errorf("runtime directory is empty")}
+			return DownloadDoneMsg{Err: fmt.Errorf("%s", i18n.T("error.runtime_directory_empty"))}
 		}
 		prepared, err := launcher.PrepareContext(ctx, runtimeDir, version, modloader, nil)
 		var javaBinary string

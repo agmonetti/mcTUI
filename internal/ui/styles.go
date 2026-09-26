@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"mcTUI/internal/i18n"
 )
 
 // ── Paleta CS:GO estilo antiguo ──────────────────────────────────────────────
@@ -43,13 +45,6 @@ var (
 
 	panelContent = lipgloss.NewStyle().
 			Width(50).
-			Height(16).
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(colorBorder).
-			Padding(0, 1)
-
-	panelNews = lipgloss.NewStyle().
-			Width(36).
 			Height(16).
 			Border(lipgloss.NormalBorder()).
 			BorderForeground(colorBorder).
@@ -127,10 +122,10 @@ func renderProfileCard(username, version, modloader string) string {
 
 // ── Featured Banner ───────────────────────────────────────────────────────────
 // Franja horizontal que muestra la configuración activa, estilo CS:GO featured offer.
-func renderFeaturedBanner(version, modloader string, memoryMB int, cached bool) string {
-	statusStr := lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("● FILES PRESENT")
+func renderFeaturedBanner(version, modloader string, memoryMB int, cached bool, width int) string {
+	statusStr := lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render(i18n.T("status.files_present_short"))
 	if !cached {
-		statusStr = lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("● FILES MISSING")
+		statusStr = lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render(i18n.T("status.files_missing"))
 	}
 
 	label := lipgloss.NewStyle().Foreground(colorGray).Render
@@ -138,42 +133,47 @@ func renderFeaturedBanner(version, modloader string, memoryMB int, cached bool) 
 
 	sep := lipgloss.NewStyle().Foreground(colorDimGray).Render("  │  ")
 
-	content := label("CURRENT SETUP") + "    " +
-		label("VER ") + val(version) +
+	content := label(i18n.T("banner.setup")) + "    " +
+		label(i18n.T("banner.version")+" ") + val(version) +
 		sep +
-		label("MOD ") + val(modloader) +
+		label(i18n.T("banner.loader")+" ") + val(modloader) +
 		sep +
-		label("RAM ") + val(fmt.Sprintf("%d MB", memoryMB)) +
+		label(i18n.T("banner.memory")+" ") + val(fmt.Sprintf("%d MB", memoryMB)) +
 		sep +
 		statusStr
 
+	bannerWidth := 78
+	if width > 0 {
+		bannerWidth = max(1, min(bannerWidth, width-6))
+	}
 	return lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(colorBorderHi).
-		Width(118).
+		Width(bannerWidth).
 		Padding(0, 2).
-		Render(content)
+		Render(lipgloss.NewStyle().MaxWidth(bannerWidth).Render(content))
 }
 
 // renderTopBar renders the CS:GO-style navigation tab bar.
 // cursorMenu drives highlighting for menu-bound tabs; state overrides
 // for sub-screens that are reached via keyboard shortcuts (i, m).
-func renderTopBar(cursorMenu int, hasUpdate bool, state screenState) string {
+func renderTopBar(cursorMenu int, hasUpdate bool, state screenState, width int) string {
 	type tabEntry struct {
 		label string
 		idx   int
 	}
 	tabs := []tabEntry{
-		{"PLAY", 0},
-		{"SET NAME", 1},
-		{"VERSION", 2},
-		{"WORLDS", 3},
-		{"MODLOADER", 4},
-		{"MEMORY", 5},
-		{"RESET", 6},
-		{"INSTANCES", 8},
-		{"MODS", 9},
-		{"QUIT", 7},
+		{i18n.T("topbar.play"), 0},
+		{i18n.T("topbar.name"), 1},
+		{i18n.T("topbar.version"), 2},
+		{i18n.T("topbar.worlds"), 3},
+		{i18n.T("topbar.modloader"), 4},
+		{i18n.T("topbar.memory"), 5},
+		{i18n.T("topbar.reset"), 6},
+		{i18n.T("topbar.language"), 8},
+		{i18n.T("topbar.instances"), 10},
+		{i18n.T("topbar.mods"), 11},
+		{i18n.T("topbar.quit"), 9},
 	}
 
 	// Determine which tab to highlight.
@@ -184,9 +184,9 @@ func renderTopBar(cursorMenu int, hasUpdate bool, state screenState) string {
 		(state >= instanceTrashScreen && state <= instanceRemoveResultScreen)
 	modsActive := state >= modsScreen && state <= modsWorkingScreen
 	if instancesActive {
-		activeIdx = 8
+		activeIdx = 10
 	} else if modsActive {
-		activeIdx = 9
+		activeIdx = 11
 	}
 
 	var parts []string
@@ -204,9 +204,13 @@ func renderTopBar(cursorMenu int, hasUpdate bool, state screenState) string {
 	}
 
 	bar := lipgloss.JoinHorizontal(lipgloss.Center, parts...)
+	barWidth := 82
+	if width > 0 {
+		barWidth = min(barWidth, width)
+	}
 	divider := lipgloss.NewStyle().
 		Foreground(colorBorder).
-		Render(strings.Repeat("─", 120))
+		Render(strings.Repeat("─", barWidth))
 
-	return bar + "\n" + divider
+	return lipgloss.NewStyle().MaxWidth(barWidth).Render(bar) + "\n" + divider
 }

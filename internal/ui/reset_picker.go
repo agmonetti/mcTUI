@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"mcTUI/internal/i18n"
 	"mcTUI/internal/instances"
 	"mcTUI/internal/java"
 	"mcTUI/internal/mojang"
@@ -113,9 +114,9 @@ func (m Model) updateJavaPicker(key string) (tea.Model, tea.Cmd) {
 				required := mojang.RequiredJavaVersion(m.runtimeDir(), m.versionSelect)
 				switch {
 				case major == 0:
-					m.pickerErr = fmt.Errorf("cannot run Java executable: %s", path)
+					m.pickerErr = fmt.Errorf("%s", i18n.T("error.java_not_executable", path))
 				case required > 0 && major < required:
-					m.pickerErr = fmt.Errorf("Java %d is too old; Minecraft %s requires Java %d or newer", major, m.versionSelect, required)
+					m.pickerErr = fmt.Errorf("%s", i18n.T("error.java_too_old", major, m.versionSelect, required))
 				default:
 					in := m.instance
 					in.JavaPath = path
@@ -173,34 +174,34 @@ func (m Model) updateResetPicker(key string) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) pickerLines() []string {
-	hidden := "hidden off"
+	hidden := i18n.T("reset.hidden_off")
 	if m.pickerShowHidden {
-		hidden = "hidden on"
+		hidden = i18n.T("reset.hidden_on")
 	}
-	lines := []string{"Choose backup location", "Current: " + m.pickerPath,
-		"[d] Use default: " + m.resetBackupRoot, "",
-		"DIRECTORIES  [→] Open  [←] Parent", "[Ctrl+H] " + hidden}
+	lines := []string{i18n.T("reset.choose_backup"), i18n.T("reset.current", m.pickerPath),
+		i18n.T("reset.use_default", m.resetBackupRoot), "",
+		i18n.T("reset.directories_hint"), "[Ctrl+H] " + hidden}
 	if m.pickerForJava {
 		required := mojang.RequiredJavaVersion(m.runtimeDir(), m.versionSelect)
-		requirement := "Minecraft Java requirement is checked before launch"
+		requirement := i18n.T("reset.java_requirement")
 		if required > 0 {
-			requirement = fmt.Sprintf("Minecraft %s requires Java %d+", m.versionSelect, required)
+			requirement = i18n.T("reset.requires_java", m.versionSelect, required)
 		}
-		lines = []string{"Choose Java executable", "Current: " + m.pickerPath,
-			"[d] Return to automatic selection", requirement, "",
-			"DIRECTORIES  [→] Open  [←] Parent", "JAVA  [Enter] Select"}
+		lines = []string{i18n.T("reset.choose_java"), i18n.T("reset.current", m.pickerPath),
+			i18n.T("reset.java_auto"), requirement, "",
+			i18n.T("reset.directories_hint"), i18n.T("reset.java_select")}
 	}
 	if m.pickerErr != nil {
-		return append(lines, "Error: "+m.pickerErr.Error())
+		return append(lines, i18n.T("reset.error", displayError(m.pickerErr)))
 	}
 	if len(m.pickerEntries) == 0 {
-		return append(lines, "  (no subdirectories)")
+		return append(lines, i18n.T("reset.no_dirs"))
 	}
 	visible := max(3, min(7, m.height-32))
 	start := max(0, m.pickerCursor-visible+2)
 	end := min(len(m.pickerEntries), start+visible)
 	if start > 0 {
-		lines = append(lines, fmt.Sprintf("↑ %d previous folders", start))
+		lines = append(lines, i18n.T("reset.previous_folders", start))
 	}
 	for i := start; i < end; i++ {
 		prefix := "  "
@@ -214,7 +215,7 @@ func (m Model) pickerLines() []string {
 		lines = append(lines, prefix+icon+m.pickerEntries[i].Name())
 	}
 	if end < len(m.pickerEntries) {
-		lines = append(lines, fmt.Sprintf("↓ %d more folders", len(m.pickerEntries)-end))
+		lines = append(lines, i18n.T("reset.more_folders", len(m.pickerEntries)-end))
 	}
 	return lines
 }
@@ -229,17 +230,17 @@ func (m Model) pickerPanelContent() string {
 		switch {
 		case strings.HasPrefix(line, "> "):
 			lines[i] = lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(line)
-		case strings.HasPrefix(line, "Error:"):
+		case strings.HasPrefix(line, i18n.T("reset.error", "")):
 			lines[i] = lipgloss.NewStyle().Foreground(colorRed).Render(line)
 		case strings.HasPrefix(line, "[d]") || strings.HasPrefix(line, "[Ctrl+H]"):
 			lines[i] = lipgloss.NewStyle().Foreground(colorAccent).Render(line)
-		case slices.Contains([]string{"Choose backup location", "DIRECTORIES  [→] Open  [←] Parent"}, line):
+		case slices.Contains([]string{i18n.T("reset.choose_backup"), i18n.T("reset.directories_hint")}, line):
 			lines[i] = lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(line)
 		}
 	}
-	title, controls := "BACKUP DESTINATION", "[↑/↓] Navigate  [Ctrl+H] Hidden  [Enter] Select  [Esc] Cancel"
+	title, controls := i18n.T("reset.picker_title"), i18n.T("reset.picker_controls")
 	if m.pickerForJava {
-		title, controls = "JAVA EXECUTABLE", "[↑/↓] Navigate  [←/→] Browse  [Enter] Choose  [d] Automatic  [Esc] Cancel"
+		title, controls = i18n.T("reset.java_picker_title"), i18n.T("reset.java_picker_controls")
 	}
 	return lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(title) + "\n" +
 		lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 62)) + "\n\n" +

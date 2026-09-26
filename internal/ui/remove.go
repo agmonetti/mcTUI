@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"mcTUI/internal/i18n"
 	"mcTUI/internal/instances"
 )
 
@@ -85,14 +86,14 @@ func (m Model) renderRemovalScreen() string {
 
 	switch m.state {
 	case instanceTrashScreen:
-		title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("RETIRED INSTANCES")
+		title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("instances.retired_title"))
 		div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 		b.WriteString(title + "\n" + div + "\n\n")
 		if m.removeErr != nil {
-			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+m.removeErr.Error()) + "\n\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+displayError(m.removeErr)) + "\n\n")
 		}
 		if len(m.retiredList) == 0 {
-			b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("No retired instances.") + "\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("instances.no_retired")) + "\n")
 		}
 		start, end := windowAround(m.retiredCursor, len(m.retiredList), 3, 8)
 		for i := start; i < end; i++ {
@@ -105,19 +106,19 @@ func (m Model) renderRemovalScreen() string {
 				b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("  "+line) + "  " + idStr + "\n")
 			}
 		}
-		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render("[↑/↓] Move  [Enter] Restore  [d] Delete permanently  [Esc] Back"))
+		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("instances.trash_hint")))
 
 	case instanceRemoveChoiceScreen:
-		title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("REMOVE INSTANCE")
+		title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("instances.remove_title"))
 		div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 		b.WriteString(title + "\n" + div + "\n\n")
 		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(m.removeTarget.Name) +
 			"  " + lipgloss.NewStyle().Foreground(colorDimGray).Render("["+m.removeTarget.ID+"]") + "\n\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Render("[s] Soft delete") +
-			lipgloss.NewStyle().Foreground(colorGray).Render(" — move to retired; keeps game data and backups") + "\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("[f] Full delete") +
-			lipgloss.NewStyle().Foreground(colorGray).Render(" — permanently erase game data and backups") + "\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("[Esc] Cancel"))
+		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Render(i18n.T("instances.soft_delete")) +
+			lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("instances.soft_desc")) + "\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render(i18n.T("instances.full_delete")) +
+			lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("instances.full_desc")) + "\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("instances.esc_cancel")))
 
 	case instanceRemoveConfirmScreen:
 		root, id := m.dataRoot, m.removeTarget.ID
@@ -126,56 +127,56 @@ func (m Model) renderRemovalScreen() string {
 		backup := filepath.Join(root, "backups", id)
 		switch m.removeAction {
 		case "soft":
-			title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("CONFIRM SOFT DELETE")
+			title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("instances.confirm_soft"))
 			div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 			b.WriteString(title + "\n" + div + "\n\n")
-			b.WriteString(labelStyle.Render("INSTANCE  ") + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Render(m.removeTarget.Name) + "\n")
-			b.WriteString(labelStyle.Render("MOVE      ") + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(active) + "\n")
-			b.WriteString(labelStyle.Render("TO        ") + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(retired) + "\n")
-			b.WriteString(labelStyle.Render("BACKUPS   ") + "  " + lipgloss.NewStyle().Foreground(colorGray).Render("Preserved at "+backup) + "\n")
+			b.WriteString(labelStyle.Render(i18n.T("common.instance_label")) + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Render(m.removeTarget.Name) + "\n")
+			b.WriteString(labelStyle.Render(i18n.T("instances.move_label")) + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(active) + "\n")
+			b.WriteString(labelStyle.Render(i18n.T("instances.to_label")) + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(retired) + "\n")
+			b.WriteString(labelStyle.Render(i18n.T("instances.backups_label")) + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("instances.preserved_at", backup)) + "\n")
 		case "restore":
-			title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("CONFIRM RESTORE")
+			title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("instances.confirm_restore"))
 			div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 			b.WriteString(title + "\n" + div + "\n\n")
-			b.WriteString(labelStyle.Render("INSTANCE  ") + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Render(m.removeTarget.Name) + "\n")
-			b.WriteString(labelStyle.Render("MOVE      ") + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(retired) + "\n")
-			b.WriteString(labelStyle.Render("TO        ") + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(active) + "\n")
+			b.WriteString(labelStyle.Render(i18n.T("common.instance_label")) + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Render(m.removeTarget.Name) + "\n")
+			b.WriteString(labelStyle.Render(i18n.T("instances.move_label")) + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(retired) + "\n")
+			b.WriteString(labelStyle.Render(i18n.T("instances.to_label")) + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(active) + "\n")
 		case "delete":
 			src := active
 			if m.removeFromTrash {
 				src = retired
 			}
-			title := lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("CONFIRM PERMANENT DELETE")
+			title := lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render(i18n.T("instances.confirm_delete"))
 			div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 			b.WriteString(title + "\n" + div + "\n\n")
-			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("This cannot be undone.") + "\n\n")
-			b.WriteString(labelStyle.Render("INSTANCE  ") + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Render(m.removeTarget.Name) + "\n")
-			b.WriteString(labelStyle.Render("ERASE     ") + "  " + lipgloss.NewStyle().Foreground(colorRed).Render(src) + "\n")
-			b.WriteString(labelStyle.Render("ERASE     ") + "  " + lipgloss.NewStyle().Foreground(colorRed).Render(backup) + "\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render(i18n.T("instances.irreversible")) + "\n\n")
+			b.WriteString(labelStyle.Render(i18n.T("common.instance_label")) + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Render(m.removeTarget.Name) + "\n")
+			b.WriteString(labelStyle.Render(i18n.T("instances.erase_label")) + "  " + lipgloss.NewStyle().Foreground(colorRed).Render(src) + "\n")
+			b.WriteString(labelStyle.Render(i18n.T("instances.erase_label")) + "  " + lipgloss.NewStyle().Foreground(colorRed).Render(backup) + "\n")
 		}
-		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("[y] Confirm") +
-			"   " + lipgloss.NewStyle().Foreground(colorGray).Render("[n/Esc] Cancel"))
+		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render(i18n.T("common.confirm")) +
+			"   " + lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("common.cancel")))
 
 	case instanceRemoveRunningScreen:
-		title := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("UPDATING INSTANCE")
+		title := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(i18n.T("instances.updating"))
 		div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 		b.WriteString(title + "\n" + div + "\n\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Please wait; do not close mcTUI."))
+		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("instances.wait")))
 
 	case instanceRemoveResultScreen:
 		if m.removeErr != nil {
-			title := lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("INSTANCE OPERATION FAILED")
+			title := lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render(i18n.T("instances.failed"))
 			div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 			b.WriteString(title + "\n" + div + "\n\n")
-			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render(m.removeErr.Error()) + "\n\n")
-			b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Check instances/ and retired/ before retrying."))
+			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render(displayError(m.removeErr)) + "\n\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("instances.check_paths")))
 		} else {
-			title := lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("INSTANCE UPDATED")
+			title := lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render(i18n.T("instances.updated"))
 			div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 			b.WriteString(title + "\n" + div + "\n\n")
-			b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Operation completed successfully."))
+			b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("instances.completed")))
 		}
-		b.WriteString("\n\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render("[Enter/Esc] Back"))
+		b.WriteString("\n\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("instances.result_back")))
 	}
 
 	return b.String()

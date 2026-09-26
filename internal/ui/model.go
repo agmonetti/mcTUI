@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"mcTUI/internal/config"
+	"mcTUI/internal/i18n"
 	"mcTUI/internal/instances"
 	"mcTUI/internal/java"
 	"mcTUI/internal/launcher"
@@ -64,7 +65,7 @@ const (
 // menuOptionsCount must match len(menuOptions) in View(). Centralized
 // here so Update()'s cursor bounds check doesn't drift from the menu's
 // actual length if options are added/removed.
-const menuOptionsCount = 9
+const menuOptionsCount = 10
 
 // DownloadDoneMsg señala que la descarga finalizó completamente.
 type DownloadDoneMsg struct {
@@ -135,7 +136,6 @@ type Model struct {
 	modloader             string
 	versions              []string
 	worlds                []worlds.Info
-	roadmap               []string
 	dataRoot              string
 	instanceList          []instances.Instance
 	instance              instances.Instance
@@ -220,10 +220,10 @@ type Model struct {
 }
 
 // New builds the initial model from the loaded config, available versions,
-// roadmap content, and latest release info from GitHub.
-func New(versions []string, cfg config.Data, roadmap []string, latest updater.Release) Model {
+// and latest release info from GitHub.
+func New(versions []string, cfg config.Data, latest updater.Release) Model {
 	ti := textinput.New()
-	ti.Placeholder = "Type your name..."
+	ti.Placeholder = i18n.T("input.username_placeholder")
 	ti.Focus()
 	ti.CharLimit = 16
 	ti.Width = 30
@@ -238,7 +238,6 @@ func New(versions []string, cfg config.Data, roadmap []string, latest updater.Re
 		modloader:     cfg.Modloader,
 		memoryMB:      cfg.MemoryMB,
 		versions:      versions,
-		roadmap:       roadmap,
 		latestRelease: latest,
 		input:         ti,
 	}
@@ -280,7 +279,7 @@ func (m Model) isManaged() bool { return m.instance.Kind == "managed" }
 func (m Model) gameDir() string {
 	path, err := instances.GameDir(m.dataRoot, m.instance)
 	if err != nil {
-		return "(unavailable)"
+		return i18n.T("common.unavailable")
 	}
 	return path
 }
@@ -310,7 +309,7 @@ func (m *Model) setInstance(in instances.Instance) error {
 
 func (m Model) launchConfig() (LaunchConfig, error) {
 	if m.dataRoot == "" || m.instance.ID == "" {
-		return LaunchConfig{}, fmt.Errorf("no valid instance is selected")
+		return LaunchConfig{}, fmt.Errorf("%s", i18n.T("error.no_instance_selected"))
 	}
 	gameDir, err := instances.GameDir(m.dataRoot, m.instance)
 	if err != nil {
@@ -321,7 +320,7 @@ func (m Model) launchConfig() (LaunchConfig, error) {
 		return LaunchConfig{}, err
 	}
 	if m.isManaged() && (m.versionSelect != m.instance.MinecraftVersion || m.modloader != m.instance.Loader || m.instance.Loader == "Fabric" && m.instance.LoaderVersion == "") {
-		return LaunchConfig{}, fmt.Errorf("managed Minecraft and loader versions must match instance metadata")
+		return LaunchConfig{}, fmt.Errorf("%s", i18n.T("error.managed_versions_mismatch"))
 	}
 	return LaunchConfig{GameDir: gameDir, RuntimeDir: runtimeDir, Username: m.username, Version: m.versionSelect, Modloader: m.modloader, LoaderVersion: m.instance.LoaderVersion, MemoryMB: m.memoryMB, JavaPath: m.instance.JavaPath}, nil
 }

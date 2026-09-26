@@ -1,10 +1,38 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 )
+
+func TestLanguageDefaultsAndPersistence(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if runtime.GOOS == "windows" {
+		t.Setenv("USERPROFILE", home)
+		t.Setenv("APPDATA", home)
+	}
+	if got := Load().Language; got != "en" {
+		t.Fatalf("default language: %q", got)
+	}
+	if err := os.MkdirAll(filepath.Dir(path()), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path(), []byte(`{"username":"Legacy"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if got := Load().Language; got != "en" {
+		t.Fatalf("legacy config language: %q", got)
+	}
+	cfg := Load()
+	cfg.Language = "es"
+	Save(cfg)
+	if got := Load().Language; got != "es" {
+		t.Fatalf("persisted language: %q", got)
+	}
+}
 
 func TestDataDirChecked(t *testing.T) {
 	home := t.TempDir()
