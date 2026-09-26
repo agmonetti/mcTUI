@@ -102,11 +102,13 @@ func downloadAssetObjects(mcDir, indexPath string, wg *sync.WaitGroup, download 
 	return nil
 }
 
-// Game owns Java, its log and the instance lock until Wait completes.
+// Game owns Java, its log and the instance lock until Java exits, even if
+// the caller never calls Wait. Wait may be called more than once.
 type Game struct {
 	cmd     *exec.Cmd
-	log     *os.File
-	release func() error
+	done    chan struct{}
+	code    int
+	err     error
 	LogPath string
 }
 
@@ -159,15 +161,36 @@ func StartPrepared(gameDir, runtimeDir, javaBinary, username, targetVersion stri
 		_ = release()
 		return nil, err
 	}
-	return &Game{cmd: cmd, log: logFile, release: release, LogPath: logPath}, nil
+	game := &Game{cmd: cmd, LogPath: logPath, done: make(chan struct{})}
+	go func() {
+		err := cmd.Wait()
+		game.code = cmd.ProcessState.ExitCode()
+		game.err = errors.Join(err, logFile.Close(), release())
+		close(game.done)
+	}()
+	return game, nil
 }
 
-// Wait reaps Java, closes the log and releases the lock even after a crash.
+// Wait returns the final exit code and any process/cleanup errors. The lock is
+// released by the supervisor only after cmd.Wait has reaped Java.
 func (game *Game) Wait() (int, error) {
-	err := game.cmd.Wait()
-	code := game.cmd.ProcessState.ExitCode()
-	err = errors.Join(err, game.log.Close(), game.release())
-	return code, err
+	<-game.done
+	return game.code, game.err
+}
+
+// Kill requests immediate termination of Java; callers must still Wait for its
+// final result. A failed kill does not release the lock while Java is alive.
+func (game *Game) Kill() error {
+	select {
+	case <-game.done:
+		return nil
+	default:
+	}
+	err := game.cmd.Process.Kill()
+	if errors.Is(err, os.ErrProcessDone) {
+		return nil
+	}
+	return err
 }
 
 // deduplicateClasspath removes duplicate libraries from the classpath,
