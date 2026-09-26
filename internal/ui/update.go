@@ -119,6 +119,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case InstanceRemovalDoneMsg:
+		if m.state == instanceRemoveRunningScreen {
+			m.removeErr = msg.Err
+			m.instanceList, m.instanceErr = instances.List(m.dataRoot)
+			var listErr error
+			m.retiredList, listErr = instances.RetiredList(m.dataRoot)
+			if m.removeErr == nil {
+				m.removeErr = listErr
+			}
+			m.instanceCursor, m.retiredCursor = 0, 0
+			if selected, err := instances.Selected(m.dataRoot); err == nil {
+				m.instance = selected
+				if selected.Kind == "legacy" {
+					cfg := config.Load()
+					m.versionSelect, m.modloader, m.memoryMB = cfg.Version, cfg.Modloader, cfg.MemoryMB
+				}
+			}
+			m.state = instanceRemoveResultScreen
+		}
+		return m, nil
+
 	case GameStartedMsg:
 		if m.state != gameStartingScreen {
 			return m, nil
@@ -199,6 +220,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.state == javaPickerScreen {
 			return m.updateJavaPicker(msg.String())
+		}
+		if m.state >= instanceTrashScreen && m.state <= instanceRemoveResultScreen {
+			return m.updateRemovalKey(msg.String())
 		}
 		if m.state >= resetModeScreen && m.state <= resetResultScreen {
 			return m.updateResetKey(msg.String())
@@ -580,6 +604,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
+		case "t", "T":
+			if m.state == instancesScreen {
+				m.retiredList, m.removeErr = instances.RetiredList(m.dataRoot)
+				if m.removeErr == nil {
+					m.retiredCursor = 0
+					m.state = instanceTrashScreen
+				}
+				return m, nil
+			}
+
 		case "r", "R":
 			if m.state == instancesScreen && len(m.instanceList) > 0 {
 				in := m.instanceList[m.instanceCursor]
@@ -608,7 +642,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "d", "D":
-			if m.state == instanceCopyResultScreen && m.copyStage != "" {
+			if m.state == instancesScreen && m.instanceCursor >= 0 && m.instanceCursor < len(m.instanceList) {
+				in := m.instanceList[m.instanceCursor]
+				if in.ID == instances.LegacyID {
+					m.instanceErr = fmt.Errorf("the existing installation cannot be removed")
+				} else {
+					m.removeTarget = in
+					m.removeFromTrash = false
+					m.removeErr = nil
+					m.state = instanceRemoveChoiceScreen
+				}
+				return m, nil
+			} else if m.state == instanceCopyResultScreen && m.copyStage != "" {
 				m.state = instanceCopyCleanupConfirmScreen
 			}
 

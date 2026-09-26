@@ -129,16 +129,15 @@ func Read(root, id string) (Instance, error) {
 	if err := checkInstancesDir(root); err != nil {
 		return Instance{}, err
 	}
-	dir := filepath.Join(root, "instances", id)
-	info, err := os.Lstat(dir)
-	if err != nil {
+	return readMetadata(filepath.Join(root, "instances", id), id)
+}
+
+func readMetadata(dir, id string) (Instance, error) {
+	if err := checkManagedDirectory(dir, false); err != nil {
 		return Instance{}, err
 	}
-	if !info.IsDir() {
-		return Instance{}, fmt.Errorf("instance directory is not a directory: %s", dir)
-	}
 	path := filepath.Join(dir, "instance.json")
-	info, err = os.Lstat(path)
+	info, err := os.Lstat(path)
 	if err != nil {
 		return Instance{}, err
 	}

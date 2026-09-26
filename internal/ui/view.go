@@ -27,6 +27,9 @@ func (m Model) View() string {
 	if m.state >= instanceCopyInspectScreen && m.state <= instanceCopyCleanupConfirmScreen {
 		return m.renderInstanceCopyScreen()
 	}
+	if m.state >= instanceTrashScreen && m.state <= instanceRemoveResultScreen {
+		return m.renderRemovalScreen()
+	}
 	// ── Download screen completo (tapa todo el TUI) ──────────────────────────
 	if m.state == downloadScreen {
 		return m.renderDownloadScreen()
@@ -886,7 +889,7 @@ func (m Model) renderInstancesScreen() string {
 			fmt.Fprintf(&b, "%s%s — %s %s%s\n", marker, in.Name, in.MinecraftVersion, loader, selected)
 		}
 	}
-	b.WriteString("\n[↑/↓] Move  [Enter] Select  [n] New Vanilla  [c] Copy selected  [r] Rename  [Esc] Back\n")
+	b.WriteString("\n[↑/↓] Move  [Enter] Select  [n] New Vanilla  [c] Copy  [r] Rename  [d] Remove  [t] Retired  [Esc] Back\n")
 	b.WriteString("\nNew instances use the shared runtime and private game data.")
 	return lipgloss.NewStyle().Padding(1, 2).Render(b.String())
 }

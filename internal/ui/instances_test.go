@@ -215,6 +215,96 @@ func TestCopyManagedInstanceOpensNameWithoutVersionPicker(t *testing.T) {
 	}
 }
 
+func TestRetireAndRestoreInstanceFromPicker(t *testing.T) {
+	root := t.TempDir()
+	in, err := instances.Create(root, "Managed", "1.21.1", "Vanilla", "", 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := instances.Select(root, in.ID); err != nil {
+		t.Fatal(err)
+	}
+	m := Model{state: instancesScreen, dataRoot: root, instance: in, instanceList: []instances.Instance{in}}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	m = updated.(Model)
+	if m.state != instanceRemoveChoiceScreen {
+		t.Fatalf("remove choice state = %v", m.state)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	m = updated.(Model)
+	if m.state != instanceRemoveConfirmScreen || !strings.Contains(m.View(), "retired") {
+		t.Fatalf("missing soft-delete confirmation: %s", m.View())
+	}
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = updated.(Model)
+	if cmd == nil {
+		t.Fatal("retire did not start")
+	}
+	updated, _ = m.Update(cmd())
+	m = updated.(Model)
+	if m.removeErr != nil || m.instance.ID != instances.LegacyID {
+		t.Fatalf("retire result: %v, selected %q", m.removeErr, m.instance.ID)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	m = updated.(Model)
+	if m.state != instanceTrashScreen || len(m.retiredList) != 1 {
+		t.Fatalf("retired picker: state %v, items %v", m.state, m.retiredList)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = updated.(Model)
+	updated, _ = m.Update(cmd())
+	m = updated.(Model)
+	if m.removeErr != nil {
+		t.Fatalf("restore result: %v", m.removeErr)
+	}
+	if restored, err := instances.Read(root, in.ID); err != nil || restored.ID != in.ID {
+		t.Fatalf("restored instance: %+v, %v", restored, err)
+	}
+}
+
+func TestFullDeleteFromPickerRemovesGameAndBackups(t *testing.T) {
+	root := t.TempDir()
+	in, err := instances.Create(root, "Erase", "1.21.1", "Vanilla", "", 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	game, err := instances.GameDir(root, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(game, 0700); err != nil {
+		t.Fatal(err)
+	}
+	backup := filepath.Join(root, "backups", in.ID)
+	if err := os.MkdirAll(backup, 0700); err != nil {
+		t.Fatal(err)
+	}
+	m := Model{state: instancesScreen, dataRoot: root, instance: in, instanceList: []instances.Instance{in}}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	m = updated.(Model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'f'}})
+	m = updated.(Model)
+	if m.state != instanceRemoveConfirmScreen || !strings.Contains(m.View(), backup) {
+		t.Fatalf("delete confirmation missing backups: %s", m.View())
+	}
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = updated.(Model)
+	updated, _ = m.Update(cmd())
+	m = updated.(Model)
+	if m.removeErr != nil || m.instance.ID != instances.LegacyID {
+		t.Fatalf("full delete: %v, selected %q", m.removeErr, m.instance.ID)
+	}
+	for _, path := range []string{filepath.Join(root, "instances", in.ID), filepath.Join(root, "retired", in.ID), backup} {
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			t.Fatalf("not removed: %s: %v", path, err)
+		}
+	}
+}
+
 func TestRenameInstanceFromPicker(t *testing.T) {
 	root := t.TempDir()
 	in, err := instances.Create(root, "Before", "1.20.4", "Vanilla", "", 2048)

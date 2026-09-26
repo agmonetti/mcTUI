@@ -265,7 +265,7 @@ Depende de: estado actual de fases 1–4.
 - [ ] **A09** Mundos y avisos de compatibilidad referidos a la instancia seleccionada.
 - [ ] **A10** Reset/restore con raíz explícita e historial identificado por instancia (legacy conserva historial; managed usa `backups/<id>` con selección fijada; lock entre procesos implementado, falta validación real).
 - [ ] **A11** Controles de concurrencia y confirmación de operaciones destructivas (Reset/restore y Play comparten lock OS por gameDir mientras mcTUI supervisa Java; falta cierre forzado y demás mutaciones).
-- [ ] **A12** Retirar instancia: distinguir quitar referencia de borrar datos; confirmar claramente.
+- [x] **A12** Soft delete a papelera recuperable desde la TUI y full delete de juego + backups con confirmación; pruebas manuales confirmadas por el usuario (§10.14).
 
 **Salida:** A y B mantienen mods, configuraciones y mundos independientes; jugar, resetear o restaurar A no cambia B. La instalación heredada y sus backups siguen accesibles. Fallar Fabric no inicia Vanilla.
 
@@ -522,6 +522,10 @@ Tests cubren selección, copia independiente, rechazo de enlaces, no publicació
 ### 10.13. A05 — duplicación selectiva de instancias managed
 
 `c` sobre una instancia managed crea otra con ID nuevo y conserva versión Minecraft, loader exacto, Java y memoria del origen. El usuario elige el nombre y cuáles de `mods/`, `config/`, `saves/`, `resourcepacks/`, `shaderpacks/` y `options.txt` copiar: **los mundos (`saves/`) no se incluyen salvo selección explícita**. No se copian runtime, logs ni historial de Reset; los archivos son copias independientes. Se reutilizan lock, preflight, staging y confirmación de borrado parcial de A04. La duplicación no cambia la instancia origen y selecciona la nueva tras publicar. Tests de copia de metadata, omisión de mundos e independencia añadidos. El test puntual `TestCopyInstancePreservesSettingsAndCopiesOnlySelectedData` pasó tras corregir la preparación de su directorio temporal; la suite completa no se ejecutó. **Validación manual reportada por el usuario:** copia de `saves/` correcta y checklist de A05 aprobado: copia desde una instancia managed sin cambiar versión/loader, nueva identidad y selección, omisión de `saves/` cuando no se elige, ajustes heredados, historial de Reset no copiado e independencia de archivos en ambas direcciones. Fecha, build, OS/arquitectura y versión exacta de estas pruebas no registrados; otros sistemas operativos se validarán más adelante (§9). A05 queda cerrada en el entorno probado.
+
+### 10.14. A12 — retirar y recuperar instancias
+
+En el selector, `d` sobre una instancia managed ofrece soft delete o borrado permanente; legacy no puede retirarse. Soft delete mueve `instances/<id>/` a `retired/<id>/`, conserva los backups y, si era la activa, selecciona legacy. `t` muestra las retiradas y permite restaurarlas sin cambiar su ID o borrarlas definitivamente. El borrado permanente confirma explícitamente las rutas del directorio de la instancia y de `backups/<id>` antes de eliminar ambos. El traslado y la restauración comprueban colisiones y comparten exclusión; no se retira una instancia con juego activo bajo el lock de mcTUI. Los errores muestran el estado parcial sin afirmar éxito. Pruebas automatizadas de retiro bloqueado, recuperación, selección y borrado de backups pasan en Linux. **Validación manual confirmada por el usuario:** todas las operaciones de A12 funcionaron; fecha, build y detalles de cada intento no registrados. A12 queda cerrada en el entorno probado; ejecución en otros OS diferida. El cierre forzado de mcTUI con Java vivo sigue siendo límite de A11.
 
 ## 11. Trazabilidad y seguimiento
 

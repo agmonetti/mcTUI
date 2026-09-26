@@ -45,6 +45,11 @@ const (
 	instanceCopyRunningScreen
 	instanceCopyResultScreen
 	instanceCopyCleanupConfirmScreen
+	instanceTrashScreen
+	instanceRemoveChoiceScreen
+	instanceRemoveConfirmScreen
+	instanceRemoveRunningScreen
+	instanceRemoveResultScreen
 	gameStartingScreen
 	gameRunningScreen
 	gameResultScreen
@@ -92,6 +97,10 @@ type InstanceCopyCleanupDoneMsg struct {
 	Err error
 }
 
+type InstanceRemovalDoneMsg struct {
+	Err error
+}
+
 // Model is the root Bubble Tea model for mcTUI.
 type LaunchConfig struct {
 	GameDir, RuntimeDir          string
@@ -133,6 +142,12 @@ type Model struct {
 	copyErr          error
 	copyResult       instances.CopyResult
 	copyCleaning     bool
+	retiredList      []instances.Instance
+	retiredCursor    int
+	removeTarget     instances.Instance
+	removeAction     string
+	removeFromTrash  bool
+	removeErr        error
 	pickerForJava    bool
 	launch           LaunchConfig
 	latestRelease    updater.Release // zero value = no update available
