@@ -112,20 +112,11 @@ func Resolve(ctx context.Context, targetVersion, mcDir, librariesPath string, wg
 	}
 
 	if requested == "" { // Legacy installations continue to follow the default loader.
-		loaderURL := fmt.Sprintf("https://meta.fabricmc.net/v2/versions/loader/%s", targetVersion)
-		body, err := get(ctx, loaderURL, 2<<20)
+		var err error
+		requested, err = LatestLoader(ctx, targetVersion)
 		if err != nil {
 			return Profile{}, err
 		}
-		var loaders []struct {
-			Loader struct {
-				Version string `json:"version"`
-			} `json:"loader"`
-		}
-		if err := json.Unmarshal(body, &loaders); err != nil || len(loaders) == 0 || !validVersion(loaders[0].Loader.Version) {
-			return Profile{}, fmt.Errorf("no valid Fabric loader for %s", targetVersion)
-		}
-		requested = loaders[0].Loader.Version
 	}
 	profileURL := fmt.Sprintf("https://meta.fabricmc.net/v2/versions/loader/%s/%s/profile/json", targetVersion, requested)
 	body, err := get(ctx, profileURL, 2<<20)
@@ -201,6 +192,26 @@ func Resolve(ctx context.Context, targetVersion, mcDir, librariesPath string, wg
 		return Profile{}, err
 	}
 	return result, nil
+}
+
+// LatestLoader returns Fabric Meta's preferred loader for this Minecraft version.
+func LatestLoader(ctx context.Context, version string) (string, error) {
+	if !validVersion(version) {
+		return "", fmt.Errorf("invalid Minecraft version %q", version)
+	}
+	body, err := get(ctx, fmt.Sprintf("https://meta.fabricmc.net/v2/versions/loader/%s", version), 2<<20)
+	if err != nil {
+		return "", err
+	}
+	var loaders []struct {
+		Loader struct {
+			Version string `json:"version"`
+		} `json:"loader"`
+	}
+	if err := json.Unmarshal(body, &loaders); err != nil || len(loaders) == 0 || !validVersion(loaders[0].Loader.Version) {
+		return "", fmt.Errorf("no valid Fabric loader for %s", version)
+	}
+	return loaders[0].Loader.Version, nil
 }
 
 func validVersion(version string) bool {

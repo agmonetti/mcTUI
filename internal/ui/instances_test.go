@@ -415,14 +415,30 @@ func TestManagedFabricCreationAndExactLaunchSnapshot(t *testing.T) {
 	m := Model{state: instancesScreen, dataRoot: root, versions: []string{"1.20.4"}, memoryMB: 2048, input: textinput.New()}
 	press := func(key tea.KeyMsg) { updated, _ := m.Update(key); m = updated.(Model) }
 	press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
-	press(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")})
-	if m.state != instanceLoaderScreen || m.creationVersion != "1.20.4" {
-		t.Fatalf("Fabric loader prompt missing: state=%v version=%q", m.state, m.creationVersion)
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")})
+	m = updated.(Model)
+	if m.state != instanceLoaderScreen || m.creationVersion != "1.20.4" || cmd == nil {
+		t.Fatalf("automatic Fabric lookup not started: state=%v version=%q", m.state, m.creationVersion)
 	}
-	m.input.SetValue("0.15.11")
-	press(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, _ = m.Update(FabricLoaderDoneMsg{Request: m.fabricLoaderRequest, MinecraftVersion: "1.20.4", Err: context.DeadlineExceeded})
+	m = updated.(Model)
+	if m.state != instanceLoaderScreen || m.instanceErr == nil {
+		t.Fatalf("failed lookup did not permit retry: state=%v err=%v", m.state, m.instanceErr)
+	}
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if cmd == nil || m.fabricLoaderRequest != 2 {
+		t.Fatal("Fabric lookup retry not started")
+	}
+	updated, _ = m.Update(FabricLoaderDoneMsg{Request: 1, MinecraftVersion: "1.20.4", LoaderVersion: "0.15.10"})
+	m = updated.(Model)
+	if m.state != instanceLoaderScreen {
+		t.Fatal("stale lookup replaced current request")
+	}
+	updated, _ = m.Update(FabricLoaderDoneMsg{Request: m.fabricLoaderRequest, MinecraftVersion: "1.20.4", LoaderVersion: "0.15.11"})
+	m = updated.(Model)
 	if m.state != instanceNameScreen || m.creationLoaderVersion != "0.15.11" {
-		t.Fatalf("loader version not captured: state=%v loader=%q", m.state, m.creationLoaderVersion)
+		t.Fatalf("automatic loader version not captured: state=%v loader=%q", m.state, m.creationLoaderVersion)
 	}
 	m.input.SetValue("Fabric instance")
 	press(tea.KeyMsg{Type: tea.KeyEnter})

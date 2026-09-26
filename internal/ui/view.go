@@ -793,7 +793,7 @@ func (m Model) renderVersionsScreen(c *strings.Builder) {
 		}
 	}
 	if m.creatingInstance {
-		c.WriteString("\n[Enter] New Vanilla  [f] New Fabric (exact loader version)")
+		c.WriteString("\n[Enter] New Vanilla  [f] New Fabric (automatic loader)")
 	}
 }
 
@@ -1024,11 +1024,12 @@ func formatCopySize(size int64) string {
 
 func (m Model) renderInstanceLoaderScreen() string {
 	var b strings.Builder
-	b.WriteString("FABRIC LOADER VERSION\n────────────────────────────────────────\n\nMinecraft: " + m.creationVersion + "\nLoader version: " + m.input.View() + "\n")
+	b.WriteString("FINDING FABRIC LOADER\n────────────────────────────────────────\n\nMinecraft: " + m.creationVersion + "\n")
 	if m.instanceErr != nil {
-		b.WriteString("\nError: " + m.instanceErr.Error() + "\n")
+		b.WriteString("\nError: " + m.instanceErr.Error() + "\n\n[Enter] Retry  [Esc] Cancel")
+	} else {
+		b.WriteString("\nChecking Fabric Meta...\n\n[Esc] Cancel")
 	}
-	b.WriteString("\n[Enter] Continue  [Esc] Cancel")
 	return lipgloss.NewStyle().Padding(1, 2).Render(b.String())
 }
 

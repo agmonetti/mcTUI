@@ -16,6 +16,32 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
+func TestLatestLoaderForMinecraftVersion(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v2/versions/loader/1.20.4" {
+			t.Errorf("unexpected lookup: %s", r.URL.Path)
+		}
+		fmt.Fprint(w, `[{"loader":{"version":"0.15.11"}},{"loader":{"version":"0.15.10"}}]`)
+	}))
+	defer server.Close()
+	previous := client
+	client = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		r = r.Clone(r.Context())
+		u := *r.URL
+		u.Scheme, u.Host = "http", server.Listener.Addr().String()
+		r.URL, r.Host = &u, ""
+		return http.DefaultTransport.RoundTrip(r)
+	})}
+	t.Cleanup(func() { client = previous })
+	loader, err := LatestLoader(context.Background(), "1.20.4")
+	if err != nil || loader != "0.15.11" {
+		t.Fatalf("preferred loader = %q, %v", loader, err)
+	}
+	if _, err := LatestLoader(context.Background(), "../unsafe"); err == nil {
+		t.Fatal("invalid Minecraft version accepted")
+	}
+}
+
 func TestExactLoaderNeverUsesDefaultOrOtherCachedProfile(t *testing.T) {
 	const hash = "f92e777f4341930bad9b2422283c4680d00dbc06"
 	requests := make([]string, 0)

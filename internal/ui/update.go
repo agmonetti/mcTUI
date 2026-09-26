@@ -65,10 +65,33 @@ func startLaunchDownload(ctx context.Context, launch LaunchConfig) tea.Cmd {
 	}
 }
 
+func fabricLoaderCmd(version string, request uint64) tea.Cmd {
+	return func() tea.Msg {
+		loader, err := fabric.LatestLoader(context.Background(), version)
+		return FabricLoaderDoneMsg{Request: request, MinecraftVersion: version, LoaderVersion: loader, Err: err}
+	}
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case FabricLoaderDoneMsg:
+		if m.state != instanceLoaderScreen || m.creationVersion != msg.MinecraftVersion || m.fabricLoaderRequest != msg.Request {
+			return m, nil
+		}
+		if msg.Err != nil {
+			m.instanceErr = msg.Err
+			return m, nil
+		}
+		m.creationLoaderVersion = msg.LoaderVersion
+		m.instanceErr = nil
+		m.state = instanceNameScreen
+		m.input.SetValue("")
+		m.input.CharLimit = 80
+		m.input.Placeholder = "Instance name"
+		m.input.Focus()
+		return m, nil
 	case modsDoneMsg:
 		if msg.Request != m.modRequest || m.state != modsWorkingScreen {
 			return m, nil
@@ -372,15 +395,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.state = instanceCopyConfirmScreen
 				}
 			} else if m.state == instanceLoaderScreen {
-				loaderVersion := strings.TrimSpace(m.input.Value())
-				if loaderVersion == "" {
-					m.instanceErr = fmt.Errorf("enter an exact Fabric Loader version")
-				} else {
-					m.creationLoaderVersion = loaderVersion
+				if m.instanceErr != nil {
 					m.instanceErr = nil
-					m.state = instanceNameScreen
-					m.input.SetValue("")
-					m.input.Placeholder = "Instance name"
+					m.fabricLoaderRequest++
+					return m, fabricLoaderCmd(m.creationVersion, m.fabricLoaderRequest)
 				}
 			} else if m.state == instanceNameScreen {
 				name := strings.TrimSpace(m.input.Value())
@@ -626,12 +644,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.creationVersion = m.versions[m.cursorVersions]
 				m.creationLoaderVersion = ""
 				m.instanceErr = nil
-				m.input.SetValue("")
-				m.input.CharLimit = 100
-				m.input.Placeholder = "Exact Fabric Loader version (e.g. 0.15.11)"
-				m.input.Focus()
 				m.state = instanceLoaderScreen
-				return m, nil
+				m.fabricLoaderRequest++
+				return m, fabricLoaderCmd(m.creationVersion, m.fabricLoaderRequest)
 			}
 
 		case "n", "N":
@@ -794,7 +809,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	if m.state == nameScreen || m.state == instanceNameScreen || m.state == instanceLoaderScreen {
+	if m.state == nameScreen || m.state == instanceNameScreen {
 		m.input, cmd = m.input.Update(msg)
 	}
 

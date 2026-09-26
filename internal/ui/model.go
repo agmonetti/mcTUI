@@ -89,6 +89,13 @@ type ResetDoneMsg struct {
 	Err    error
 }
 
+type FabricLoaderDoneMsg struct {
+	Request          uint64
+	MinecraftVersion string
+	LoaderVersion    string
+	Err              error
+}
+
 type InstanceCopyInspectDoneMsg struct {
 	Items []instances.CopyItem
 	Err   error
@@ -139,6 +146,7 @@ type Model struct {
 	copyingInstance       bool
 	creationVersion       string
 	creationLoaderVersion string
+	fabricLoaderRequest   uint64
 	copySource            string
 	copySourceID          string
 	copyLoader            string
