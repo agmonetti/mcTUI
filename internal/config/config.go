@@ -14,22 +14,24 @@ import (
 // Data is the persisted user configuration, stored as JSON under
 // AppDataDir("mctui", "config.json").
 type Data struct {
-	Username  string `json:"username"`
-	Version   string `json:"version"`
-	Modloader string `json:"modloader"`
-	MemoryMB  int    `json:"memory_mb"`
-	Language  string `json:"language"`
+	Username   string `json:"username"`
+	Version    string `json:"version"`
+	Modloader  string `json:"modloader"`
+	MemoryMB   int    `json:"memory_mb"`
+	Language   string `json:"language"`
+	ModChannel string `json:"mod_channel,omitempty"`
 }
 
 // defaults returns the configuration used when no config file exists yet,
 // or to fill in missing/zero fields from a partially-populated one.
 func defaults() Data {
 	return Data{
-		Username:  "Player",
-		Version:   "1.20.4",
-		Modloader: "Vanilla",
-		MemoryMB:  2048,
-		Language:  "en",
+		Username:   "Player",
+		Version:    "1.20.4",
+		Modloader:  "Vanilla",
+		MemoryMB:   2048,
+		Language:   "en",
+		ModChannel: "release",
 	}
 }
 
@@ -142,14 +144,22 @@ func Load() Data {
 	if cfg.Language == "" {
 		cfg.Language = def.Language
 	}
+	if cfg.ModChannel != "beta" && cfg.ModChannel != "alpha" {
+		cfg.ModChannel = def.ModChannel
+	}
 	return cfg
 }
 
 // Save writes cfg to the config file, creating parent directories as
 // needed.
-func Save(cfg Data) {
+func Save(cfg Data) error {
 	p := path()
-	os.MkdirAll(filepath.Dir(p), 0755)
-	data, _ := json.MarshalIndent(cfg, "", "  ")
-	os.WriteFile(p, data, 0644)
+	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(p, data, 0644)
 }

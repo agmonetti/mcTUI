@@ -25,6 +25,7 @@ type Instance struct {
 	MinecraftVersion string `json:"minecraft_version"`
 	Loader           string `json:"loader"`
 	LoaderVersion    string `json:"loader_version,omitempty"`
+	ModChannel       string `json:"mod_channel,omitempty"`
 	JavaPath         string `json:"java_path,omitempty"`
 	MemoryMB         int    `json:"memory_mb"`
 }
@@ -84,9 +85,13 @@ func BackupDir(root string, in Instance) (string, error) {
 	return path, nil
 }
 
+func validModChannel(channel string) bool {
+	return channel == "" || channel == "release" || channel == "beta" || channel == "alpha"
+}
+
 func legacy() Instance {
 	cfg := config.Load()
-	return Instance{SchemaVersion: 1, ID: LegacyID, Name: "Instalación existente", Kind: "legacy", MinecraftVersion: cfg.Version, Loader: cfg.Modloader, MemoryMB: cfg.MemoryMB}
+	return Instance{SchemaVersion: 1, ID: LegacyID, Name: "Instalación existente", Kind: "legacy", MinecraftVersion: cfg.Version, Loader: cfg.Modloader, ModChannel: cfg.ModChannel, MemoryMB: cfg.MemoryMB}
 }
 
 // List includes the existing installation without writing into it. An
@@ -156,7 +161,7 @@ func readMetadata(dir, id string) (Instance, error) {
 	if err := json.Unmarshal(data, &in); err != nil {
 		return Instance{}, err
 	}
-	if in.ID != id || in.Kind != "managed" || in.SchemaVersion != 1 || !validName(in.Name) || !validVersion(in.MinecraftVersion) || !validLoader(in.Loader, in.LoaderVersion) || in.MemoryMB <= 0 || (in.JavaPath != "" && !filepath.IsAbs(in.JavaPath)) {
+	if in.ID != id || in.Kind != "managed" || in.SchemaVersion != 1 || !validName(in.Name) || !validVersion(in.MinecraftVersion) || !validLoader(in.Loader, in.LoaderVersion) || !validModChannel(in.ModChannel) || in.MemoryMB <= 0 || (in.JavaPath != "" && !filepath.IsAbs(in.JavaPath)) {
 		return Instance{}, fmt.Errorf("invalid or unsupported instance metadata: %s", path)
 	}
 	return in, nil
@@ -200,7 +205,7 @@ func Rename(root, id, name string) error {
 }
 
 func UpdateSettings(root string, in Instance) error {
-	if in.Kind != "managed" || in.ID == LegacyID || !validID(in.ID) || in.SchemaVersion != 1 || !validName(in.Name) || !validVersion(in.MinecraftVersion) || !validLoader(in.Loader, in.LoaderVersion) || in.MemoryMB <= 0 || (in.JavaPath != "" && !filepath.IsAbs(in.JavaPath)) {
+	if in.Kind != "managed" || in.ID == LegacyID || !validID(in.ID) || in.SchemaVersion != 1 || !validName(in.Name) || !validVersion(in.MinecraftVersion) || !validLoader(in.Loader, in.LoaderVersion) || !validModChannel(in.ModChannel) || in.MemoryMB <= 0 || (in.JavaPath != "" && !filepath.IsAbs(in.JavaPath)) {
 		return fmt.Errorf("invalid instance settings")
 	}
 	current, err := Read(root, in.ID)

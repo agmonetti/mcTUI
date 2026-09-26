@@ -115,9 +115,19 @@ func TestUpdateSettingsKeepsManagedMinecraftAndLoaderFixed(t *testing.T) {
 		t.Fatal(err)
 	}
 	in.MemoryMB = 4096
+	in.ModChannel = "beta"
 	if err := UpdateSettings(root, in); err != nil {
 		t.Fatal("mutable settings rejected:", err)
 	}
+	saved, err := Read(root, in.ID)
+	if err != nil || saved.ModChannel != "beta" {
+		t.Fatalf("mod channel not persisted: %+v %v", saved, err)
+	}
+	in.ModChannel = "preview"
+	if err := UpdateSettings(root, in); err == nil {
+		t.Fatal("invalid mod channel accepted")
+	}
+	in.ModChannel = "beta"
 	in.MinecraftVersion = "1.21.1"
 	if err := UpdateSettings(root, in); err == nil {
 		t.Fatal("managed Minecraft version change accepted")

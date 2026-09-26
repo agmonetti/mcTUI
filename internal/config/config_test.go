@@ -17,6 +17,9 @@ func TestLanguageDefaultsAndPersistence(t *testing.T) {
 	if got := Load().Language; got != "en" {
 		t.Fatalf("default language: %q", got)
 	}
+	if got := Load().ModChannel; got != "release" {
+		t.Fatalf("default mod channel: %q", got)
+	}
 	if err := os.MkdirAll(filepath.Dir(path()), 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +31,13 @@ func TestLanguageDefaultsAndPersistence(t *testing.T) {
 	}
 	cfg := Load()
 	cfg.Language = "es"
-	Save(cfg)
+	cfg.ModChannel = "beta"
+	if err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if got := Load().ModChannel; got != "beta" {
+		t.Fatalf("persisted mod channel: %q", got)
+	}
 	if got := Load().Language; got != "es" {
 		t.Fatalf("persisted language: %q", got)
 	}
