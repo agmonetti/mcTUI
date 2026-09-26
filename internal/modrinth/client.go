@@ -41,7 +41,7 @@ func allowed(u *url.URL, cdn bool) bool {
 		return false
 	}
 	if cdn {
-		return u.Host == "cdn.modrinth.net"
+		return u.Host == "cdn.modrinth.net" || u.Host == "cdn.modrinth.com"
 	}
 	return u.Host == "api.modrinth.com" && (u.Path == "/v2" || strings.HasPrefix(u.Path, "/v2/"))
 }
