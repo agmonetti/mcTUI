@@ -578,9 +578,11 @@ func (m Model) renderDownloadScreen() string {
 func (m Model) renderGameScreen() string {
 	status := i18n.T("status.starting")
 	hint := i18n.T("status.game_wait")
+	statusColor := colorAccent
 	switch m.state {
 	case gameRunningScreen:
 		status = i18n.T("status.game_running")
+		statusColor = colorGreen
 		if m.gameKillConfirm {
 			hint = i18n.T("status.force_close_question")
 		} else {
@@ -588,20 +590,38 @@ func (m Model) renderGameScreen() string {
 		}
 		if m.gameKillErr != nil {
 			hint = i18n.T("status.kill_error", displayError(m.gameKillErr)) + "\n" + hint
+			statusColor = colorRed
 		}
 	case gameResultScreen:
 		status = i18n.T("status.game_exited", m.gameExitCode)
+		statusColor = colorAccent
 		if m.gameErr != nil {
 			status = i18n.T("status.game_failed", displayError(m.gameErr))
+			statusColor = colorRed
 		}
 		hint = i18n.T("status.game_back")
 	}
-	body := i18n.T("status.instance", m.launch.GameDir) + "\n" + status
-	if m.gameLog != "" {
-		body += "\n" + i18n.T("status.log", m.gameLog)
+
+	contentWidth := 64
+	if m.width > 0 {
+		contentWidth = max(1, min(contentWidth, m.width-10))
 	}
-	body += "\n\n" + hint
-	panel := lipgloss.NewStyle().Width(64).Border(lipgloss.NormalBorder()).BorderForeground(colorAccent).Padding(1, 3).Render(body)
+	lines := wrapResetLines([]string{status}, contentWidth)
+	styled := []string{lipgloss.NewStyle().Foreground(statusColor).Bold(true).Render(strings.Join(lines, "\n")), ""}
+	for _, line := range wrapResetLines([]string{i18n.T("status.instance", m.launch.GameDir)}, contentWidth) {
+		styled = append(styled, lipgloss.NewStyle().Foreground(colorWhite).Render(line))
+	}
+	if m.gameLog != "" {
+		for _, line := range wrapResetLines([]string{i18n.T("status.log", m.gameLog)}, contentWidth) {
+			styled = append(styled, lipgloss.NewStyle().Foreground(colorGray).Render(line))
+		}
+	}
+	styled = append(styled, "")
+	for _, line := range wrapResetLines(strings.Split(hint, "\n"), contentWidth) {
+		styled = append(styled, lipgloss.NewStyle().Foreground(colorDimGray).Render(line))
+	}
+	body := strings.Join(styled, "\n")
+	panel := lipgloss.NewStyle().Width(contentWidth).Border(lipgloss.NormalBorder()).BorderForeground(colorAccent).Padding(1, 3).Render(body)
 	if m.width > 0 && m.height > 0 {
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, panel)
 	}
@@ -852,6 +872,7 @@ func (m Model) renderConfirmScreen(c *strings.Builder) {
 	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("menu.verify_installation"))
 	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 	c.WriteString(title + "\n" + div + "\n\n")
+	width := max(20, m.centerWidth()-6)
 	launch, err := m.launchConfig()
 	if err != nil {
 		c.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render(displayError(err)) + "\n\n")
@@ -862,17 +883,30 @@ func (m Model) renderConfirmScreen(c *strings.Builder) {
 		} else if launch.JavaPath != "" {
 			javaLabel = i18n.T("menu.java_unavailable")
 		}
-		c.WriteString(i18n.T("menu.verify_details", m.instance.Name, launch.GameDir, launch.RuntimeDir, javaLabel))
+		details := strings.TrimSpace(i18n.T("menu.verify_details", m.instance.Name, launch.GameDir, launch.RuntimeDir, javaLabel))
+		for _, line := range strings.Split(details, "\n") {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				label := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(parts[0] + ":")
+				wrapped := wrapResetLines([]string{strings.TrimLeft(parts[1], " ")}, max(10, width-lipgloss.Width(parts[0])-2))
+				for i, part := range wrapped {
+					if i == 0 {
+						c.WriteString(label + " " + lipgloss.NewStyle().Foreground(colorWhite).Render(part) + "\n")
+					} else {
+						c.WriteString("  " + lipgloss.NewStyle().Foreground(colorWhite).Render(part) + "\n")
+					}
+				}
+			} else {
+				c.WriteString(lipgloss.NewStyle().Foreground(colorWhite).Render(strings.Join(wrapResetLines([]string{line}, width), "\n")) + "\n")
+			}
+		}
 	}
 	if m.dlErr != nil {
-		c.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render(displayError(m.dlErr)) + "\n\n")
+		c.WriteString("\n" + lipgloss.NewStyle().Foreground(colorRed).Render(strings.Join(wrapResetLines([]string{displayError(m.dlErr)}, width), "\n")) + "\n")
 	}
-	c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(
-		i18n.T("menu.verify_hint")) + "\n\n")
-
+	c.WriteString("\n" + lipgloss.NewStyle().Foreground(colorGray).Render(strings.Join(wrapResetLines([]string{i18n.T("menu.verify_hint")}, width), "\n")) + "\n\n")
 	c.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render(i18n.T("menu.yes_hint")) +
-		"   " +
-		lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("common.cancel")))
+		"   " + lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("common.cancel")))
 }
 
 // windowAround computes a [start, end) slice window of size windowSize

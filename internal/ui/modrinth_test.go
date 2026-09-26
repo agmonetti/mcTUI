@@ -113,7 +113,7 @@ func TestCatalogReleaseUpdateBehindBeta(t *testing.T) {
 }
 
 func TestCatalogOptionalReplacementConsent(t *testing.T) {
-	m := Model{state: modrinthReviewScreen, catalogOptional: map[string]bool{"optional": true},
+	m := Model{state: modrinthReviewScreen, catalogOptional: map[string]bool{"optional": true}, height: 40,
 		catalogPlan: modrinth.InstallPlan{OptionalDeps: []modrinth.PlanItem{{Version: modrinth.Version{ProjectID: "optional"}, File: modrinth.File{Filename: "new.jar"}}}},
 		modItems:    []mods.Mod{{Record: mods.Record{ProjectID: "optional", File: "old.jar"}, Changed: true}},
 	}
@@ -164,7 +164,7 @@ func TestCatalogOptionalConflictReview(t *testing.T) {
 }
 
 func TestCatalogReviewShowsEffectiveDownloadsAndDestination(t *testing.T) {
-	m := Model{state: modrinthReviewScreen, height: 28, width: 100,
+	m := Model{state: modrinthReviewScreen, height: 40, width: 100,
 		modStore:        mods.Store{GameDir: "/instances/A/minecraft"},
 		catalogOptional: map[string]bool{},
 		catalogPlan: modrinth.InstallPlan{
@@ -308,11 +308,11 @@ func TestCatalogPaginationAndStaleResults(t *testing.T) {
 
 func TestCatalogSortCyclingAndSearch(t *testing.T) {
 	m := Model{
-		state:         modrinthSearchScreen,
+		state:        modrinthSearchScreen,
 		catalogQuery: "sodium",
-		instance:      instances.Instance{Loader: "fabric", MinecraftVersion: "1.21.1"},
-		width:         100,
-		height:        30,
+		instance:     instances.Instance{Loader: "fabric", MinecraftVersion: "1.21.1"},
+		width:        100,
+		height:       30,
 	}
 	expectedSorts := []string{"downloads", "follows", "newest", "updated", "relevance"}
 	for _, want := range expectedSorts {
@@ -416,6 +416,30 @@ func TestCatalogDetailCardRendering(t *testing.T) {
 	}
 	if strings.Contains(view, "1.21, 1.21.1") {
 		t.Fatalf("detail view showed all compatible game versions instead of the active version:\n%s", view)
+	}
+}
+
+func TestCatalogDetailLongDescriptionFitsCenterPanel(t *testing.T) {
+	m := Model{
+		state:          modrinthDetailScreen,
+		width:          100,
+		height:         30,
+		catalogProject: modrinth.Project{Title: "Iris", Description: strings.Repeat("A shader loader description that wraps across narrow terminal lines. ", 30)},
+		catalogVersion: modrinth.Version{
+			Number:       "1.11.4+26.1-fabric",
+			Channel:      "release",
+			Published:    time.Date(2026, time.September, 13, 0, 0, 0, 0, time.UTC),
+			Loaders:      []string{"fabric"},
+			GameVersions: []string{"26.1"},
+			Files:        []modrinth.File{{Filename: "iris.jar", Primary: true, Size: 1024}},
+		},
+	}
+	view := m.renderCatalog()
+	if height := lipgloss.Height(view); height > m.centerInnerHeight() {
+		t.Fatalf("detail view exceeds its panel: got %d lines, panel has %d\n%s", height, m.centerInnerHeight(), view)
+	}
+	if !strings.Contains(view, "iris.jar") || !strings.Contains(view, "…") {
+		t.Fatalf("detail view lost file metadata or did not truncate the description:\n%s", view)
 	}
 }
 
@@ -549,6 +573,25 @@ func TestCatalogHeaderRemainsPinnedOnScroll(t *testing.T) {
 		expectedMod := fmt.Sprintf("► Mod-%02d", cursor)
 		if !strings.Contains(view, expectedMod) {
 			t.Fatalf("cursor %d: selected item %q not in view:\n%s", cursor, expectedMod, view)
+		}
+	}
+}
+
+func TestCatalogIncompatibilityDiagnosticIsVisible(t *testing.T) {
+	err := fmt.Errorf("required dependency Sodium 0.9.2 for Fabric 26.1.2: version \"Sodium 0.9.2 for Fabric 26.1.2\" supports Minecraft [26.1.2] with loaders [fabric], but this instance uses Minecraft 26.1 with loader fabric")
+	m := Model{
+		state:          modrinthDetailScreen,
+		catalogErr:     err,
+		catalogProject: modrinth.Project{Title: "Iris"},
+		catalogVersion: modrinth.Version{Number: "1.11.4+26.1-fabric"},
+		instance:       instances.Instance{Name: "test", Loader: "Fabric", MinecraftVersion: "26.1"},
+		width:          100,
+		height:         30,
+	}
+	view := strings.Join(strings.Fields(m.renderCatalog()), " ")
+	for _, want := range []string{"Sodium 0.9.2 for Fabric 26.1.2", "Minecraft [26.1.2]", "Minecraft 26.1"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("rendered catalog error does not explain %q: %s", want, view)
 		}
 	}
 }

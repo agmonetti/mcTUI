@@ -44,7 +44,7 @@ func TestMainMenuOptionsAndRendering(t *testing.T) {
 		"Play (1.20.4)",
 		"Worlds",
 		"Mods",
-		"Change Instances",
+		"Instances",
 		"Configs",
 		"Quit",
 	}
@@ -63,6 +63,38 @@ func TestMainMenuOptionsAndRendering(t *testing.T) {
 		if strings.Contains(view, "► "+sub) || strings.Contains(view, "  "+sub) {
 			t.Errorf("main menu view should not show config sub-option %q:\n%s", sub, view)
 		}
+	}
+}
+
+func TestVerifyInstallationDetailsUseReadableLines(t *testing.T) {
+	if err := i18n.Init("en"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = i18n.Init("en") })
+	root := t.TempDir()
+	in, err := instances.Create(root, "TestInstance", "1.20.4", "Vanilla", "", 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := Model{
+		state:         confirmScreen,
+		username:      "Steve",
+		versionSelect: "1.20.4",
+		modloader:     "Vanilla",
+		memoryMB:      2048,
+		dataRoot:      root,
+		instance:      in,
+		width:         120,
+		height:        35,
+	}
+	view := m.View()
+	for _, want := range []string{"VERIFY INSTALLATION", "Instance: TestInstance", "Game data:", "Shared runtime:", "Java:", "[y/Enter] YES"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("verification screen missing %q: %q", want, view)
+		}
+	}
+	if strings.Contains(view, `\n`) {
+		t.Fatalf("verification screen rendered escaped newlines literally:\n%s", view)
 	}
 }
 

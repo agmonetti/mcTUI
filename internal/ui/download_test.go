@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"mcTUI/internal/launcher"
 )
@@ -131,6 +132,24 @@ func TestFailedDownloadNeverStartsGame(t *testing.T) {
 	m = updated.(Model)
 	if cmd != nil || !errors.Is(m.dlErr, context.Canceled) {
 		t.Fatal("late success launched after cancellation")
+	}
+}
+
+func TestGameRunningScreenFitsNarrowTerminal(t *testing.T) {
+	path := "/home/player/.local/share/mctui/instances/instance-id/minecraft"
+	m := Model{
+		state:   gameRunningScreen,
+		width:   70,
+		height:  20,
+		launch:  LaunchConfig{GameDir: path},
+		gameLog: path + "/mctui_latest.log",
+	}
+	view := m.View()
+	if width, height := lipgloss.Width(view), lipgloss.Height(view); width > m.width || height > m.height {
+		t.Fatalf("running-game view exceeds terminal: %dx%d in %dx%d", width, height, m.width, m.height)
+	}
+	if !strings.Contains(view, "/home/player") || !strings.Contains(view, "mctui_latest.log") {
+		t.Fatalf("running-game view omitted instance or log information: %q", view)
 	}
 }
 

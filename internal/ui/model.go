@@ -193,6 +193,7 @@ type Model struct {
 	catalogOffset          int
 	catalogSortIndex       int
 	catalogLoading         bool
+	catalogPreviousScreen  screenState
 	catalogRequest         uint64
 	catalogProject         modrinth.Project
 	catalogVersion         modrinth.Version
@@ -366,6 +367,13 @@ func (m Model) centerWidth() int {
 		return min(80, max(46, m.width-34))
 	}
 	return 76
+}
+
+func (m Model) centerInnerHeight() int {
+	if m.width > 0 {
+		return max(14, min(38, m.height-19))
+	}
+	return m.height - 4
 }
 
 func (m Model) catalogWidth() int {

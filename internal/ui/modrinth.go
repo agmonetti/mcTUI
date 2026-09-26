@@ -316,11 +316,13 @@ func (m Model) updateCatalog(msg tea.Msg) (Model, tea.Cmd, bool) {
 			m.catalogPlan, m.catalogErr = v.Plan, v.Err
 			if v.Err == nil {
 				m.catalogVersion = v.Plan.TargetMod
+				m.state = modrinthReviewScreen
+			} else {
+				m.state = m.catalogPreviousScreen
 			}
 			m.catalogOptional = map[string]bool{}
 			m.catalogCursor = 0
 			m.catalogModifiedConfirm = false
-			m.state = modrinthReviewScreen
 		}
 		return m, nil, true
 	case catalogUpdatesMsg:
@@ -429,6 +431,7 @@ func (m Model) updateCatalogKey(key string) (tea.Model, tea.Cmd) {
 	case modrinthDetailScreen:
 		if key == "enter" {
 			m.startCatalogRead()
+			m.catalogPreviousScreen = m.state
 			m.state = modrinthWorkingScreen
 			return m, m.catalogResolve()
 		}
@@ -491,6 +494,7 @@ func (m Model) updateCatalogKey(key string) (tea.Model, tea.Cmd) {
 		}
 		if key == "y" && len(m.catalogUpdates) > 0 {
 			m.startCatalogRead()
+			m.catalogPreviousScreen = m.state
 			m.state = modrinthWorkingScreen
 			return m, m.catalogResolveUpdates()
 		}
@@ -501,10 +505,19 @@ func (m Model) updateCatalogKey(key string) (tea.Model, tea.Cmd) {
 }
 func (m Model) renderCatalog() string {
 	var b strings.Builder
-	b.WriteString(i18n.T("modrinth.catalog_title", modText(m.instance.Name)) + "\n")
-	b.WriteString(i18n.T("modrinth.filter_status", modText(m.instance.Loader), modText(m.instance.MinecraftVersion), i18n.T("modrinth.channel."+m.catalogChannel()), i18n.T("modrinth.sort."+m.catalogSort())) + "\n\n")
+	headerWidth := max(20, m.centerWidth()-6)
+	headerLines := wrapResetLines([]string{i18n.T("modrinth.catalog_title", modText(m.instance.Name))}, headerWidth)
+	filterLines := wrapResetLines([]string{i18n.T("modrinth.filter_status", modText(m.instance.Loader), modText(m.instance.MinecraftVersion), i18n.T("modrinth.channel."+m.catalogChannel()), i18n.T("modrinth.sort."+m.catalogSort()))}, headerWidth)
+	b.WriteString(strings.Join(headerLines, "\n") + "\n" + strings.Join(filterLines, "\n") + "\n\n")
+	headerLineCount := len(headerLines) + len(filterLines) + 1
 	if m.catalogErr != nil {
-		b.WriteString("⚠ " + modText(m.catalogErr.Error()) + "\n\n")
+		errorWidth := max(20, m.centerWidth()-6)
+		b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("⚠ "+i18n.T("modrinth.error_title")) + "\n")
+		explanation := wrapResetLines([]string{i18n.T("modrinth.error_explanation")}, errorWidth)
+		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(strings.Join(explanation, "\n")) + "\n")
+		reason := wrapResetLines([]string{modText(m.catalogErr.Error())}, errorWidth)
+		b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render(strings.Join(reason, "\n")) + "\n\n")
+		headerLineCount += 3 + len(explanation) + len(reason)
 	}
 	switch m.state {
 	case modrinthSearchScreen:
@@ -539,11 +552,18 @@ func (m Model) renderCatalog() string {
 		b.WriteString(i18n.T("modrinth.search_results_count", len(m.catalogResults.Hits), m.catalogResults.Total) + "\n")
 		b.WriteString(i18n.T("modrinth.search_hint"))
 	case modrinthDetailScreen:
+		width := max(20, m.centerWidth()-6)
+		wrapStyled := func(text string, style lipgloss.Style) []string {
+			parts := wrapResetLines([]string{text}, width)
+			for i := range parts {
+				parts[i] = style.Render(parts[i])
+			}
+			return parts
+		}
 		titleStr := modText(m.catalogProject.Title)
 		if m.catalogProject.Slug != "" && m.catalogProject.Slug != m.catalogProject.Title {
 			titleStr += " (" + modText(m.catalogProject.Slug) + ")"
 		}
-		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(titleStr) + "\n")
 		author := ""
 		if m.catalogCursor < len(m.catalogResults.Hits) {
 			author = m.catalogResults.Hits[m.catalogCursor].Author
@@ -556,42 +576,31 @@ func (m Model) renderCatalog() string {
 			metaLine += i18n.T("modrinth.detail_by", modText(author)) + "  ·  "
 		}
 		metaLine += i18n.T("modrinth.detail_downloads", formatDownloads(m.catalogProject.Downloads))
-		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(metaLine) + "\n\n")
+		titleLines := wrapStyled(titleStr, lipgloss.NewStyle().Foreground(colorAccent).Bold(true))
+		metaLines := wrapStyled(metaLine, lipgloss.NewStyle().Foreground(colorGray))
 
-		desc := strings.TrimSpace(m.catalogProject.Description)
-		if desc != "" {
-			b.WriteString(modText(desc) + "\n\n")
-		}
-
-		b.WriteString(lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("modrinth.detail_compatible_title")) + "\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 48)) + "\n")
 		verNumber := m.catalogVersion.Number
 		if verNumber == "" {
 			verNumber = m.catalogVersion.Name
 		}
 		file, hasFile := m.catalogVersion.PrimaryFile()
-		fileSize := ""
+		versionLine := i18n.T("common.version_label") + "  " + modText(verNumber) + "  [" + modText(m.catalogVersion.Channel) + "]"
 		if hasFile {
-			fileSize = " (" + catalogSize(file.Size) + ")"
+			versionLine += " · " + catalogSize(file.Size)
 		}
-		b.WriteString(labelStyle.Render(i18n.T("common.version_label")) + "  " +
-			lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(modText(verNumber)) + "  " +
-			lipgloss.NewStyle().Foreground(colorAccent).Render("["+modText(m.catalogVersion.Channel)+"]") + fileSize + "\n")
+		staticLines := [][]string{wrapStyled(versionLine, lipgloss.NewStyle().Foreground(colorAccent2).Bold(true))}
 		if hasFile && file.Filename != "" {
-			b.WriteString(labelStyle.Render(i18n.T("mods.file_label")) + "  " +
-				lipgloss.NewStyle().Foreground(colorWhite).Render(modText(file.Filename)) + "\n")
+			staticLines = append(staticLines, wrapStyled(i18n.T("mods.file_label")+modText(file.Filename), lipgloss.NewStyle().Foreground(colorWhite)))
 		}
 		if !m.catalogVersion.Published.IsZero() {
-			b.WriteString(labelStyle.Render(i18n.T("modrinth.detail_published", m.catalogVersion.Published.Format("2006-01-02"))) + "\n")
+			staticLines = append(staticLines, wrapStyled(i18n.T("modrinth.detail_published", m.catalogVersion.Published.Format("2006-01-02")), lipgloss.NewStyle().Foreground(colorGray)))
 		}
 		if len(m.catalogVersion.Loaders) > 0 {
-			b.WriteString(i18n.T("modrinth.detail_loaders", modText(strings.Join(m.catalogVersion.Loaders, ", "))) + "  ·  " +
-				i18n.T("modrinth.detail_game_versions", modText(m.instance.MinecraftVersion)) + "\n")
+			loaders := i18n.T("modrinth.detail_loaders", modText(strings.Join(m.catalogVersion.Loaders, ", "))) + " · " +
+				i18n.T("modrinth.detail_game_versions", modText(m.instance.MinecraftVersion))
+			staticLines = append(staticLines, wrapStyled(loaders, lipgloss.NewStyle().Foreground(colorGray)))
 		}
-		b.WriteString("\n")
 
-		b.WriteString(lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("modrinth.detail_deps_title")) + "\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 48)) + "\n")
 		var reqDeps, optDeps, incDeps []string
 		for _, dep := range m.catalogVersion.Dependencies {
 			name := dep.ProjectID
@@ -610,32 +619,60 @@ func (m Model) renderCatalog() string {
 				incDeps = append(incDeps, name)
 			}
 		}
-		if len(reqDeps) == 0 && len(optDeps) == 0 && len(incDeps) == 0 {
-			b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("modrinth.detail_no_deps")) + "\n")
+		dependencyLine := ""
+		if len(reqDeps)+len(optDeps)+len(incDeps) == 0 {
+			dependencyLine = i18n.T("modrinth.detail_no_deps")
 		} else {
 			if len(reqDeps) > 0 {
-				b.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Render("  ✓ "+i18n.T("modrinth.detail_required_count", len(reqDeps))) + " " + modText(strings.Join(reqDeps, ", ")) + "\n")
+				dependencyLine += "✓ " + i18n.T("modrinth.detail_required_count", len(reqDeps)) + ": " + modText(strings.Join(reqDeps, ", ")) + "  "
 			}
 			if len(optDeps) > 0 {
-				b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Render("  • "+i18n.T("modrinth.detail_optional_count", len(optDeps))) + " " + modText(strings.Join(optDeps, ", ")) + "\n")
+				dependencyLine += "• " + i18n.T("modrinth.detail_optional_count", len(optDeps)) + ": " + modText(strings.Join(optDeps, ", ")) + "  "
 			}
 			if len(incDeps) > 0 {
-				b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("  ✗ "+i18n.T("modrinth.detail_incompatible_count", len(incDeps))) + " " + modText(strings.Join(incDeps, ", ")) + "\n")
+				dependencyLine += "✗ " + i18n.T("modrinth.detail_incompatible_count", len(incDeps)) + ": " + modText(strings.Join(incDeps, ", "))
 			}
 		}
-		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("modrinth.detail_hint")))
+		staticLines = append(staticLines, wrapStyled(dependencyLine, lipgloss.NewStyle().Foreground(colorWhite)))
+		hintLines := wrapStyled(i18n.T("modrinth.detail_hint"), lipgloss.NewStyle().Foreground(colorDimGray))
+		fixedCount := len(titleLines) + len(metaLines) + len(staticLines) + len(hintLines) + 1 // divider
+		availableDesc := max(0, m.centerInnerHeight()-headerLineCount-fixedCount)
+		if m.catalogErr != nil {
+			availableDesc = 0
+		}
+		descLines := []string{}
+		desc := strings.TrimSpace(m.catalogProject.Description)
+		if desc != "" && availableDesc > 0 {
+			descLines = wrapResetLines(strings.Split(desc, "\n"), width)
+			if len(descLines) > availableDesc {
+				descLines = descLines[:availableDesc]
+				descLines[len(descLines)-1] = strings.TrimRight(descLines[len(descLines)-1], " .") + "…"
+			}
+		}
+		rendered := append([]string{}, titleLines...)
+		rendered = append(rendered, metaLines...)
+		rendered = append(rendered, descLines...)
+		rendered = append(rendered, lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", min(46, width))))
+		for _, group := range staticLines {
+			rendered = append(rendered, group...)
+		}
+		rendered = append(rendered, hintLines...)
+		b.WriteString(strings.Join(rendered, "\n"))
 	case modrinthReviewScreen:
-		b.WriteString(i18n.T("modrinth.plan_title") + "\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("modrinth.plan_title")) + "\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46)) + "\n\n")
 		b.WriteString(i18n.T("modrinth.destination") + "\n\n")
 		lines := []string{}
 		for _, item := range m.catalogPlan.Targets {
-			lines = append(lines, i18n.T("modrinth.target_mod", modText(item.File.Filename), modText(item.Version.Number))+" · "+catalogSize(item.File.Size)+catalogInstalledLabel(item))
+			lines = append(lines, lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(i18n.T("modrinth.target_mod", modText(item.File.Filename), modText(item.Version.Number)))+" · "+catalogSize(item.File.Size)+catalogInstalledLabel(item))
 		}
-		lines = append(lines, i18n.T("modrinth.required_deps"))
+		lines = append(lines, "")
+		lines = append(lines, lipgloss.NewStyle().Foreground(colorWhite).Bold(true).Render(i18n.T("modrinth.required_deps")))
 		for _, item := range m.catalogPlan.RequiredDeps {
 			lines = append(lines, "  ✓ "+modText(item.File.Filename)+" · "+modText(item.Version.Number)+" · "+catalogSize(item.File.Size)+catalogInstalledLabel(item))
 		}
-		lines = append(lines, i18n.T("modrinth.optional_deps"))
+		lines = append(lines, "")
+		lines = append(lines, lipgloss.NewStyle().Foreground(colorWhite).Bold(true).Render(i18n.T("modrinth.optional_deps")))
 		optionalStart := len(lines)
 		chosen := []string{}
 		for id, enabled := range m.catalogOptional {
@@ -671,12 +708,13 @@ func (m Model) renderCatalog() string {
 				}
 			}
 		}
-		b.WriteString(m.catalogPage(lines, optionalStart+m.catalogCursor, 9))
+		b.WriteString(m.catalogPage(lines, optionalStart+m.catalogCursor, 13))
+		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46)) + "\n")
 		b.WriteString(i18n.T("modrinth.conflicts_label") + " ")
 		if err := m.catalogSelectedConflict(); err != nil {
-			b.WriteString("⚠ " + modText(err.Error()) + "\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("⚠ "+modText(err.Error())) + "\n")
 		} else {
-			b.WriteString(i18n.T("modrinth.no_conflicts") + "\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Render(i18n.T("modrinth.no_conflicts")) + "\n")
 		}
 		if m.catalogModifiedConfirm {
 			b.WriteString(i18n.T("modrinth.modified_approved") + "\n")
@@ -689,8 +727,9 @@ func (m Model) renderCatalog() string {
 				count++
 			}
 		}
-		b.WriteString(i18n.T("modrinth.total_download", catalogSize(total), count) + " · SHA-512\n")
-		b.WriteString(i18n.T("modrinth.confirm_prompt") + "  " + i18n.T("modrinth.review_hint"))
+		b.WriteString(i18n.T("modrinth.total_download", catalogSize(total), count) + " · SHA-512\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render(i18n.T("modrinth.confirm_prompt")) + "\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("modrinth.review_hint")))
 	case modrinthUpdatesScreen:
 		b.WriteString(i18n.T("modrinth.updates_title", len(m.catalogUpdates)) + "\n")
 		lines := make([]string, 0, len(m.catalogUpdates))

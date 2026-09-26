@@ -287,7 +287,11 @@ func (m Model) renderMods() string {
 		if m.pickerErr != nil {
 			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+modText(displayError(m.pickerErr))) + "\n\n")
 		}
-		count := max(1, m.height-12)
+		available := m.centerInnerHeight() - 14
+		if m.pickerErr != nil {
+			available -= 2
+		}
+		count := max(1, available)
 		start := max(0, m.pickerCursor-count+1)
 		for i := start; i < min(len(m.pickerEntries), start+count); i++ {
 			entry := m.pickerEntries[i]
@@ -309,7 +313,17 @@ func (m Model) renderMods() string {
 		if len(m.modItems) == 0 {
 			b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("  "+i18n.T("mods.empty")) + "\n\n")
 		}
-		count := max(1, m.height-14)
+		available := m.centerInnerHeight() - 7
+		if m.modBusy != nil {
+			available -= 2
+		}
+		if m.modErr != nil {
+			available -= 2
+		}
+		if len(m.modItems) == 0 {
+			available -= 2
+		}
+		count := max(1, available)
 		start := max(0, m.modCursor-count+1)
 		for i := start; i < min(len(m.modItems), start+count); i++ {
 			item := m.modItems[i]
