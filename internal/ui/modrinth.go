@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"mcTUI/internal/i18n"
 	"mcTUI/internal/modrinth"
 	"mcTUI/internal/mods"
@@ -46,6 +47,38 @@ type catalogInstalledMsg struct {
 type catalogProgressMsg struct{ Downloaded int64 }
 
 var catalogAPI = modrinth.NewClient() // Share Modrinth rate limits across searches, updates and downloads.
+var catalogSorts = []string{"relevance", "downloads", "follows", "newest", "updated"}
+
+func (m Model) catalogSort() string {
+	if m.catalogSortIndex >= 0 && m.catalogSortIndex < len(catalogSorts) {
+		return catalogSorts[m.catalogSortIndex]
+	}
+	return "relevance"
+}
+
+func formatDownloads(n int64) string {
+	if n <= 0 {
+		return "0"
+	}
+	if n < 1000 {
+		return fmt.Sprintf("%d", n)
+	}
+	if n < 1000000 {
+		return fmt.Sprintf("%.1fK", float64(n)/1000)
+	}
+	return fmt.Sprintf("%.1fM", float64(n)/1000000)
+}
+
+func padCol(s string, width int) string {
+	r := []rune(s)
+	if len(r) > width {
+		if width > 1 {
+			return string(r[:width-1]) + "…"
+		}
+		return string(r[:width])
+	}
+	return s + strings.Repeat(" ", width-len(r))
+}
 
 func (m Model) catalogClient() *modrinth.Client { return catalogAPI }
 func (m *Model) startCatalogRead() {
@@ -70,9 +103,9 @@ func (m Model) catalogChannel() string {
 	return "release"
 }
 func (m Model) catalogSearch() tea.Cmd {
-	query, loader, mc, request, offset, ctx := m.catalogQuery, m.instance.Loader, m.instance.MinecraftVersion, m.catalogRequest, m.catalogOffset, m.catalogContext
+	query, loader, mc, sort, request, offset, ctx := m.catalogQuery, m.instance.Loader, m.instance.MinecraftVersion, m.catalogSort(), m.catalogRequest, m.catalogOffset, m.catalogContext
 	return func() tea.Msg {
-		results, err := m.catalogClient().Search(ctx, query, loader, mc, offset)
+		results, err := m.catalogClient().Search(ctx, query, loader, mc, offset, sort)
 		return catalogSearchMsg{request, offset, results, err}
 	}
 }
@@ -351,6 +384,14 @@ func (m Model) updateCatalogKey(key string) (tea.Model, tea.Cmd) {
 	switch m.state {
 	case modrinthSearchScreen:
 		switch key {
+		case "tab":
+			m.catalogSortIndex = (m.catalogSortIndex + 1) % len(catalogSorts)
+			m.catalogOffset = 0
+			m.catalogResults = modrinth.SearchResponse{}
+			m.catalogCursor = 0
+			m.catalogLoading = true
+			m.startCatalogRead()
+			return m, m.catalogSearch()
 		case "up":
 			m.catalogCursor = max(0, m.catalogCursor-1)
 		case "down":
@@ -461,7 +502,7 @@ func (m Model) updateCatalogKey(key string) (tea.Model, tea.Cmd) {
 func (m Model) renderCatalog() string {
 	var b strings.Builder
 	b.WriteString(i18n.T("modrinth.catalog_title", modText(m.instance.Name)) + "\n")
-	b.WriteString(i18n.T("modrinth.filter_status", modText(m.instance.Loader), modText(m.instance.MinecraftVersion), i18n.T("modrinth.channel."+m.catalogChannel())) + "\n\n")
+	b.WriteString(i18n.T("modrinth.filter_status", modText(m.instance.Loader), modText(m.instance.MinecraftVersion), i18n.T("modrinth.channel."+m.catalogChannel()), i18n.T("modrinth.sort."+m.catalogSort())) + "\n\n")
 	if m.catalogErr != nil {
 		b.WriteString("⚠ " + modText(m.catalogErr.Error()) + "\n\n")
 	}
@@ -469,22 +510,117 @@ func (m Model) renderCatalog() string {
 	case modrinthSearchScreen:
 		b.WriteString(i18n.T("modrinth.search_label", modText(m.catalogQuery)) + "\n")
 		lines := make([]string, 0, len(m.catalogResults.Hits))
+		useTable := m.width >= 75
+		if useTable && len(m.catalogResults.Hits) > 0 {
+			header := "  " + padCol(i18n.T("modrinth.col_name"), 22) + "  " + padCol(i18n.T("modrinth.col_author"), 14) + "  " + padCol(i18n.T("modrinth.col_downloads"), 10) + "  " + i18n.T("modrinth.col_description")
+			lines = append(lines, lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(header))
+			divWidth := min(max(40, m.width-18), 76)
+			lines = append(lines, lipgloss.NewStyle().Foreground(colorDimGray).Render("  "+strings.Repeat("─", divWidth)))
+		}
 		for i, hit := range m.catalogResults.Hits {
 			prefix := "  "
 			if i == m.catalogCursor {
 				prefix = "► "
 			}
-			lines = append(lines, prefix+modText(hit.Title)+" · "+modText(hit.Author)+" · "+catalogSize(hit.Downloads)+" — "+modText(hit.Description))
+			if useTable {
+				lines = append(lines, prefix+padCol(modText(hit.Title), 22)+"  "+padCol(modText(hit.Author), 14)+"  "+padCol(formatDownloads(hit.Downloads), 10)+"  "+modText(hit.Description))
+			} else {
+				lines = append(lines, prefix+modText(hit.Title)+" · "+modText(hit.Author)+" · "+formatDownloads(hit.Downloads)+" — "+modText(hit.Description))
+			}
 		}
-		b.WriteString(m.catalogPage(lines, m.catalogCursor, 7))
-		b.WriteString(fmt.Sprintf("%d / %d\n", len(lines), m.catalogResults.Total))
+		offsetCursor := m.catalogCursor
+		if useTable && len(m.catalogResults.Hits) > 0 {
+			offsetCursor += 2
+		}
+		b.WriteString(m.catalogPage(lines, offsetCursor, 7))
+		b.WriteString(i18n.T("modrinth.search_results_count", len(m.catalogResults.Hits), m.catalogResults.Total) + "\n")
 		b.WriteString(i18n.T("modrinth.search_hint"))
 	case modrinthDetailScreen:
-		b.WriteString(modText(m.catalogProject.Title) + "\n")
-		b.WriteString(m.catalogPage([]string{modText(m.catalogProject.Description)}, 0, 7))
-		file, _ := m.catalogVersion.PrimaryFile()
-		b.WriteString(i18n.T("modrinth.detail_version", modText(m.catalogVersion.Number), modText(m.catalogVersion.Channel), catalogSize(file.Size)) + "\n")
-		b.WriteString(modText(file.Filename) + "\n" + i18n.T("modrinth.detail_hint"))
+		titleStr := modText(m.catalogProject.Title)
+		if m.catalogProject.Slug != "" && m.catalogProject.Slug != m.catalogProject.Title {
+			titleStr += " (" + modText(m.catalogProject.Slug) + ")"
+		}
+		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(titleStr) + "\n")
+		author := ""
+		if m.catalogCursor < len(m.catalogResults.Hits) {
+			author = m.catalogResults.Hits[m.catalogCursor].Author
+		}
+		if author == "" {
+			author = m.catalogProject.Team
+		}
+		metaLine := ""
+		if author != "" {
+			metaLine += i18n.T("modrinth.detail_by", modText(author)) + "  ·  "
+		}
+		metaLine += i18n.T("modrinth.detail_downloads", formatDownloads(m.catalogProject.Downloads))
+		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(metaLine) + "\n\n")
+
+		desc := strings.TrimSpace(m.catalogProject.Description)
+		if desc != "" {
+			b.WriteString(modText(desc) + "\n\n")
+		}
+
+		b.WriteString(lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("modrinth.detail_compatible_title")) + "\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 48)) + "\n")
+		verNumber := m.catalogVersion.Number
+		if verNumber == "" {
+			verNumber = m.catalogVersion.Name
+		}
+		file, hasFile := m.catalogVersion.PrimaryFile()
+		fileSize := ""
+		if hasFile {
+			fileSize = " (" + catalogSize(file.Size) + ")"
+		}
+		b.WriteString(labelStyle.Render(i18n.T("common.version_label")) + "  " +
+			lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(modText(verNumber)) + "  " +
+			lipgloss.NewStyle().Foreground(colorAccent).Render("["+modText(m.catalogVersion.Channel)+"]") + fileSize + "\n")
+		if hasFile && file.Filename != "" {
+			b.WriteString(labelStyle.Render(i18n.T("mods.file_label")) + "  " +
+				lipgloss.NewStyle().Foreground(colorWhite).Render(modText(file.Filename)) + "\n")
+		}
+		if !m.catalogVersion.Published.IsZero() {
+			b.WriteString(labelStyle.Render(i18n.T("modrinth.detail_published", m.catalogVersion.Published.Format("2006-01-02"))) + "\n")
+		}
+		if len(m.catalogVersion.Loaders) > 0 {
+			b.WriteString(i18n.T("modrinth.detail_loaders", modText(strings.Join(m.catalogVersion.Loaders, ", "))) + "  ·  " +
+				i18n.T("modrinth.detail_game_versions", modText(strings.Join(m.catalogVersion.GameVersions, ", "))) + "\n")
+		}
+		b.WriteString("\n")
+
+		b.WriteString(lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("modrinth.detail_deps_title")) + "\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 48)) + "\n")
+		var reqDeps, optDeps, incDeps []string
+		for _, dep := range m.catalogVersion.Dependencies {
+			name := dep.ProjectID
+			if name == "" {
+				name = dep.VersionID
+			}
+			if name == "" {
+				name = dep.FileName
+			}
+			switch dep.Type {
+			case "required":
+				reqDeps = append(reqDeps, name)
+			case "optional":
+				optDeps = append(optDeps, name)
+			case "incompatible":
+				incDeps = append(incDeps, name)
+			}
+		}
+		if len(reqDeps) == 0 && len(optDeps) == 0 && len(incDeps) == 0 {
+			b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("modrinth.detail_no_deps")) + "\n")
+		} else {
+			if len(reqDeps) > 0 {
+				b.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Render("  ✓ "+i18n.T("modrinth.detail_required_count", len(reqDeps))) + " " + modText(strings.Join(reqDeps, ", ")) + "\n")
+			}
+			if len(optDeps) > 0 {
+				b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Render("  • "+i18n.T("modrinth.detail_optional_count", len(optDeps))) + " " + modText(strings.Join(optDeps, ", ")) + "\n")
+			}
+			if len(incDeps) > 0 {
+				b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("  ✗ "+i18n.T("modrinth.detail_incompatible_count", len(incDeps))) + " " + modText(strings.Join(incDeps, ", ")) + "\n")
+			}
+		}
+		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("modrinth.detail_hint")))
 	case modrinthReviewScreen:
 		b.WriteString(i18n.T("modrinth.plan_title") + "\n")
 		b.WriteString(i18n.T("modrinth.destination", modText(filepath.Join(m.modStore.GameDir, "mods"))) + "\n")

@@ -191,6 +191,7 @@ type Model struct {
 	catalogResults         modrinth.SearchResponse
 	catalogCursor          int
 	catalogOffset          int
+	catalogSortIndex       int
 	catalogLoading         bool
 	catalogRequest         uint64
 	catalogProject         modrinth.Project

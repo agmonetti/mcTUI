@@ -223,6 +223,25 @@ func TestOptionalConflictOnlyAppliesWhenChosen(t *testing.T) {
 		t.Fatalf("optional conflicts not retained for confirmation: %v", got)
 	}
 }
+func TestSearchSortingIndex(t *testing.T) {
+	var capturedIndex string
+	c := mock(t, func(w http.ResponseWriter, r *http.Request) {
+		capturedIndex = r.URL.Query().Get("index")
+		fmt.Fprint(w, `{"hits":[],"total_hits":0}`)
+	})
+	if _, err := c.Search(context.Background(), "test", "fabric", "1.21.1", 0, "downloads"); err != nil {
+		t.Fatal(err)
+	}
+	if capturedIndex != "downloads" {
+		t.Fatalf("expected index=downloads, got %q", capturedIndex)
+	}
+	if _, err := c.Search(context.Background(), "test", "fabric", "1.21.1", 0, "invalid-sort"); err != nil {
+		t.Fatal(err)
+	}
+	if capturedIndex != "relevance" {
+		t.Fatalf("expected fallback to relevance, got %q", capturedIndex)
+	}
+}
 
 func mustJSON(t *testing.T, v any) string {
 	t.Helper()

@@ -14,8 +14,10 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"mcTUI/internal/instances"
 	"mcTUI/internal/modrinth"
 	"mcTUI/internal/mods"
 )
@@ -300,5 +302,154 @@ func TestCatalogPaginationAndStaleResults(t *testing.T) {
 	m, _, _ = m.updateCatalog(catalogSearchMsg{Request: 2, Results: first})
 	if len(m.catalogResults.Hits) != 4 {
 		t.Fatal("stale search replaced results")
+	}
+}
+
+func TestCatalogSortCyclingAndSearch(t *testing.T) {
+	m := Model{
+		state:         modrinthSearchScreen,
+		catalogQuery: "sodium",
+		instance:      instances.Instance{Loader: "fabric", MinecraftVersion: "1.21.1"},
+		width:         100,
+		height:        30,
+	}
+	expectedSorts := []string{"downloads", "follows", "newest", "updated", "relevance"}
+	for _, want := range expectedSorts {
+		next, cmd := m.updateCatalogKey("tab")
+		m = next.(Model)
+		if cmd == nil {
+			t.Fatalf("expected search command after tab cycling to %s", want)
+		}
+		if m.catalogSort() != want {
+			t.Fatalf("expected sort %q, got %q", want, m.catalogSort())
+		}
+		if m.catalogOffset != 0 || m.catalogCursor != 0 || !m.catalogLoading {
+			t.Fatalf("search state not reset on sort change: offset=%d cursor=%d loading=%v", m.catalogOffset, m.catalogCursor, m.catalogLoading)
+		}
+	}
+}
+
+func TestFormatDownloads(t *testing.T) {
+	cases := []struct {
+		n    int64
+		want string
+	}{
+		{-5, "0"},
+		{0, "0"},
+		{500, "500"},
+		{999, "999"},
+		{1000, "1.0K"},
+		{1500, "1.5K"},
+		{999999, "1000.0K"},
+		{1000000, "1.0M"},
+		{42100000, "42.1M"},
+	}
+	for _, tc := range cases {
+		if got := formatDownloads(tc.n); got != tc.want {
+			t.Errorf("formatDownloads(%d) = %q, want %q", tc.n, got, tc.want)
+		}
+	}
+}
+
+func TestCatalogDetailCardRendering(t *testing.T) {
+	m := Model{
+		state: modrinthDetailScreen,
+		instance: instances.Instance{
+			Name:             "Super Fabric",
+			Loader:           "Fabric",
+			MinecraftVersion: "1.21.1",
+		},
+		catalogProject: modrinth.Project{
+			ID:          "AABBCCDD",
+			Slug:        "sodium",
+			Title:       "Sodium",
+			Description: "Modern rendering engine for Minecraft",
+			Downloads:   42100000,
+			Team:        "jellysquid3",
+		},
+		catalogVersion: modrinth.Version{
+			ID:           "v1",
+			ProjectID:    "AABBCCDD",
+			Number:       "0.5.11+mc1.21.1",
+			Channel:      "release",
+			Published:    time.Date(2024, time.August, 10, 12, 0, 0, 0, time.UTC),
+			Loaders:      []string{"fabric", "quilt"},
+			GameVersions: []string{"1.21", "1.21.1"},
+			Files: []modrinth.File{
+				{
+					Filename: "sodium-fabric-0.5.11+mc1.21.1.jar",
+					Primary:  true,
+					Size:     1887436,
+				},
+			},
+			Dependencies: []modrinth.Dependency{
+				{ProjectID: "fabric-api", Type: "required"},
+				{ProjectID: "cloth-config", Type: "optional"},
+				{ProjectID: "optifine", Type: "incompatible"},
+			},
+		},
+		width:  120,
+		height: 35,
+	}
+
+	view := m.renderCatalog()
+	for _, want := range []string{
+		"Sodium (sodium)",
+		"jellysquid3",
+		"42.1M",
+		"Modern rendering engine for Minecraft",
+		"0.5.11+mc1.21.1",
+		"[release]",
+		"sodium-fabric-0.5.11+mc1.21.1.jar",
+		"1.8 MiB",
+		"2024-08-10",
+		"fabric, quilt",
+		"1.21, 1.21.1",
+		"fabric-api",
+		"cloth-config",
+		"optifine",
+	} {
+		if !strings.Contains(view, want) {
+			t.Errorf("detail view missing expected element %q:\n%s", want, view)
+		}
+	}
+}
+
+func TestCatalogTableColumnsRendering(t *testing.T) {
+	m := Model{
+		state: modrinthSearchScreen,
+		instance: instances.Instance{
+			Name:             "Test Inst",
+			Loader:           "Fabric",
+			MinecraftVersion: "1.21.1",
+		},
+		catalogQuery: "sodi",
+		catalogResults: modrinth.SearchResponse{
+			Hits: []modrinth.SearchResult{
+				{
+					Title:       "Sodium",
+					Author:      "jellysquid3",
+					Downloads:   42100000,
+					Description: "Modern rendering engine",
+				},
+			},
+			Total: 1,
+		},
+		width:  100,
+		height: 30,
+	}
+
+	viewWide := m.renderCatalog()
+	for _, want := range []string{"Sodium", "jellysquid3", "42.1M", "Modern rendering engine"} {
+		if !strings.Contains(viewWide, want) {
+			t.Errorf("wide search view missing %q:\n%s", want, viewWide)
+		}
+	}
+
+	// Compact mode (< 75 width)
+	m.width = 65
+	viewCompact := m.renderCatalog()
+	if !strings.Contains(viewCompact, "Sodium · jellysquid3 · 42.1M — Modern rendering") {
+		t.Errorf("compact search view missing single-line format:\n%s", viewCompact)
 	}
 }
