@@ -127,7 +127,7 @@ func (m Model) catalogDetail() tea.Cmd {
 	}
 }
 func (m Model) catalogResolve() tea.Cmd {
-	v, loader, mc, channel, request, ctx := m.catalogVersion, m.instance.Loader, m.instance.MinecraftVersion, m.catalogChannel(), m.catalogRequest, m.catalogContext
+	projectID, loader, mc, channel, request, ctx := m.catalogVersion.ProjectID, m.instance.Loader, m.instance.MinecraftVersion, m.catalogChannel(), m.catalogRequest, m.catalogContext
 	installed := map[string]string{}
 	for _, item := range m.modItems {
 		if item.Enabled && item.ProjectID != "" {
@@ -135,7 +135,7 @@ func (m Model) catalogResolve() tea.Cmd {
 		}
 	}
 	return func() tea.Msg {
-		plan, err := m.catalogClient().Resolve(ctx, v, strings.ToLower(loader), mc, channel, installed)
+		plan, err := m.catalogClient().ResolveLatestCompatible(ctx, projectID, strings.ToLower(loader), mc, channel, installed)
 		return catalogPlanMsg{Request: request, Plan: plan, Err: err}
 	}
 }

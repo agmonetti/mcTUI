@@ -223,6 +223,131 @@ func TestOptionalConflictOnlyAppliesWhenChosen(t *testing.T) {
 		t.Fatalf("optional conflicts not retained for confirmation: %v", got)
 	}
 }
+func TestResolverIncompatiblePinnedDependencyNamesVersions(t *testing.T) {
+	file := File{Filename: "sodium.jar", Primary: true, Hashes: Hashes{SHA512: strings.Repeat("a", 128)}}
+	sodium := Version{
+		ID: "opaque-version-id", ProjectID: "opaque-project-id",
+		Name: "Sodium 0.9.2 for Fabric 26.1.2", Number: "mc26.1.2-0.9.2-fabric",
+		Loaders: []string{"fabric"}, GameVersions: []string{"26.1.2"},
+		Files: []File{file},
+	}
+	c := mock(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v2/version/opaque-version-id" {
+			fmt.Fprint(w, mustJSON(t, sodium))
+			return
+		}
+		http.NotFound(w, r)
+	})
+	iris := Version{
+		ID: "iris-version", ProjectID: "iris-project",
+		Loaders: []string{"fabric"}, GameVersions: []string{"26.1"},
+		Files:        []File{file},
+		Dependencies: []Dependency{{VersionID: sodium.ID, ProjectID: sodium.ProjectID, Type: "required"}},
+	}
+
+	_, err := c.Resolve(context.Background(), iris, "fabric", "26.1", "release", nil)
+	if err == nil {
+		t.Fatal("incompatible pinned dependency was accepted")
+	}
+	for _, want := range []string{"Sodium 0.9.2 for Fabric 26.1.2", "Minecraft [26.1.2]", "Minecraft 26.1"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not explain %q", err, want)
+		}
+	}
+	for _, opaque := range []string{sodium.ID, sodium.ProjectID} {
+		if strings.Contains(err.Error(), opaque) {
+			t.Errorf("error exposes opaque identifier %q: %v", opaque, err)
+		}
+	}
+}
+
+func TestResolveLatestCompatibleFallsBackForPinnedDependency(t *testing.T) {
+	file := File{Filename: "mod.jar", Primary: true, Hashes: Hashes{SHA512: strings.Repeat("a", 128)}}
+	sodiumNew := Version{
+		ID: "sodium-new", ProjectID: "sodium", Name: "Sodium 0.9.2 for 26.1.2",
+		Loaders: []string{"fabric"}, GameVersions: []string{"26.1.2"}, Files: []File{file},
+	}
+	sodiumOld := Version{
+		ID: "sodium-old", ProjectID: "sodium", Name: "Sodium 0.8.9 for 26.1",
+		Loaders: []string{"fabric"}, GameVersions: []string{"26.1"}, Files: []File{file},
+	}
+	iris := func(id, number string, published time.Time, sodiumVersion string) Version {
+		return Version{
+			ID: id, ProjectID: "iris", Number: number, Channel: "release", Published: published,
+			Loaders: []string{"fabric"}, GameVersions: []string{"26.1", "26.1.1", "26.1.2"}, Files: []File{file},
+			Dependencies: []Dependency{{ProjectID: "sodium", VersionID: sodiumVersion, Type: "required"}},
+		}
+	}
+	older := iris("iris-old", "1.10.9", time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC), sodiumOld.ID)
+	newest := iris("iris-new", "1.11.4", time.Date(2026, 9, 13, 0, 0, 0, 0, time.UTC), sodiumNew.ID)
+	c := mock(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v2/project/iris/version":
+			fmt.Fprint(w, mustJSON(t, []Version{older, newest}))
+		case "/v2/version/sodium-new":
+			fmt.Fprint(w, mustJSON(t, sodiumNew))
+		case "/v2/version/sodium-old":
+			fmt.Fprint(w, mustJSON(t, sodiumOld))
+		default:
+			http.NotFound(w, r)
+		}
+	})
+
+	plan, err := c.ResolveLatestCompatible(context.Background(), "iris", "fabric", "26.1", "release", map[string]string{"sodium": sodiumOld.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.TargetMod.ID != older.ID {
+		t.Fatalf("selected Iris %s (%s), want compatible older release %s", plan.TargetMod.ID, plan.TargetMod.Number, older.ID)
+	}
+	if len(plan.RequiredDeps) != 1 || !plan.RequiredDeps[0].AlreadyInstalled || plan.RequiredDeps[0].Version.ID != sodiumOld.ID {
+		t.Fatalf("compatible installed Sodium was not reused: %+v", plan.RequiredDeps)
+	}
+}
+
+func TestResolveLatestCompatibleDoesNotFallbackOnIntegrityError(t *testing.T) {
+	file := File{Filename: "mod.jar", Primary: true, Hashes: Hashes{SHA512: strings.Repeat("a", 128)}}
+	sodiumBroken := Version{
+		ID: "sodium-broken", ProjectID: "sodium", Name: "Sodium broken",
+		Loaders: []string{"fabric"}, GameVersions: []string{"26.1"}, Files: []File{{Filename: "broken.jar", Primary: true}},
+	}
+	sodiumOld := Version{
+		ID: "sodium-old", ProjectID: "sodium", Name: "Sodium 0.8.9",
+		Loaders: []string{"fabric"}, GameVersions: []string{"26.1"}, Files: []File{file},
+	}
+	iris := func(id string, published time.Time, sodiumVersion string) Version {
+		return Version{
+			ID: id, ProjectID: "iris", Channel: "release", Published: published,
+			Loaders: []string{"fabric"}, GameVersions: []string{"26.1"}, Files: []File{file},
+			Dependencies: []Dependency{{ProjectID: "sodium", VersionID: sodiumVersion, Type: "required"}},
+		}
+	}
+	newest := iris("iris-new", time.Date(2026, 9, 13, 0, 0, 0, 0, time.UTC), sodiumBroken.ID)
+	older := iris("iris-old", time.Date(2026, 4, 3, 0, 0, 0, 0, time.UTC), sodiumOld.ID)
+	oldDependencyRequests := 0
+	c := mock(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v2/project/iris/version":
+			fmt.Fprint(w, mustJSON(t, []Version{older, newest}))
+		case "/v2/version/sodium-broken":
+			fmt.Fprint(w, mustJSON(t, sodiumBroken))
+		case "/v2/version/sodium-old":
+			oldDependencyRequests++
+			fmt.Fprint(w, mustJSON(t, sodiumOld))
+		default:
+			http.NotFound(w, r)
+		}
+	})
+
+	_, err := c.ResolveLatestCompatible(context.Background(), "iris", "fabric", "26.1", "release", nil)
+	if err == nil || !strings.Contains(err.Error(), "missing verified primary file") {
+		t.Fatalf("integrity error was hidden by fallback: %v", err)
+	}
+	if oldDependencyRequests != 0 {
+		t.Fatalf("fallback hid a non-compatibility error; older dependency fetched %d times", oldDependencyRequests)
+	}
+}
+
 func TestSearchSortingIndex(t *testing.T) {
 	var capturedIndex string
 	c := mock(t, func(w http.ResponseWriter, r *http.Request) {

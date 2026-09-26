@@ -18,10 +18,18 @@ func (c *Client) Versions(ctx context.Context, id, loader, minecraft string) ([]
 	return versions, err
 }
 func Compatible(versions []Version, loader, minecraft, channel string) (Version, error) {
+	matches, err := compatibleVersions(versions, loader, minecraft, channel)
+	if err != nil {
+		return Version{}, err
+	}
+	return matches[0], nil
+}
+
+func compatibleVersions(versions []Version, loader, minecraft, channel string) ([]Version, error) {
 	allowed := map[string]int{"release": 0, "beta": 1, "alpha": 2}
 	max, ok := allowed[channel]
 	if !ok {
-		return Version{}, fmt.Errorf("invalid channel %q", channel)
+		return nil, fmt.Errorf("invalid channel %q", channel)
 	}
 	matches := make([]Version, 0, len(versions))
 	for _, v := range versions {
@@ -33,10 +41,10 @@ func Compatible(versions []Version, loader, minecraft, channel string) (Version,
 		}
 	}
 	if len(matches) == 0 {
-		return Version{}, fmt.Errorf("no compatible %s version for %s %s", channel, loader, minecraft)
+		return nil, fmt.Errorf("no compatible %s version for %s %s", channel, loader, minecraft)
 	}
 	slices.SortFunc(matches, func(a, b Version) int { return b.Published.Compare(a.Published) })
-	return matches[0], nil
+	return matches, nil
 }
 func (c *Client) CompatibleVersion(ctx context.Context, id, loader, minecraft, channel string) (Version, error) {
 	versions, err := c.Versions(ctx, id, loader, minecraft)

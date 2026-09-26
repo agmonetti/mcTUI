@@ -2,8 +2,10 @@ package modrinth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
+	"strings"
 )
 
 type PlanItem struct {
@@ -16,6 +18,19 @@ type PlanItem struct {
 	// IncompatibleIDs declared by this optional branch; enforced only when selected.
 	IncompatibleIDs []string
 }
+type incompatibleVersionError struct {
+	versionLabel    string
+	minecraft       []string
+	loaders         []string
+	requestedMC     string
+	requestedLoader string
+}
+
+func (e *incompatibleVersionError) Error() string {
+	return fmt.Sprintf("version %q supports Minecraft [%s] with loaders [%s], but this instance uses Minecraft %s with loader %s",
+		e.versionLabel, strings.Join(e.minecraft, ", "), strings.Join(e.loaders, ", "), e.requestedMC, e.requestedLoader)
+}
+
 type InstallPlan struct {
 	TargetMod        Version
 	Targets          []PlanItem
@@ -96,10 +111,13 @@ func (c *Client) ResolveBatch(ctx context.Context, targets []Version, loader, mi
 			}
 			return nil
 		}
-		selected[v.ProjectID] = v.ID
 		if !slices.Contains(v.Loaders, loader) || !slices.Contains(v.GameVersions, minecraft) {
-			return fmt.Errorf("incompatible version %s", v.ID)
+			return &incompatibleVersionError{
+				versionLabel: versionLabel(v), minecraft: v.GameVersions, loaders: v.Loaders,
+				requestedMC: minecraft, requestedLoader: loader,
+			}
 		}
+		selected[v.ProjectID] = v.ID
 		f, ok := v.PrimaryFile()
 		if !ok || f.Hashes.SHA512 == "" {
 			return fmt.Errorf("missing verified primary file for %s", v.ProjectID)
@@ -188,9 +206,9 @@ func (c *Client) ResolveBatch(ctx context.Context, targets []Version, loader, mi
 			}
 			if err = walk(dep, optional || d.Type == "optional"); err != nil {
 				if d.Type == "optional" {
-					return fmt.Errorf("optional dependency %s: %w", id, err)
+					return fmt.Errorf("optional dependency %s: %w", versionLabel(dep), err)
 				}
-				return fmt.Errorf("required dependency %s: %w", id, err)
+				return fmt.Errorf("required dependency %s: %w", versionLabel(dep), err)
 			}
 			if d.Type == "required" {
 				addRequiredBy(&p, id, v.ProjectID)
@@ -247,4 +265,45 @@ func addRequiredBy(p *InstallPlan, id, parent string) {
 			}
 		}
 	}
+}
+func versionLabel(v Version) string {
+	if v.Name != "" {
+		return v.Name
+	}
+	if v.Number != "" {
+		return v.Number
+	}
+	if v.ProjectID != "" {
+		return v.ProjectID
+	}
+	return v.ID
+}
+
+// ResolveLatestCompatible selects the newest listed project version whose required dependency graph
+// resolves for this loader and Minecraft version. It falls back only when a pinned dependency is
+// incompatible; network, file-integrity, and graph errors remain visible.
+func (c *Client) ResolveLatestCompatible(ctx context.Context, projectID, loader, minecraft, channel string, installed map[string]string) (InstallPlan, error) {
+	versions, err := c.Versions(ctx, projectID, loader, minecraft)
+	if err != nil {
+		return InstallPlan{}, err
+	}
+	candidates, err := compatibleVersions(versions, loader, minecraft, channel)
+	if err != nil {
+		return InstallPlan{}, err
+	}
+	var newestCompatibilityErr error
+	for _, target := range candidates {
+		plan, err := c.Resolve(ctx, target, loader, minecraft, channel, installed)
+		if err == nil {
+			return plan, nil
+		}
+		var incompatible *incompatibleVersionError
+		if !errors.As(err, &incompatible) {
+			return InstallPlan{}, err
+		}
+		if newestCompatibilityErr == nil {
+			newestCompatibilityErr = err
+		}
+	}
+	return InstallPlan{}, newestCompatibilityErr
 }
