@@ -83,10 +83,11 @@ func (m Model) View() string {
 	}
 	versionLabel := versionOption(m.instance, m.versionSelect)
 
-	// ── Main menu (5 options) ─────────────────────────────────────────────────
+	// ── Main menu (6 options) ─────────────────────────────────────────────────
 	menuOptions := []string{
 		i18n.T("menu.play", m.versionSelect),
 		i18n.T("menu.worlds"),
+		i18n.T("menu.mods"),
 		i18n.T("menu.change_instances"),
 		i18n.T("menu.configs"),
 		i18n.T("menu.quit"),

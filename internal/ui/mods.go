@@ -22,6 +22,13 @@ type modsDoneMsg struct {
 	Err, Busy error
 }
 
+type modHistoryMsg struct {
+	Request   uint64
+	ProjectID string
+	Entries   []mods.HistoryEntry
+	Err       error
+}
+
 func (m Model) openMods() (tea.Model, tea.Cmd) {
 	dir, err := instances.GameDir(m.dataRoot, m.instance)
 	m.modErr = err
@@ -55,6 +62,28 @@ func (m Model) runMods(action string, target mods.Mod, source string) (tea.Model
 }
 func (m Model) updateModsKey(key string) (tea.Model, tea.Cmd) {
 	if m.state == modsWorkingScreen {
+		return m, nil
+	}
+	if m.state == modsRollbackScreen {
+		switch key {
+		case "y", "Y":
+			if m.modBusy != nil {
+				m.modErr = m.modBusy
+				m.state = modsScreen
+				return m, nil
+			}
+			store, project := m.modStore, m.modRollback.ProjectID
+			m.modRequest++
+			request := m.modRequest
+			m.state = modsWorkingScreen
+			return m, func() tea.Msg {
+				err := store.Rollback(project)
+				items, scanErr := store.Scan()
+				return modsDoneMsg{request, items, errors.Join(err, scanErr), store.CheckBusy()}
+			}
+		case "esc", "n", "N":
+			m.state = modsScreen
+		}
 		return m, nil
 	}
 	if m.state == modsConfirmScreen {
@@ -155,6 +184,10 @@ func (m Model) updateModsKey(key string) (tea.Model, tea.Cmd) {
 		m.state = modrinthWorkingScreen
 		return m, m.catalogCheckUpdates()
 	case "b":
+		if m.modBusy != nil {
+			m.modErr = m.modBusy
+			break
+		}
 		if len(m.modItems) > 0 && m.modItems[m.modCursor].ProjectID != "" {
 			project := m.modItems[m.modCursor].ProjectID
 			store := m.modStore
@@ -162,9 +195,8 @@ func (m Model) updateModsKey(key string) (tea.Model, tea.Cmd) {
 			request := m.modRequest
 			m.state = modsWorkingScreen
 			return m, func() tea.Msg {
-				err := store.Rollback(project)
-				items, scanErr := store.Scan()
-				return modsDoneMsg{request, items, errors.Join(err, scanErr), store.CheckBusy()}
+				entries, err := store.History()
+				return modHistoryMsg{request, project, entries, err}
 			}
 		}
 	case "a":
@@ -223,6 +255,17 @@ func (m Model) renderMods() string {
 		lipgloss.NewStyle().Foreground(colorDimGray).Render(modText(m.modStore.GameDir)) + "\n\n")
 
 	switch m.state {
+	case modsRollbackScreen:
+		entry := m.modRollback
+		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(i18n.T("mods.rollback_title")) + "\n\n")
+		b.WriteString(i18n.T("mods.rollback_instance", modText(m.instance.Name)) + "\n")
+		b.WriteString(i18n.T("mods.rollback_current", modText(entry.New.File), modText(entry.New.VersionID)) + "\n")
+		b.WriteString(i18n.T("mods.rollback_previous", modText(entry.Previous.File), modText(entry.Previous.VersionID)) + "\n")
+		b.WriteString(i18n.T("mods.rollback_date", modText(entry.Date)) + "\n")
+		b.WriteString(i18n.T("mods.rollback_backup", modText(filepath.Join(filepath.Dir(m.modStore.Registry), "backups", "mods_replaced", entry.Backup))) + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("mods.rollback_warning")) + "\n\n")
+		b.WriteString(i18n.T("mods.rollback_hint"))
+
 	case modsWorkingScreen:
 		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(i18n.T("mods.processing")) + "\n")
 

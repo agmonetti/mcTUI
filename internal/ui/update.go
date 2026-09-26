@@ -96,6 +96,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.input.Placeholder = i18n.T("input.instance_placeholder")
 		m.input.Focus()
 		return m, nil
+	case modHistoryMsg:
+		if msg.Request != m.modRequest || m.state != modsWorkingScreen {
+			return m, nil
+		}
+		m.state = modsScreen
+		m.modErr = msg.Err
+		if msg.Err != nil {
+			return m, nil
+		}
+		for i := len(msg.Entries) - 1; i >= 0; i-- {
+			if msg.Entries[i].ProjectID == msg.ProjectID {
+				m.modRollback = msg.Entries[i]
+				m.state = modsRollbackScreen
+				return m, nil
+			}
+		}
+		m.modErr = fmt.Errorf("%s", i18n.T("mods.rollback_unavailable"))
+		return m, nil
 	case modsDoneMsg:
 		if msg.Request != m.modRequest || m.state != modsWorkingScreen {
 			return m, nil
@@ -304,7 +322,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.state >= modrinthSearchScreen && m.state <= modrinthWorkingScreen {
 			return m.updateCatalogKey(msg.String())
 		}
-		if m.state >= modsScreen && m.state <= modsWorkingScreen {
+		if m.state >= modsScreen && m.state <= modsRollbackScreen {
 			return m.updateModsKey(msg.String())
 		}
 		if m.state == javaPickerScreen {
@@ -486,7 +504,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					m.state = worldsScreen
 					m.cursorWorlds = 0
-				case 2: // Change Instances
+				case 2: // Mods
+					return m.openMods()
+				case 3: // Change Instances
 					m.instanceList, m.instanceErr = instances.List(m.dataRoot)
 					m.instanceCursor = 0
 					for i, in := range m.instanceList {
@@ -496,10 +516,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 					m.state = instancesScreen
-				case 3: // Configs
+				case 4: // Configs
 					m.cursorConfig = 0
 					m.state = configScreen
-				case 4: // Quit
+				case 5: // Quit
 					return m, tea.Quit
 				}
 			} else if m.state == configScreen {

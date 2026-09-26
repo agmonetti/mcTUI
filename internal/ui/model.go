@@ -61,6 +61,7 @@ const (
 	modsPickerScreen
 	modsConfirmScreen
 	modsWorkingScreen
+	modsRollbackScreen
 	modrinthSearchScreen
 	modrinthDetailScreen
 	modrinthReviewScreen
@@ -73,7 +74,7 @@ const (
 // here so Update()'s cursor bounds check doesn't drift from the menu's
 // actual length if options are added/removed.
 // menuOptionsCount must match len(menuOptions) in View() for the main menu.
-const menuOptionsCount = 5
+const menuOptionsCount = 6
 
 // configOptionsCount must match len(configOptions) in View() for the config submenu.
 const configOptionsCount = 7
@@ -185,6 +186,7 @@ type Model struct {
 	modBusy                error
 	modRequest             uint64
 	modTarget              mods.Mod
+	modRollback            mods.HistoryEntry
 	catalogQuery           string
 	catalogResults         modrinth.SearchResponse
 	catalogCursor          int

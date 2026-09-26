@@ -165,10 +165,10 @@ func renderTopBar(cursorMenu int, hasUpdate bool, state screenState, width int) 
 	tabs := []tabEntry{
 		{i18n.T("topbar.play"), 0},
 		{i18n.T("topbar.worlds"), 1},
-		{i18n.T("topbar.instances"), 2},
-		{i18n.T("topbar.configs"), 3},
-		{i18n.T("topbar.mods"), 10},
-		{i18n.T("topbar.quit"), 4},
+		{i18n.T("topbar.mods"), 2},
+		{i18n.T("topbar.instances"), 3},
+		{i18n.T("topbar.configs"), 4},
+		{i18n.T("topbar.quit"), 5},
 	}
 
 	// Determine which tab to highlight.
@@ -182,15 +182,15 @@ func renderTopBar(cursorMenu int, hasUpdate bool, state screenState, width int) 
 		(state >= resetModeScreen && state <= resetResultScreen) ||
 		(!instancesActive && (state == nameScreen || state == versionsScreen))
 	if instancesActive {
-		activeIdx = 2
+		activeIdx = 3
 	} else if modsActive {
-		activeIdx = 10
+		activeIdx = 2
 	} else if state == worldsScreen {
 		activeIdx = 1
 	} else if state == confirmScreen {
 		activeIdx = 0
 	} else if configsActive {
-		activeIdx = 3
+		activeIdx = 4
 	}
 
 	var parts []string

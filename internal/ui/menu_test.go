@@ -42,6 +42,7 @@ func TestMainMenuOptionsAndRendering(t *testing.T) {
 	expectedMain := []string{
 		"Play (1.20.4)",
 		"Worlds",
+		"Mods",
 		"Change Instances",
 		"Configs",
 		"Quit",
@@ -96,8 +97,8 @@ func TestMainMenuNavigationAndTransitions(t *testing.T) {
 		t.Fatalf("expected cursorMenu 0, got %d", m.cursorMenu)
 	}
 
-	// Down arrow moves cursor down to menuOptionsCount-1 (4)
-	for expected := 1; expected <= 4; expected++ {
+	// Down arrow moves cursor down to menuOptionsCount-1 (5)
+	for expected := 1; expected <= 5; expected++ {
 		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 		m = updated.(Model)
 		if m.cursorMenu != expected {
@@ -105,14 +106,14 @@ func TestMainMenuNavigationAndTransitions(t *testing.T) {
 		}
 	}
 
-	// Down when at cursorMenu 4 should stay at 4
+	// Down when at cursorMenu 5 should stay at 5
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m = updated.(Model)
-	if m.cursorMenu != 4 {
-		t.Fatalf("expected cursorMenu to stay at 4, got %d", m.cursorMenu)
+	if m.cursorMenu != 5 {
+		t.Fatalf("expected cursorMenu to stay at 5, got %d", m.cursorMenu)
 	}
 
-	// Enter on Quit (cursor 4) quits
+	// Enter on Quit (cursor 5) quits
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd == nil {
 		t.Fatal("expected quit cmd when pressing Enter on Quit option")
@@ -147,8 +148,17 @@ func TestMainMenuNavigationAndTransitions(t *testing.T) {
 		t.Fatalf("expected menuScreen after Esc, got %v", m.state)
 	}
 
-	// 2: Change Instances -> instancesScreen
+	// 2: Mods -> triggers openMods (modsWorkingScreen)
 	m.cursorMenu = 2
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if m.state != modsWorkingScreen {
+		t.Fatalf("expected modsWorkingScreen for Mods enter, got %v", m.state)
+	}
+	m.state = menuScreen
+
+	// 3: Change Instances -> instancesScreen
+	m.cursorMenu = 3
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
 	if m.state != instancesScreen {
@@ -160,8 +170,8 @@ func TestMainMenuNavigationAndTransitions(t *testing.T) {
 		t.Fatalf("expected menuScreen after Esc, got %v", m.state)
 	}
 
-	// 3: Configs -> configScreen
-	m.cursorMenu = 3
+	// 4: Configs -> configScreen
+	m.cursorMenu = 4
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
 	if m.state != configScreen || m.cursorConfig != 0 {
@@ -183,7 +193,7 @@ func TestConfigSubmenuOptionsAndNavigation(t *testing.T) {
 
 	m := Model{
 		state:         configScreen,
-		cursorMenu:    3,
+		cursorMenu:    4,
 		cursorConfig:  0,
 		username:      "Steve",
 		versionSelect: "1.20.4",
@@ -258,8 +268,8 @@ func TestConfigSubmenuOptionsAndNavigation(t *testing.T) {
 	// Esc returns to menuScreen
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	m = updated.(Model)
-	if m.state != menuScreen || m.cursorMenu != 3 {
-		t.Fatalf("expected menuScreen with cursorMenu 3 after Esc, got state=%v cursorMenu=%d", m.state, m.cursorMenu)
+	if m.state != menuScreen || m.cursorMenu != 4 {
+		t.Fatalf("expected menuScreen with cursorMenu 4 after Esc, got state=%v cursorMenu=%d", m.state, m.cursorMenu)
 	}
 
 	// 'q' on configScreen also returns to menuScreen
@@ -285,7 +295,7 @@ func TestConfigSubmenuActions(t *testing.T) {
 
 	m := Model{
 		state:         configScreen,
-		cursorMenu:    3,
+		cursorMenu:    4,
 		cursorConfig:  0,
 		username:      "Player",
 		versionSelect: "1.20.4",
