@@ -9,8 +9,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"mcTUI/internal/config"
 	"mcTUI/internal/i18n"
 	"mcTUI/internal/instances"
+	"mcTUI/internal/modrinth"
 	"mcTUI/internal/mods"
 )
 
@@ -103,6 +105,68 @@ func (m Model) updateModsKey(key string) (tea.Model, tea.Cmd) {
 		m.modCursor = min(max(0, len(m.modItems)-1), m.modCursor+1)
 	case "r":
 		return m.runMods("", mods.Mod{}, "")
+	case "c":
+		{
+			channels := []string{"release", "beta", "alpha"}
+			i := 0
+			for n, channel := range channels {
+				if channel == m.instance.ModChannel {
+					i = (n + 1) % len(channels)
+					break
+				}
+			}
+			previous := m.instance.ModChannel
+			m.instance.ModChannel = channels[i]
+			if m.instance.Kind == "managed" {
+				if err := instances.UpdateSettings(m.dataRoot, m.instance); err != nil {
+					m.modErr = err
+				} else {
+					m.modErr = nil
+				}
+			} else {
+				cfg := config.Load()
+				cfg.ModChannel = m.instance.ModChannel
+				m.modErr = config.Save(cfg)
+			}
+			if m.modErr != nil {
+				m.instance.ModChannel = previous
+			}
+		}
+	case "s", "/":
+		if m.modBusy != nil {
+			m.modErr = m.modBusy
+			break
+		}
+		m.catalogQuery = ""
+		m.catalogOffset = 0
+		m.catalogResults = modrinth.SearchResponse{}
+		m.catalogLoading = true
+		m.catalogErr = nil
+		m.startCatalogRead()
+		m.state = modrinthSearchScreen
+		return m, m.catalogSearch()
+	case "u":
+		if m.modBusy != nil {
+			m.modErr = m.modBusy
+			break
+		}
+		m.catalogErr = nil
+		m.startCatalogRead()
+		m.state = modrinthWorkingScreen
+		return m, m.catalogCheckUpdates()
+	case "b":
+		if len(m.modItems) > 0 && m.modItems[m.modCursor].ProjectID != "" {
+			project := m.modItems[m.modCursor].ProjectID
+			store := m.modStore
+			m.modRequest++
+			request := m.modRequest
+			m.state = modsWorkingScreen
+			return m, func() tea.Msg {
+				err := store.Rollback(project)
+				items, scanErr := store.Scan()
+				return modsDoneMsg{request, items, errors.Join(err, scanErr), store.CheckBusy()}
+			}
+		}
 	case "a":
 		if m.modBusy != nil {
 			m.modErr = m.modBusy
@@ -237,7 +301,7 @@ func (m Model) renderMods() string {
 			}
 		}
 		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render(
-			i18n.T("mods.footer", len(m.modItems))))
+			i18n.T("mods.footer", len(m.modItems), i18n.T("modrinth.channel."+m.catalogChannel()))))
 	}
 
 	return b.String()
