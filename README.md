@@ -32,16 +32,18 @@ responsibility:
 - `internal/launcher` — orchestrates the actual game launch
 - `internal/ui` — the Bubble Tea model, update, and view
 
-`main.go` loads config, builds the UI, and hands off to the launcher.
+`main.go` loads config and runs the UI, which prepares and supervises the game process.
 
 ## Phase 5 status
 
-Runtime preparation is shared by the TUI and launcher. The in-progress Phase 5A
-cut adds managed Vanilla instance selection and routes game data separately from
-the shared runtime; verify this cut before relying on it. Managed Fabric launch,
-instance-specific settings, Reset Configs, and mod management remain incomplete.
-Play verifies cached files first and can cancel preparation with Esc; a missing
-published hash blocks an artifact rather than accepting an unverifiable cache.
+The in-progress Phase 5A cut adds managed Vanilla instances with separate game
+data, shared runtime, per-instance Reset history and a supervised launch inside
+the TUI. Play verifies cached files before starting Java, holds an instance lock
+until Java exits and shows its result and log path without automatically closing
+the interface. Managed Fabric launch, cross-process supervision after a forced
+mcTUI exit, real-platform validation and mod management remain incomplete.
+Preparation can be canceled with Esc; a missing published hash blocks an artifact
+rather than accepting an unverifiable cache.
 See [the implementation plan](PHASE_5_IMPLEMENTATION_PLAN.md) for status and
 remaining safety checks.
 
