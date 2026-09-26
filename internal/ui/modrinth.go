@@ -586,7 +586,7 @@ func (m Model) renderCatalog() string {
 		}
 		if len(m.catalogVersion.Loaders) > 0 {
 			b.WriteString(i18n.T("modrinth.detail_loaders", modText(strings.Join(m.catalogVersion.Loaders, ", "))) + "  ·  " +
-				i18n.T("modrinth.detail_game_versions", modText(strings.Join(m.catalogVersion.GameVersions, ", "))) + "\n")
+				i18n.T("modrinth.detail_game_versions", modText(m.instance.MinecraftVersion)) + "\n")
 		}
 		b.WriteString("\n")
 
@@ -626,7 +626,7 @@ func (m Model) renderCatalog() string {
 		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("modrinth.detail_hint")))
 	case modrinthReviewScreen:
 		b.WriteString(i18n.T("modrinth.plan_title") + "\n")
-		b.WriteString(i18n.T("modrinth.destination", modText(filepath.Join(m.modStore.GameDir, "mods"))) + "\n")
+		b.WriteString(i18n.T("modrinth.destination") + "\n\n")
 		lines := []string{}
 		for _, item := range m.catalogPlan.Targets {
 			lines = append(lines, i18n.T("modrinth.target_mod", modText(item.File.Filename), modText(item.Version.Number))+" · "+catalogSize(item.File.Size)+catalogInstalledLabel(item))

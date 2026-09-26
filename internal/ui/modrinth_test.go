@@ -174,9 +174,9 @@ func TestCatalogReviewShowsEffectiveDownloadsAndDestination(t *testing.T) {
 		},
 	}
 	view := m.renderCatalog()
-	if !strings.Contains(view, "/instances/A/minecraft/mods") || !strings.Contains(view, "a.jar") ||
+	if !strings.Contains(view, "instance mods folder") || strings.Contains(view, "/instances/A/minecraft") || !strings.Contains(view, "a.jar") ||
 		!strings.Contains(view, "b.jar") || !strings.Contains(view, "1.0 KiB (1 ") {
-		t.Fatalf("review omitted destination, installed dependency or effective size: %s", view)
+		t.Fatalf("review omitted compact destination, installed dependency or effective size: %s", view)
 	}
 	next, _ := m.updateCatalogKey(" ")
 	m = next.(Model)
@@ -405,7 +405,7 @@ func TestCatalogDetailCardRendering(t *testing.T) {
 		"1.8 MiB",
 		"2024-08-10",
 		"fabric, quilt",
-		"1.21, 1.21.1",
+		"1.21.1",
 		"fabric-api",
 		"cloth-config",
 		"optifine",
@@ -413,6 +413,9 @@ func TestCatalogDetailCardRendering(t *testing.T) {
 		if !strings.Contains(view, want) {
 			t.Errorf("detail view missing expected element %q:\n%s", want, view)
 		}
+	}
+	if strings.Contains(view, "1.21, 1.21.1") {
+		t.Fatalf("detail view showed all compatible game versions instead of the active version:\n%s", view)
 	}
 }
 
