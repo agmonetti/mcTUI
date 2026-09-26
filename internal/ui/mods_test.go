@@ -50,7 +50,7 @@ func TestModsUIOfflineLifecycle(t *testing.T) {
 	if m.modErr != nil || len(m.modItems) != 1 || m.state != modsScreen {
 		t.Fatalf("%+v", m.modErr)
 	}
-	if !strings.Contains(m.View(), "Habilitado") || !strings.Contains(m.View(), "mundos") {
+	if !strings.Contains(m.View(), "Enabled") || !strings.Contains(m.View(), "LOCAL MODS") {
 		t.Fatal(m.View())
 	}
 	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeySpace})
@@ -91,7 +91,7 @@ func TestModsUIOfflineLifecycle(t *testing.T) {
 	m = updated.(Model)
 	updated, _ = m.Update(cmd())
 	m = updated.(Model)
-	if m.modBusy == nil || !strings.Contains(m.View(), "BLOQUEADO") {
+	if m.modBusy == nil || !strings.Contains(m.View(), "LOCKED") {
 		t.Fatal("lock not displayed")
 	}
 	updated, cmd = m.updateModsKey("a")

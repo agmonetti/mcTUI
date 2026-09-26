@@ -82,27 +82,43 @@ func (m Model) updateRemovalKey(key string) (tea.Model, tea.Cmd) {
 
 func (m Model) renderRemovalScreen() string {
 	var b strings.Builder
+
 	switch m.state {
 	case instanceTrashScreen:
-		b.WriteString("RETIRED INSTANCES\n────────────────────────────────────────\n\n")
+		title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("RETIRED INSTANCES")
+		div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+		b.WriteString(title + "\n" + div + "\n\n")
 		if m.removeErr != nil {
-			fmt.Fprintf(&b, "Error: %v\n\n", m.removeErr)
+			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+m.removeErr.Error()) + "\n\n")
 		}
 		if len(m.retiredList) == 0 {
-			b.WriteString("No retired instances.\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("No retired instances.") + "\n")
 		}
 		start, end := windowAround(m.retiredCursor, len(m.retiredList), 3, 8)
 		for i := start; i < end; i++ {
 			in := m.retiredList[i]
-			marker := "  "
+			line := fmt.Sprintf("%s — %s %s", in.Name, in.MinecraftVersion, in.Loader)
+			idStr := lipgloss.NewStyle().Foreground(colorDimGray).Render("[" + in.ID + "]")
 			if i == m.retiredCursor {
-				marker = "► "
+				b.WriteString(cursorStyle.Render("► "+line) + "  " + idStr + "\n")
+			} else {
+				b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("  "+line) + "  " + idStr + "\n")
 			}
-			fmt.Fprintf(&b, "%s%s — %s %s [%s]\n", marker, in.Name, in.MinecraftVersion, in.Loader, in.ID)
 		}
-		b.WriteString("\n[↑/↓] Move  [Enter] Restore  [d] Delete permanently  [Esc] Back")
+		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render("[↑/↓] Move  [Enter] Restore  [d] Delete permanently  [Esc] Back"))
+
 	case instanceRemoveChoiceScreen:
-		fmt.Fprintf(&b, "REMOVE INSTANCE\n────────────────────────────────────────\n\n%s [%s]\n\n[s] Soft delete: move to retired instances; keep game data and backups.\n[f] Full delete: permanently erase game data and Reset backups.\n[Esc] Cancel", m.removeTarget.Name, m.removeTarget.ID)
+		title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("REMOVE INSTANCE")
+		div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+		b.WriteString(title + "\n" + div + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(m.removeTarget.Name) +
+			"  " + lipgloss.NewStyle().Foreground(colorDimGray).Render("["+m.removeTarget.ID+"]") + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Render("[s] Soft delete") +
+			lipgloss.NewStyle().Foreground(colorGray).Render(" — move to retired; keeps game data and backups") + "\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("[f] Full delete") +
+			lipgloss.NewStyle().Foreground(colorGray).Render(" — permanently erase game data and backups") + "\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("[Esc] Cancel"))
+
 	case instanceRemoveConfirmScreen:
 		root, id := m.dataRoot, m.removeTarget.ID
 		active := filepath.Join(root, "instances", id)
@@ -110,25 +126,57 @@ func (m Model) renderRemovalScreen() string {
 		backup := filepath.Join(root, "backups", id)
 		switch m.removeAction {
 		case "soft":
-			fmt.Fprintf(&b, "CONFIRM SOFT DELETE\n\n%s [%s]\nMove %s\nto %s\nBackups stay at %s.\n", m.removeTarget.Name, id, active, retired, backup)
+			title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("CONFIRM SOFT DELETE")
+			div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+			b.WriteString(title + "\n" + div + "\n\n")
+			b.WriteString(labelStyle.Render("INSTANCE  ") + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Render(m.removeTarget.Name) + "\n")
+			b.WriteString(labelStyle.Render("MOVE      ") + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(active) + "\n")
+			b.WriteString(labelStyle.Render("TO        ") + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(retired) + "\n")
+			b.WriteString(labelStyle.Render("BACKUPS   ") + "  " + lipgloss.NewStyle().Foreground(colorGray).Render("Preserved at "+backup) + "\n")
 		case "restore":
-			fmt.Fprintf(&b, "CONFIRM RESTORE\n\n%s [%s]\nMove %s\nto %s\n", m.removeTarget.Name, id, retired, active)
+			title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("CONFIRM RESTORE")
+			div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+			b.WriteString(title + "\n" + div + "\n\n")
+			b.WriteString(labelStyle.Render("INSTANCE  ") + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Render(m.removeTarget.Name) + "\n")
+			b.WriteString(labelStyle.Render("MOVE      ") + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(retired) + "\n")
+			b.WriteString(labelStyle.Render("TO        ") + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(active) + "\n")
 		case "delete":
+			src := active
 			if m.removeFromTrash {
-				active = retired
+				src = retired
 			}
-			fmt.Fprintf(&b, "CONFIRM PERMANENT DELETE\n\n%s [%s]\nPermanently erase:\n  %s\n  %s\nThis cannot be undone.\n", m.removeTarget.Name, id, active, backup)
+			title := lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("CONFIRM PERMANENT DELETE")
+			div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+			b.WriteString(title + "\n" + div + "\n\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("This cannot be undone.") + "\n\n")
+			b.WriteString(labelStyle.Render("INSTANCE  ") + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Render(m.removeTarget.Name) + "\n")
+			b.WriteString(labelStyle.Render("ERASE     ") + "  " + lipgloss.NewStyle().Foreground(colorRed).Render(src) + "\n")
+			b.WriteString(labelStyle.Render("ERASE     ") + "  " + lipgloss.NewStyle().Foreground(colorRed).Render(backup) + "\n")
 		}
-		b.WriteString("\n[y] Confirm  [n/Esc] Cancel")
+		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("[y] Confirm") +
+			"   " + lipgloss.NewStyle().Foreground(colorGray).Render("[n/Esc] Cancel"))
+
 	case instanceRemoveRunningScreen:
-		b.WriteString("UPDATING INSTANCE\n\nPlease wait; do not close mcTUI.")
+		title := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("UPDATING INSTANCE")
+		div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+		b.WriteString(title + "\n" + div + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Please wait; do not close mcTUI."))
+
 	case instanceRemoveResultScreen:
 		if m.removeErr != nil {
-			fmt.Fprintf(&b, "INSTANCE OPERATION FAILED\n\n%v\n\nCheck instances/ and retired/ before retrying.", m.removeErr)
+			title := lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("INSTANCE OPERATION FAILED")
+			div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+			b.WriteString(title + "\n" + div + "\n\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render(m.removeErr.Error()) + "\n\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Check instances/ and retired/ before retrying."))
 		} else {
-			b.WriteString("INSTANCE UPDATED\n\nOperation completed.")
+			title := lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("INSTANCE UPDATED")
+			div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+			b.WriteString(title + "\n" + div + "\n\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Operation completed successfully."))
 		}
-		b.WriteString("\n\n[Enter/Esc] Back")
+		b.WriteString("\n\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render("[Enter/Esc] Back"))
 	}
-	return lipgloss.NewStyle().Padding(1, 2).Render(safeCopyText(b.String()))
+
+	return b.String()
 }

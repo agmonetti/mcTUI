@@ -15,26 +15,8 @@ import (
 )
 
 func (m Model) View() string {
-	if m.state >= modsScreen && m.state <= modsWorkingScreen {
-		return m.renderMods()
-	}
 	if m.state == javaPickerScreen {
 		return lipgloss.Place(m.width, m.height, lipgloss.Left, lipgloss.Top, m.pickerPanelContent())
-	}
-	if m.state == instancesScreen {
-		return m.renderInstancesScreen()
-	}
-	if m.state == instanceNameScreen {
-		return m.renderInstanceNameScreen()
-	}
-	if m.state == instanceLoaderScreen {
-		return m.renderInstanceLoaderScreen()
-	}
-	if m.state >= instanceCopyInspectScreen && m.state <= instanceCopyCleanupConfirmScreen {
-		return m.renderInstanceCopyScreen()
-	}
-	if m.state >= instanceTrashScreen && m.state <= instanceRemoveResultScreen {
-		return m.renderRemovalScreen()
 	}
 	// ── Download screen completo (tapa todo el TUI) ──────────────────────────
 	if m.state == downloadScreen {
@@ -53,13 +35,20 @@ func (m Model) View() string {
 			lipgloss.NewStyle().Foreground(colorBlue).Render("  OPTIONS  ► Resets Configs") + "\n\n"
 		return lipgloss.Place(m.width, m.height, lipgloss.Left, lipgloss.Top, header+content)
 	}
+
+	instancesActive := m.state == instancesScreen || m.state == instanceNameScreen ||
+		m.state == instanceLoaderScreen ||
+		(m.state >= instanceCopyInspectScreen && m.state <= instanceCopyCleanupConfirmScreen) ||
+		(m.state >= instanceTrashScreen && m.state <= instanceRemoveResultScreen)
+	modsActive := m.state >= modsScreen && m.state <= modsWorkingScreen
+
 	hasUpdate := m.latestRelease.TagName != ""
 
 	// ── Logo ─────────────────────────────────────────────────────────────────
 	logo := getAsciiArt()
 
 	// ── Topbar de tabs ───────────────────────────────────────────────────────
-	topBar := renderTopBar(m.cursorMenu, hasUpdate)
+	topBar := renderTopBar(m.cursorMenu, hasUpdate, m.state)
 
 	// ── Featured Banner ──────────────────────────────────────────────────────
 	cached := filesCached(m.runtimeDir(), m.versionSelect, m.modloader, m.instance.LoaderVersion)
@@ -99,7 +88,7 @@ func (m Model) View() string {
 	}
 
 	for i, option := range menuOptions {
-		if m.cursorMenu == i {
+		if m.cursorMenu == i && !instancesActive && !modsActive {
 			line := lipgloss.NewStyle().
 				Foreground(colorAccent).Bold(true).
 				Render(fmt.Sprintf("► %s", option))
@@ -132,6 +121,10 @@ func (m Model) View() string {
 		contentStr.WriteString(m.pickerPanelContent())
 	case resetActive:
 		contentStr.WriteString(m.resetPanelContent())
+	case instancesActive:
+		contentStr.WriteString(m.renderInstancesContent())
+	case modsActive:
+		contentStr.WriteString(m.renderMods())
 	case m.state == menuScreen && m.cursorMenu == 5:
 		m.renderMemoryPanel(&contentStr)
 	case m.state == menuScreen && m.cursorMenu == 3:
@@ -148,8 +141,12 @@ func (m Model) View() string {
 		m.renderConfirmScreen(&contentStr)
 	}
 	centerStyle := panelContent
-	if resetActive {
-		centerStyle = panelContent.Copy().Width(max(50, m.width-68)).Height(max(16, min(40, m.height-17)))
+	if resetActive || instancesActive || modsActive {
+		if m.width > 0 {
+			centerStyle = panelContent.Copy().Width(max(50, m.width-68)).Height(max(16, min(40, m.height-17)))
+		} else {
+			centerStyle = panelContent.Copy().UnsetWidth().UnsetHeight()
+		}
 	}
 	centerPanel := centerStyle.Render(contentStr.String())
 
@@ -174,7 +171,7 @@ func (m Model) View() string {
 
 	// ── Layout responsive ────────────────────────────────────────────────────
 	showNews := true
-	if resetActive || (m.width > 0 && m.width < 122) {
+	if resetActive || instancesActive || modsActive || (m.width > 0 && m.width < 122) {
 		showNews = false
 	}
 
@@ -883,62 +880,146 @@ func versionOption(in instances.Instance, version string) string {
 	return "Change Version"
 }
 
-func (m Model) renderInstancesScreen() string {
+// renderInstancesContent is the unified dispatcher for all instance sub-screens.
+// It returns bare styled content that View() feeds into the center panel.
+func (m Model) renderInstancesContent() string {
+	switch {
+	case m.state == instancesScreen:
+		return m.renderInstancesListContent()
+	case m.state == instanceNameScreen:
+		return m.renderInstanceNameContent()
+	case m.state == instanceLoaderScreen:
+		return m.renderInstanceLoaderContent()
+	case m.state >= instanceCopyInspectScreen && m.state <= instanceCopyCleanupConfirmScreen:
+		return m.renderInstanceCopyContent()
+	case m.state >= instanceTrashScreen && m.state <= instanceRemoveResultScreen:
+		return m.renderRemovalScreen()
+	}
+	return ""
+}
+
+func (m Model) renderInstancesListContent() string {
 	var b strings.Builder
-	b.WriteString("SELECT INSTANCE\n────────────────────────────────────────\n\n")
+	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("SELECT INSTANCE")
+	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+	b.WriteString(title + "\n" + div + "\n\n")
 	if m.instanceErr != nil {
-		b.WriteString("Error: " + m.instanceErr.Error() + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+m.instanceErr.Error()) + "\n\n")
 	}
 	if len(m.instanceList) == 0 {
-		b.WriteString("No instances available.\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("No instances available.") + "\n")
 	} else {
 		start, end := windowAround(m.instanceCursor, len(m.instanceList), 3, 8)
 		for i := start; i < end; i++ {
 			in := m.instanceList[i]
-			marker := "  "
-			if i == m.instanceCursor {
-				marker = "► "
-			}
-			selected := ""
-			if in.ID == m.instance.ID {
-				selected = "  [active]"
-			}
 			loader := in.Loader
 			if in.LoaderVersion != "" {
 				loader += " " + in.LoaderVersion
 			}
-			fmt.Fprintf(&b, "%s%s — %s %s%s\n", marker, in.Name, in.MinecraftVersion, loader, selected)
+			line := fmt.Sprintf("%s — %s %s", in.Name, in.MinecraftVersion, loader)
+			var suffix string
+			if in.ID == m.instance.ID {
+				suffix = "  " + lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("[active]")
+			}
+			if i == m.instanceCursor {
+				b.WriteString(cursorStyle.Render("► "+line) + suffix + "\n")
+			} else {
+				b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("  "+line) + suffix + "\n")
+			}
 		}
 	}
-	b.WriteString("\n[↑/↓] Move  [Enter] Select  [n] New (Vanilla/Fabric)  [c] Copy  [r] Rename  [d] Remove  [t] Retired  [Esc] Back\n")
-	b.WriteString("\nNew instances use the shared runtime and private game data.")
-	return lipgloss.NewStyle().Padding(1, 2).Render(b.String())
+	b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render(
+		"[↑/↓] Move  [Enter] Select  [n] New  [c] Copy  [r] Rename  [d] Remove  [t] Retired  [Esc] Back",
+	))
+	b.WriteString("\n\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render("New instances use shared runtime and private game data."))
+	return b.String()
 }
 
-func (m Model) renderInstanceCopyScreen() string {
+func (m Model) renderInstanceNameContent() string {
+	title := "NEW VANILLA INSTANCE"
+	if m.creationLoaderVersion != "" {
+		title = "NEW FABRIC INSTANCE"
+	}
+	if m.copyingInstance {
+		title = "COPY FROM EXISTING INSTALLATION"
+		if m.copySourceID != instances.LegacyID {
+			title = "DUPLICATE INSTANCE"
+		}
+	} else if m.instanceRenameID != "" {
+		title = "RENAME INSTANCE"
+	}
+	var b strings.Builder
+	styledTitle := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(title)
+	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+	b.WriteString(styledTitle + "\n" + div + "\n\n")
+	b.WriteString(labelStyle.Render("NAME  ") + "  " + m.input.View() + "\n")
+	if m.instanceErr != nil {
+		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+m.instanceErr.Error()) + "\n")
+	}
+	if m.instanceRenameID != "" {
+		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render("[Enter] Save name  [Esc] Cancel"))
+	} else if m.copyingInstance {
+		b.WriteString("\n" + labelStyle.Render("MINECRAFT  ") + "  " +
+			lipgloss.NewStyle().Foreground(colorAccent2).Render(m.creationVersion+" ("+m.copyLoader+")") + "\n")
+		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render("[Enter] Choose content  [Esc] Cancel"))
+	} else {
+		loader := "Vanilla"
+		if m.creationLoaderVersion != "" {
+			loader = "Fabric " + m.creationLoaderVersion
+		}
+		b.WriteString("\n" + labelStyle.Render("MINECRAFT  ") + "  " +
+			lipgloss.NewStyle().Foreground(colorAccent2).Render(m.creationVersion+" ("+loader+")") + "\n")
+		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render("[Enter] Create  [Esc] Cancel"))
+	}
+	return b.String()
+}
+
+func (m Model) renderInstanceLoaderContent() string {
+	var b strings.Builder
+	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("FINDING FABRIC LOADER")
+	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+	b.WriteString(title + "\n" + div + "\n\n")
+	b.WriteString(labelStyle.Render("MINECRAFT  ") + "  " +
+		lipgloss.NewStyle().Foreground(colorAccent2).Render(m.creationVersion) + "\n\n")
+	if m.instanceErr != nil {
+		b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+m.instanceErr.Error()) + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("[Enter] Retry  [Esc] Cancel"))
+	} else {
+		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Checking Fabric Meta…") + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("[Esc] Cancel"))
+	}
+	return b.String()
+}
+
+func (m Model) renderInstanceCopyContent() string {
 	var b strings.Builder
 	title := "COPY FROM EXISTING INSTALLATION"
 	if m.copySourceID != instances.LegacyID {
 		title = "DUPLICATE INSTANCE"
 	}
-	footer := "[Esc] Back"
+	styledTitle := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(title)
+	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+	footer := lipgloss.NewStyle().Foreground(colorDimGray).Render("[Esc] Back")
+
 	switch m.state {
 	case instanceCopyInspectScreen:
-		b.WriteString(title + "\n\nCalculating selected-folder sizes and checking file types...\n\nPlease wait.")
-		footer = "Inspection in progress..."
+		b.WriteString(styledTitle + "\n" + div + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Calculating folder sizes and checking file types…") + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Render("Please wait."))
+		footer = lipgloss.NewStyle().Foreground(colorDimGray).Render("Inspection in progress…")
+
 	case instanceCopySelectScreen:
-		b.WriteString(title + "\n────────────────────────────────────────\n\n")
-		fmt.Fprintf(&b, "Source: %s\nDestination: %s/instances/<new-id>/minecraft\nMinecraft: %s (%s)\n\nChoose items to copy (including saves/ only if wanted):\n", m.copySource, m.dataRoot, m.creationVersion, m.copyLoader)
+		b.WriteString(styledTitle + "\n" + div + "\n\n")
+		b.WriteString(labelStyle.Render("SOURCE   ") + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(safeCopyText(m.copySource)) + "\n")
+		b.WriteString(labelStyle.Render("DEST     ") + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(safeCopyText(m.dataRoot)+"/instances/<new-id>/minecraft") + "\n")
+		b.WriteString(labelStyle.Render("MINECRAFT") + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Render(m.creationVersion+" ("+m.copyLoader+")") + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Choose items to copy (saves/ included only if wanted):") + "\n")
 		selected := false
 		for i, item := range m.copyItems {
 			selected = selected || m.copySelected[item.Name]
-			cursor := "  "
-			if i == m.copyCursor {
-				cursor = "► "
-			}
-			mark := "[ ]"
+			mark := lipgloss.NewStyle().Foreground(colorDimGray).Render("[ ]")
 			if m.copySelected[item.Name] {
-				mark = "[x]"
+				mark = lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("[x]")
 			}
 			status := formatCopySize(item.Bytes)
 			if item.Error != "" {
@@ -946,61 +1027,90 @@ func (m Model) renderInstanceCopyScreen() string {
 			} else if !item.Exists {
 				status = "not present"
 			}
-			fmt.Fprintf(&b, "%s%s %s  (%s)\n", cursor, mark, item.Name, status)
+			nameStr := item.Name + "  " + lipgloss.NewStyle().Foreground(colorDimGray).Render("("+status+")")
+			if i == m.copyCursor {
+				b.WriteString(cursorStyle.Render("► ") + mark + " " + lipgloss.NewStyle().Foreground(colorWhite).Render(nameStr) + "\n")
+			} else {
+				b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("  ") + mark + " " + lipgloss.NewStyle().Foreground(colorGray).Render(nameStr) + "\n")
+			}
 		}
 		if !selected {
-			b.WriteString("\nSelect at least one available item to continue.")
+			b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorRed).Render("Select at least one available item to continue."))
 		}
-		b.WriteString("\nSource data is copied, not moved. mcTUI creates/reuses .mctui-operation.lock in the source. Mods and mod-dependent worlds may not work with this version.")
-		footer = "[↑/↓] Navigate  [Space] Toggle  [Enter] Review  [Esc] Cancel"
+		footer = lipgloss.NewStyle().Foreground(colorDimGray).Render("[↑/↓] Navigate  [Space] Toggle  [Enter] Review  [Esc] Cancel")
+
 	case instanceCopyConfirmScreen:
-		b.WriteString("CONFIRM SELECTIVE COPY\n────────────────────────────────────────\n\n")
-		fmt.Fprintf(&b, "Source: %s\nDestination: %s/instances/<new-id>/minecraft\nName: %s\nMinecraft: %s (%s)\n\nSelected content:\n", m.copySource, m.dataRoot, m.copyName, m.creationVersion, m.copyLoader)
+		cTitle := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("CONFIRM SELECTIVE COPY")
+		b.WriteString(cTitle + "\n" + div + "\n\n")
+		b.WriteString(labelStyle.Render("SOURCE") + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(safeCopyText(m.copySource)) + "\n")
+		b.WriteString(labelStyle.Render("NAME  ") + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(m.copyName) + "\n")
+		b.WriteString(labelStyle.Render("VER   ") + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Render(m.creationVersion+" ("+m.copyLoader+")") + "\n\n")
+		b.WriteString(labelStyle.Render("CONTENT") + "\n")
 		var total int64
 		for _, item := range m.copyItems {
 			if m.copySelected[item.Name] {
-				fmt.Fprintf(&b, "  - %s (%s)\n", item.Name, formatCopySize(item.Bytes))
+				b.WriteString("  " + lipgloss.NewStyle().Foreground(colorGray).Render(
+					fmt.Sprintf("- %s (%s)", item.Name, formatCopySize(item.Bytes))) + "\n")
 				total += item.Bytes
 			}
 		}
+		b.WriteString("\n" + labelStyle.Render("TOTAL  ") + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Render(formatCopySize(total)) + "\n")
 		sourceLabel := "Source"
 		if m.copySourceID == instances.LegacyID {
 			sourceLabel = "Legacy"
 		}
-		fmt.Fprintf(&b, "\nEstimated total: %s\n%s data will not be moved or overwritten; mcTUI creates/reuses .mctui-operation.lock there.\n", formatCopySize(total), sourceLabel)
-		b.WriteString("Minecraft and loader compatibility is not guaranteed; worlds using mods may lose content if opened without those mods.")
-		footer = "[y] Confirm copy  [n/Esc] Back"
+		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorGray).Render(
+			sourceLabel+" data will not be moved or overwritten; mcTUI creates/reuses .mctui-operation.lock there."))
+		footer = lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("[y] Confirm copy") +
+			"   " + lipgloss.NewStyle().Foreground(colorGray).Render("[n/Esc] Back")
+
+
 	case instanceCopyRunningScreen:
+		opTitle := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("COPYING INSTANCE DATA")
 		if m.copyCleaning {
-			fmt.Fprintf(&b, "REMOVING PARTIAL COPY\n\n%s\n\nPlease wait.", m.copyStage)
-		} else {
-			fmt.Fprintf(&b, "COPYING INSTANCE DATA\n\n%s\n→ %s/instances/<new-id>/minecraft\n\nDo not close mcTUI.", m.copySource, m.dataRoot)
+			opTitle = lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("REMOVING PARTIAL COPY")
 		}
-		footer = "Operation in progress..."
+		b.WriteString(opTitle + "\n" + div + "\n\n")
+		b.WriteString(labelStyle.Render("STAGE  ") + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(safeCopyText(m.copyStage)) + "\n")
+		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorGray).Render("Do not close mcTUI."))
+		footer = lipgloss.NewStyle().Foreground(colorDimGray).Render("Operation in progress…")
+
 	case instanceCopyResultScreen:
-		b.WriteString("COPY RESULT\n────────────────────────────────────────\n\n")
+		resTitle := lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("COPY RESULT")
+		b.WriteString(resTitle + "\n" + div + "\n\n")
 		if m.copyResult.Instance.ID != "" {
 			gameDir, _ := instances.GameDir(m.dataRoot, m.copyResult.Instance)
-			fmt.Fprintf(&b, "Copy completed.\nInstance: %s\nGame data: %s\nCopied: %s\n", m.copyResult.Instance.Name, gameDir, strings.Join(m.copyResult.Copied, ", "))
+			b.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Render("Copy completed.") + "\n\n")
+			b.WriteString(labelStyle.Render("INSTANCE") + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Render(m.copyResult.Instance.Name) + "\n")
+			b.WriteString(labelStyle.Render("GAME DIR") + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(safeCopyText(gameDir)) + "\n")
+			b.WriteString(labelStyle.Render("COPIED  ") + "  " + lipgloss.NewStyle().Foreground(colorGray).Render(strings.Join(m.copyResult.Copied, ", ")) + "\n")
 			if m.copyErr != nil {
-				fmt.Fprintf(&b, "\nWarning: instance was copied but could not be selected: %v\n", m.copyErr)
+				b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorRed).Render("⚠ Could not select instance: "+m.copyErr.Error()) + "\n")
 			}
 		} else if m.copyErr != nil {
-			fmt.Fprintf(&b, "Copy/cleanup error: %v\n", m.copyErr)
+			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+m.copyErr.Error()) + "\n")
 		} else {
-			b.WriteString("Partial staging data removed.\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Partial staging data removed.") + "\n")
 		}
 		if m.copyStage != "" {
-			fmt.Fprintf(&b, "\nPartial copy retained at:\n%s\n", m.copyStage)
-			footer = "[d] Discard partial copy  [Enter/Esc] Back"
+			b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorGray).Render("Partial copy retained at:\n"+safeCopyText(m.copyStage)) + "\n")
+			footer = lipgloss.NewStyle().Foreground(colorDimGray).Render("[d] Discard partial copy  [Enter/Esc] Back")
 		} else {
-			footer = "[Enter/Esc] Continue"
+			footer = lipgloss.NewStyle().Foreground(colorDimGray).Render("[Enter/Esc] Continue")
 		}
+
 	case instanceCopyCleanupConfirmScreen:
-		fmt.Fprintf(&b, "CONFIRM CLEANUP\n────────────────────────────────────────\n\nPermanently remove partial staging data?\n%s\n\nOnly this temporary migration directory will be removed.", m.copyStage)
-		footer = "[y] Delete partial data  [n/Esc] Keep it"
+		cTitle := lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("CONFIRM CLEANUP")
+		b.WriteString(cTitle + "\n" + div + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Permanently remove partial staging data?") + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(safeCopyText(m.copyStage)) + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Only this temporary migration directory will be removed."))
+		footer = lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("[y] Delete partial data") +
+			"   " + lipgloss.NewStyle().Foreground(colorGray).Render("[n/Esc] Keep it")
 	}
-	return lipgloss.NewStyle().Padding(1, 2).Render(safeCopyText(b.String() + "\n\n" + footer))
+
+	b.WriteString("\n\n" + footer)
+	return b.String()
 }
 
 func safeCopyText(text string) string {

@@ -145,69 +145,101 @@ func modText(s string) string {
 	}, s)
 }
 func (m Model) renderMods() string {
-	lines := []string{"Mods locales — " + modText(m.instance.Name), modText(m.instance.MinecraftVersion + " / " + m.instance.Loader + " " + m.instance.LoaderVersion), modText(m.modStore.GameDir), "Aviso: retirar/desactivar mods puede dañar mundos dependientes.", "Cierra Minecraft externo: su ejecución no está verificada."}
+	var b strings.Builder
+
+	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("LOCAL MODS")
+	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+	b.WriteString(title + "\n" + div + "\n\n")
+
+	b.WriteString(labelStyle.Render("INSTANCE  ") + "  " +
+		lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(modText(m.instance.Name)) + "\n")
+	b.WriteString(labelStyle.Render("VERSION   ") + "  " +
+		lipgloss.NewStyle().Foreground(colorGray).Render(modText(m.instance.MinecraftVersion+" / "+m.instance.Loader+" "+m.instance.LoaderVersion)) + "\n")
+	b.WriteString(labelStyle.Render("PATH      ") + "  " +
+		lipgloss.NewStyle().Foreground(colorDimGray).Render(modText(m.modStore.GameDir)) + "\n\n")
+
 	switch m.state {
 	case modsWorkingScreen:
-		lines = append(lines, "Procesando archivos locales…")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("Processing local files…") + "\n")
+
 	case modsConfirmScreen:
-		lines = append(lines, "¿Eliminar físicamente "+modText(m.modTarget.File)+"?", "Config y dependencias se conservan. [y] Confirmar / [n/Esc] Cancelar")
+		warn := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+		b.WriteString(warn + "\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("CONFIRM DELETE") + "\n\n")
+		b.WriteString(labelStyle.Render("File: ") + lipgloss.NewStyle().Foreground(colorWhite).Render(modText(m.modTarget.File)) + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Config and dependencies are preserved.") + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("[y] Delete") +
+			"   " + lipgloss.NewStyle().Foreground(colorGray).Render("[n/Esc] Cancel"))
+
 	case modsPickerScreen:
-		lines = append(lines, "Agregar .jar: "+modText(m.pickerPath), "[↑/↓] Elegir [→/Enter] Abrir/elegir [←] Padre [Ctrl+H] Ocultos [Esc] Volver")
+		warn := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+		b.WriteString(warn + "\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("ADD MOD (.jar)") + "\n\n")
+		b.WriteString(labelStyle.Render("PATH  ") + "  " +
+			lipgloss.NewStyle().Foreground(colorGray).Render(modText(m.pickerPath)) + "\n\n")
 		if m.pickerErr != nil {
-			lines = append(lines, modText(m.pickerErr.Error()))
+			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+modText(m.pickerErr.Error())) + "\n\n")
 		}
-		count := max(1, m.height-len(lines)-2)
+		count := max(1, m.height-12)
 		start := max(0, m.pickerCursor-count+1)
 		for i := start; i < min(len(m.pickerEntries), start+count); i++ {
-			prefix := "  "
+			entry := m.pickerEntries[i]
 			if i == m.pickerCursor {
-				prefix = "> "
+				b.WriteString(cursorStyle.Render("► "+modText(entry.Name())) + "\n")
+			} else {
+				b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("  "+modText(entry.Name())) + "\n")
 			}
-			lines = append(lines, prefix+modText(m.pickerEntries[i].Name()))
 		}
+		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render("[↑/↓] Navigate  [→/Enter] Open/Select  [←] Parent  [Ctrl+H] Hidden  [Esc] Back"))
+
 	default:
-		lines = append(lines, "[Space/Enter] Alternar [a] Agregar [d] Retirar [r] Refrescar [Esc] Volver")
 		if m.modBusy != nil {
-			lines = append(lines, "BLOQUEADO: "+modText(m.modBusy.Error()))
+			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("⚠ LOCKED: "+modText(m.modBusy.Error())) + "\n\n")
 		}
 		if m.modErr != nil {
-			lines = append(lines, "Error: "+modText(m.modErr.Error()))
+			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+modText(m.modErr.Error())) + "\n\n")
 		}
-		count := max(1, m.height-len(lines)-3)
+		count := max(1, m.height-14)
 		start := max(0, m.modCursor-count+1)
 		for i := start; i < min(len(m.modItems), start+count); i++ {
 			item := m.modItems[i]
-			state := "Deshabilitado"
+
+			stateStr := lipgloss.NewStyle().Foreground(colorRed).Render("Disabled")
 			if item.Enabled {
-				state = "Habilitado"
+				stateStr = lipgloss.NewStyle().Foreground(colorGreen).Render("Enabled")
 			}
+			var flags []string
 			if item.Metadata.ID == "" {
-				state += " / Desconocido"
+				flags = append(flags, lipgloss.NewStyle().Foreground(colorGray).Render("Unknown"))
 			}
 			if item.Problem != "" {
-				state += " / Corrupto"
+				flags = append(flags, lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("Corrupt"))
 			}
 			if item.Duplicate {
-				state += " / Duplicado"
+				flags = append(flags, lipgloss.NewStyle().Foreground(colorRed).Render("Duplicate"))
 			}
 			if item.Changed {
-				state += " / Modificado externamente"
+				flags = append(flags, lipgloss.NewStyle().Foreground(colorAccent).Render("Modified"))
 			}
-			origin := "Externo/no gestionado"
-			if item.Managed {
-				origin = item.Origin
+
+			nameStr := item.Metadata.Name
+			if nameStr == "" {
+				nameStr = item.File
 			}
-			prefix := "  "
+			row := stateStr + "  " + lipgloss.NewStyle().Foreground(colorWhite).Render(modText(nameStr))
+			if len(flags) > 0 {
+				row += "  " + strings.Join(flags, " / ")
+			}
 			if i == m.modCursor {
-				prefix = "> "
+				b.WriteString(cursorStyle.Render("► ") + lipgloss.NewStyle().MaxWidth(44).Render(row) + "\n")
+			} else {
+				b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("  ") + lipgloss.NewStyle().MaxWidth(44).Render(row) + "\n")
 			}
-			lines = append(lines, prefix+modText(fmt.Sprintf("%s [%s] %s %s %s (%s)", item.File, state, item.Metadata.Name, item.Metadata.Version, item.Metadata.Environment, origin)))
 		}
-		lines = append(lines, fmt.Sprintf("%d archivos · ↑/↓ desplazar", len(m.modItems)))
+		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render(
+			fmt.Sprintf("%d files · [Space/Enter] Toggle  [a] Add  [d] Remove  [r] Refresh  [Esc] Back",
+				len(m.modItems))))
 	}
-	width := max(20, m.width)
-	for i := range lines {
-		lines[i] = lipgloss.NewStyle().MaxWidth(width).Render(lines[i])
-	}
-	return strings.Join(lines, "\n")
+
+	return b.String()
 }

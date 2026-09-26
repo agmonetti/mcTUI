@@ -155,12 +155,15 @@ func renderFeaturedBanner(version, modloader string, memoryMB int, cached bool) 
 		Render(content)
 }
 
-// ── Topbar tipo CS:GO ─────────────────────────────────────────────────────────
-func renderTopBar(cursorMenu int, hasUpdate bool) string {
-	tabs := []struct {
+// renderTopBar renders the CS:GO-style navigation tab bar.
+// cursorMenu drives highlighting for menu-bound tabs; state overrides
+// for sub-screens that are reached via keyboard shortcuts (i, m).
+func renderTopBar(cursorMenu int, hasUpdate bool, state screenState) string {
+	type tabEntry struct {
 		label string
 		idx   int
-	}{
+	}
+	tabs := []tabEntry{
 		{"PLAY", 0},
 		{"SET NAME", 1},
 		{"VERSION", 2},
@@ -168,7 +171,22 @@ func renderTopBar(cursorMenu int, hasUpdate bool) string {
 		{"MODLOADER", 4},
 		{"MEMORY", 5},
 		{"RESET", 6},
+		{"INSTANCES", 8},
+		{"MODS", 9},
 		{"QUIT", 7},
+	}
+
+	// Determine which tab to highlight.
+	activeIdx := cursorMenu
+	instancesActive := state == instancesScreen || state == instanceNameScreen ||
+		state == instanceLoaderScreen ||
+		(state >= instanceCopyInspectScreen && state <= instanceCopyCleanupConfirmScreen) ||
+		(state >= instanceTrashScreen && state <= instanceRemoveResultScreen)
+	modsActive := state >= modsScreen && state <= modsWorkingScreen
+	if instancesActive {
+		activeIdx = 8
+	} else if modsActive {
+		activeIdx = 9
 	}
 
 	var parts []string
@@ -178,7 +196,7 @@ func renderTopBar(cursorMenu int, hasUpdate bool) string {
 		if t.idx == 0 && hasUpdate {
 			label += lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render(" [!]")
 		}
-		if cursorMenu == t.idx {
+		if activeIdx == t.idx {
 			parts = append(parts, tabActive.Render(label))
 		} else {
 			parts = append(parts, tabInactive.Render(label))
