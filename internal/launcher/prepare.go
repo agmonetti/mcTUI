@@ -37,10 +37,16 @@ func Prepare(runtimeDir, version, modloader string, progress func(string)) (Prep
 }
 
 func PrepareContext(ctx context.Context, runtimeDir, version, modloader string, progress func(string)) (Prepared, error) {
+	return PrepareWithLoaderContext(ctx, runtimeDir, version, modloader, "", progress)
+}
+
+// PrepareWithLoaderContext optionally pins the Fabric Loader version. An empty
+// loaderVersion keeps the legacy behavior of selecting the current default.
+func PrepareWithLoaderContext(ctx context.Context, runtimeDir, version, modloader, loaderVersion string, progress func(string)) (Prepared, error) {
 	if err := ctx.Err(); err != nil {
 		return Prepared{}, err
 	}
-	if !filepath.IsAbs(runtimeDir) || !filepath.IsLocal(version) || version != filepath.Base(version) || strings.ContainsAny(version, "/\\") || version == "." || version == ".." || (modloader != "Vanilla" && modloader != "Fabric") {
+	if !filepath.IsAbs(runtimeDir) || !filepath.IsLocal(version) || version != filepath.Base(version) || strings.ContainsAny(version, "/\\") || version == "." || version == ".." || (modloader != "Vanilla" && modloader != "Fabric") || (loaderVersion != "" && modloader != "Fabric") {
 		return Prepared{}, fmt.Errorf("invalid runtime, version or loader")
 	}
 	data, ok := mojang.CachedVersionData(runtimeDir, version)
@@ -123,7 +129,7 @@ func PrepareContext(ctx context.Context, runtimeDir, version, modloader string, 
 
 	mainClass := "net.minecraft.client.main.Main"
 	if modloader == "Fabric" {
-		profile, err := fabric.Resolve(ctx, version, runtimeDir, librariesPath, &wg, download)
+		profile, err := fabric.Resolve(ctx, version, runtimeDir, librariesPath, &wg, download, loaderVersion)
 		if err != nil {
 			return Prepared{}, &PrepareError{Stage: "Fabric", Err: fmt.Errorf("profile unavailable for %s; Vanilla will not be launched: %w", version, err)}
 		}

@@ -8,6 +8,12 @@ import (
 	"testing"
 )
 
+func TestPrepareWithLoaderContextRejectsPinnedVanillaLoader(t *testing.T) {
+	if _, err := PrepareWithLoaderContext(context.Background(), t.TempDir(), "1.20.4", "Vanilla", "0.16.0", nil); err == nil {
+		t.Fatal("Vanilla preparation accepted a Fabric loader version")
+	}
+}
+
 func TestPrepareContextRejectsCanceledAndIncompletePreparation(t *testing.T) {
 	root := t.TempDir()
 	ctx, cancel := context.WithCancel(context.Background())
