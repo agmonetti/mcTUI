@@ -107,6 +107,10 @@ func List(root string) ([]Instance, error) {
 		return nil, err
 	}
 	for _, entry := range entries {
+		// Legacy has a local mods registry, but remains a virtual instance.
+		if entry.Name() == LegacyID && entry.IsDir() {
+			continue
+		}
 		if !entry.IsDir() || !validID(entry.Name()) {
 			return nil, fmt.Errorf("unexpected entry in instances: %q", entry.Name())
 		}
