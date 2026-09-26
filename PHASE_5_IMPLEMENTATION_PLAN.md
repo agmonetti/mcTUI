@@ -257,7 +257,7 @@ Depende de: estado actual de fases 1–4.
 - [x] **A01** Resolver decisiones de rutas/esquema y documentarlas en la sección 10 (diseño; implementación pendiente).
 - [ ] **A02** Separar gameDir y runtime; revisar todos los callers de `MinecraftDir()` (Play, mundos y Reset/restore usan rutas de instancia; falta validar ejecución real).
 - [ ] **A03** Persistir/listar/crear/seleccionar/renombrar instancias con ID estable (API y TUI completas para listar, crear Vanilla, cambiar activa y renombrar; falta validar el corte en ejecución).
-- [ ] **A04** Instancia heredada y copia selectiva no destructiva.
+- [ ] **A04** Instancia heredada y copia selectiva no destructiva (copia manual de `saves/` exitosa y escritura de `c` confirmada; falta cerrar verificación de origen intacto e independencia del destino).
 - [ ] **A05** Duplicación independiente; política explícita de inclusión de mundos.
 - [ ] **A06** Ajustes por instancia; versión Minecraft y loader inmutables tras crear managed; Java y memoria validados (selector Java automático/override persistido y preflight unificado). La TUI permite elegir versión al crear Vanilla; creación managed Fabric queda pendiente de soporte de loader exacto.
 - [ ] **A07** Preparación común con errores; corregir éxito falso y fallback silencioso (UI y lanzador reutilizan `launcher.Prepare`; índice/natives en §10.4 y contexto/integridad/cancelación en §10.5; faltan errores tipados y casos de arquitectura/extracción señalados allí).
@@ -378,6 +378,7 @@ Anotar en la tabla siguiente OS/arquitectura, build, versión, loader, Java, pre
 | No confirmada | No confirmado | Arch Linux (reportado; arquitectura/build no confirmados) | 1.20.4 | Fabric (loader exacto no confirmado) | No confirmado | Sin fallas (reportado; detalles no confirmados) | No confirmado | No confirmado |
 | No confirmada | `go run .` (árbol local) | Linux / Arch Linux reportado; arquitectura no confirmada | 1.21.2 | Vanilla, instancia `prueba` | Automático (Java 21+) | Preparación exitosa | Sí; salida normal, código 0 | `instances/50ebfeb76d00e58c87638b8e430aa64f/minecraft/mctui_latest.log` |
 | No confirmada | `go run .` (árbol local) | Linux / Arch Linux reportado; arquitectura no confirmada | 1.21.2 | Vanilla, instancia `test Fase 5` | Manual Java 27 | Preparación exitosa | Sí; salida normal, código 0 | `instances/2efef7fa3925f5271b674d528bbda27f/minecraft/mctui_latest.log` |
+| 2026-09-26 | `ccb659beffccf3716cca6966de7a48b98ba5f7e0` (modo de ejecución/estado local no registrados) | Linux x86_64 | 26.1 | Vanilla, instancia `A` | Automático; OpenJDK 27 en PATH (binario exacto no registrado) | Usuario reporta funcionamiento exitoso | Usuario reporta funcionamiento exitoso; evidencia detallada no transcrita | GameDir mostrado: `/home/agus-hy/.local/share/mctui/instances/2275cc15ad13672cd0ecad603758d93a/minecraft`; log esperado: `mctui_latest.log` dentro de ese directorio (no se registró su lectura) |
 
 
 ### Plataformas
@@ -507,6 +508,14 @@ El corte sin commit de A08/A10/A11 pasa `go test ./...`, `go test -race ./...`, 
 
 En el corte actual, la creación managed ofrece Vanilla. Fabric managed no debe ofrecerse hasta que Play pueda preparar y respetar la versión exacta de Fabric Loader; habilitarlo antes produciría una instancia que no se puede lanzar. La selección de canal para futuras actualizaciones de mods es una decisión separada de C08.
 
+### 10.12. A04 parcial — copia selectiva desde legacy
+
+El selector ofrece copiar desde la instalación heredada sin mover sus datos. El usuario elige nombre, versión Vanilla y cualquiera de `mods/`, `config/`, `saves/`, `resourcepacks/`, `shaderpacks/` y `options.txt`; la confirmación muestra origen, destino, contenido, tamaño estimado y advertencia sobre compatibilidad de mods/mundos. Runtime, logs e historial de Reset quedan fuera.
+
+El motor rechaza enlaces y archivos especiales en el contenido seleccionado, adquiere el lock compartido sobre el gameDir heredado y copia con `os.Root`/`os.CopyFS`. Prepara metadata y archivos en `.mctui-copy-*` bajo la raíz de datos, fuera de `instances/`; solo publica la instancia mediante rename después de completar todo. Un error conserva el temporal y muestra su ruta; eliminarlo requiere confirmación explícita. El lock compartido crea/reutiliza `.mctui-operation.lock` en el origen, igual que Play/Reset; los datos seleccionados no se mueven ni modifican.
+
+Tests cubren selección, copia independiente, rechazo de enlaces, no publicación ante preflight fallido, limpieza acotada del temporal y escritura de la letra `c` en el nombre. Validación manual reportada: se copió `saves/` a una instancia Vanilla 1.21.10; inicialmente el atajo `c` consumía la primera letra (`copia` quedaba como `opia`), se corrigió y el usuario confirmó manualmente que `c` ya funciona. **A04 permanece abierta** hasta confirmar que legacy sigue intacta y la nueva instancia es independiente. La plataforma y las consecuencias de cambios concurrentes hechos por launchers externos requieren validación manual; el lock solo coordina mcTUI.
+
 ## 11. Trazabilidad y seguimiento
 
 | Requisito original | Implementación rastreable |
@@ -529,7 +538,7 @@ Al cerrar tareas, sustituir «pendiente» por commit y evidencia. Documentar dif
 
 | Hito | Estado | Commit(s) | Evidencia / bloqueos |
 | --- | --- | --- | --- |
-| 5A | En curso (A01; A02/A03/A07/A08/A10/A11 parciales) | `8e3c89d`, `c834078`, `e3079af`, `7c12b8a`, `c57fbe2`; cortes locales sin commit | §10.1–10.11; validación manual del corte y cierre forzado pendientes; DEC-05 resuelta |
+| 5A | En curso (A01; A02/A03/A07/A08/A10/A11 parciales; A04 parcial) | `8e3c89d`, `c834078`, `e3079af`, `7c12b8a`, `c57fbe2`; cortes locales sin commit | §9 registra validación manual del corte según reporte del usuario. A04: copia de `saves/` exitosa y `c` confirmado; falta confirmar origen intacto e independencia (§10.12). A05/A12 y otros cierres parciales pendientes; DEC-05 resuelta |
 | 5B | Pendiente | — | Requiere 5A; DEC-04 |
 | 5C | Pendiente | — | Requiere 5A/5B; DEC-06/10 |
 | 5D | Pendiente | — | Requiere 5A–5C; DEC-07/10 |

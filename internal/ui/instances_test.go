@@ -98,6 +98,109 @@ func TestNewManagedInstanceSelectsVersionBeforeName(t *testing.T) {
 	}
 }
 
+func TestCopyNameAcceptsLetterC(t *testing.T) {
+	input := textinput.New()
+	input.Focus()
+	m := Model{state: instanceNameScreen, copyingInstance: true, input: input}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	m = updated.(Model)
+	if m.input.Value() != "c" {
+		t.Fatalf("copy name swallowed 'c': %q", m.input.Value())
+	}
+}
+
+func TestInstanceCopyViewEscapesTerminalControlsFromPaths(t *testing.T) {
+	m := Model{state: instanceCopySelectScreen, copySource: "/tmp/legacy\x1b[31m", dataRoot: "/tmp/data", creationVersion: "1.21.1", copyItems: []instances.CopyItem{{Name: "mods", Exists: true}}}
+	if view := m.View(); strings.Contains(view, "\x1b") || !strings.Contains(view, "COPY FROM EXISTING INSTALLATION") {
+		t.Fatalf("copy view did not sanitize terminal controls: %q", view)
+	}
+}
+
+func TestCopyLegacyFlowCreatesAndSelectsIndependentInstance(t *testing.T) {
+	root, source := t.TempDir(), t.TempDir()
+	if err := os.Mkdir(filepath.Join(source, "mods"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "mods", "example.jar"), []byte("mod-data"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "options.txt"), []byte("video"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	legacy := instances.Instance{ID: instances.LegacyID, Kind: "legacy", Name: "Existing"}
+	m := Model{state: instancesScreen, dataRoot: root, instance: legacy, instanceList: []instances.Instance{legacy}, versions: []string{"1.21.1"}, versionSelect: "1.21.1", memoryMB: 2048, input: textinput.New()}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	m = updated.(Model)
+	if m.state != versionsScreen || !m.copyingInstance {
+		t.Fatalf("legacy copy action did not open version picker: state=%v", m.state)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if m.state != instanceNameScreen {
+		t.Fatalf("copy version did not open name prompt: state=%v", m.state)
+	}
+	m.input.SetValue("Imported")
+	m.copySource = source // keep this UI test isolated from the user's real .minecraft
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if m.state != instanceCopyInspectScreen || cmd == nil {
+		t.Fatalf("copy inspection did not start asynchronously: state=%v", m.state)
+	}
+	inspect, ok := cmd().(InstanceCopyInspectDoneMsg)
+	if !ok {
+		t.Fatalf("inspection command returned unexpected message")
+	}
+	updated, _ = m.Update(inspect)
+	m = updated.(Model)
+	if m.state != instanceCopySelectScreen || len(m.copyItems) != 6 {
+		t.Fatalf("copy selection screen/items = %v/%d", m.state, len(m.copyItems))
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}})
+	m = updated.(Model)
+	for range 5 {
+		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+		m = updated.(Model)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}})
+	m = updated.(Model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if m.state != instanceCopyConfirmScreen || !strings.Contains(m.View(), "mods") || !strings.Contains(m.View(), "Legacy data will not be moved or overwritten") {
+		t.Fatalf("copy confirmation missing selection/safety details: state=%v view=%s", m.state, m.View())
+	}
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = updated.(Model)
+	if m.state != instanceCopyRunningScreen || cmd == nil {
+		t.Fatalf("copy did not start asynchronously: state=%v cmd=%v", m.state, cmd)
+	}
+	msg, ok := cmd().(InstanceCopyDoneMsg)
+	if !ok {
+		t.Fatalf("copy command returned %T", cmd())
+	}
+	updated, _ = m.Update(msg)
+	m = updated.(Model)
+	if m.state != instanceCopyResultScreen || m.copyErr != nil || m.instance.ID == instances.LegacyID || m.instance.MinecraftVersion != "1.21.1" {
+		t.Fatalf("copy result/selection = state %v, err %v, instance %+v", m.state, m.copyErr, m.instance)
+	}
+	gameDir, err := instances.GameDir(root, m.instance)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rel, want := range map[string]string{"mods/example.jar": "mod-data", "options.txt": "video"} {
+		data, err := os.ReadFile(filepath.Join(gameDir, filepath.FromSlash(rel)))
+		if err != nil || string(data) != want {
+			t.Fatalf("copied %s = %q, %v", rel, data, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(source, "mods", "example.jar"), []byte("changed source"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(gameDir, "mods", "example.jar"))
+	if err != nil || string(data) != "mod-data" {
+		t.Fatalf("destination shares source data: %q, %v", data, err)
+	}
+}
+
 func TestRenameInstanceFromPicker(t *testing.T) {
 	root := t.TempDir()
 	in, err := instances.Create(root, "Before", "1.20.4", "Vanilla", "", 2048)

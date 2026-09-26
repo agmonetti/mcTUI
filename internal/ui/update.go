@@ -75,6 +75,50 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case InstanceCopyInspectDoneMsg:
+		if m.state == instanceCopyInspectScreen {
+			if msg.Err != nil {
+				m.copyErr = msg.Err
+				m.state = instanceCopyResultScreen
+			} else {
+				m.copyItems = msg.Items
+				m.copySelected = make(map[string]bool)
+				m.copyCursor = 0
+				m.copyErr = nil
+				m.state = instanceCopySelectScreen
+			}
+		}
+		return m, nil
+
+	case InstanceCopyDoneMsg:
+		if m.state == instanceCopyRunningScreen && !m.copyCleaning {
+			m.copyResult, m.copyErr, m.copyStage = msg.Result, msg.Err, msg.Result.StagingPath
+			if msg.Err == nil {
+				if err := m.setInstance(msg.Result.Instance); err != nil {
+					m.copyErr = err
+					m.state = instanceCopyResultScreen
+				} else {
+					m.instanceList, m.instanceErr = instances.List(m.dataRoot)
+					m.copyingInstance = false
+					m.state = instanceCopyResultScreen
+				}
+			} else {
+				m.state = instanceCopyResultScreen
+			}
+		}
+		return m, nil
+
+	case InstanceCopyCleanupDoneMsg:
+		if m.state == instanceCopyRunningScreen && m.copyCleaning {
+			m.copyCleaning = false
+			m.copyErr = msg.Err
+			if msg.Err == nil {
+				m.copyStage = ""
+			}
+			m.state = instanceCopyResultScreen
+		}
+		return m, nil
+
 	case GameStartedMsg:
 		if m.state != gameStartingScreen {
 			return m, nil
@@ -198,7 +242,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "up", "k":
-			if m.state == instancesScreen && m.instanceCursor > 0 {
+			if m.state == instanceCopySelectScreen && m.copyCursor > 0 {
+				m.copyCursor--
+			} else if m.state == instancesScreen && m.instanceCursor > 0 {
 				m.instanceCursor--
 			} else if m.state == menuScreen && m.cursorMenu > 0 {
 				m.cursorMenu--
@@ -209,7 +255,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "down", "j":
-			if m.state == instancesScreen && m.instanceCursor+1 < len(m.instanceList) {
+			if m.state == instanceCopySelectScreen && m.copyCursor+1 < len(m.copyItems) {
+				m.copyCursor++
+			} else if m.state == instancesScreen && m.instanceCursor+1 < len(m.instanceList) {
 				m.instanceCursor++
 			} else if m.state == menuScreen && m.cursorMenu < menuOptionsCount-1 {
 				m.cursorMenu++
@@ -220,9 +268,38 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "enter":
-			if m.state == instanceNameScreen {
+			if m.state == instanceCopyResultScreen {
+				if m.copyErr == nil && m.copyResult.Instance.ID != "" {
+					m.state = menuScreen
+				} else {
+					m.copyingInstance = false
+					m.state = instancesScreen
+					m.instanceList, m.instanceErr = instances.List(m.dataRoot)
+				}
+			} else if m.state == instanceCopySelectScreen {
+				selected := false
+				for _, item := range m.copyItems {
+					selected = selected || m.copySelected[item.Name]
+				}
+				if selected {
+					m.state = instanceCopyConfirmScreen
+				}
+			} else if m.state == instanceNameScreen {
 				name := strings.TrimSpace(m.input.Value())
-				if m.instanceRenameID != "" {
+				if m.copyingInstance {
+					if name == "" || len(name) > 80 {
+						m.instanceErr = fmt.Errorf("instance name must be 1-80 characters")
+					} else {
+						m.copyName = name
+						m.copyErr = nil
+						m.state = instanceCopyInspectScreen
+						source := m.copySource
+						return m, func() tea.Msg {
+							items, err := instances.InspectCopySource(source)
+							return InstanceCopyInspectDoneMsg{Items: items, Err: err}
+						}
+					}
+				} else if m.instanceRenameID != "" {
 					m.instanceErr = instances.Rename(m.dataRoot, m.instanceRenameID, name)
 					if m.instanceErr == nil {
 						m.instanceList, m.instanceErr = instances.List(m.dataRoot)
@@ -371,7 +448,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// else: stay on nameScreen, showing the validation hint
 			} else if m.state == versionsScreen {
 				version := m.versions[m.cursorVersions]
-				if m.creatingInstance {
+				if m.creatingInstance || m.copyingInstance {
 					m.creationVersion = version
 					m.state = instanceNameScreen
 					m.instanceErr = nil
@@ -416,7 +493,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "y", "Y":
-			if m.state == confirmScreen {
+			if m.state == instanceCopyConfirmScreen {
+				return m.startInstanceCopy()
+			} else if m.state == instanceCopyCleanupConfirmScreen {
+				root, stage := m.dataRoot, m.copyStage
+				m.copyCleaning = true
+				m.state = instanceCopyRunningScreen
+				return m, func() tea.Msg {
+					return InstanceCopyCleanupDoneMsg{Err: instances.DiscardCopyStage(root, stage)}
+				}
+			} else if m.state == confirmScreen {
 				launch, err := m.launchConfig()
 				if err != nil {
 					m.dlErr = err
@@ -435,9 +521,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "n", "N":
 			if m.state == confirmScreen {
 				m.state = menuScreen
+			} else if m.state == instanceCopyConfirmScreen {
+				m.state = instanceCopySelectScreen
+			} else if m.state == instanceCopyCleanupConfirmScreen {
+				m.state = instanceCopyResultScreen
 			} else if m.state == instancesScreen {
 				m.instanceErr = nil
 				m.instanceRenameID = ""
+				m.copyingInstance = false
 				m.creatingInstance = true
 				m.state = versionsScreen
 				for i, version := range m.versions {
@@ -445,6 +536,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.cursorVersions = i
 						break
 					}
+				}
+				return m, nil
+			}
+
+		case "c", "C":
+			if m.state == instancesScreen {
+				if m.instanceCursor >= 0 && m.instanceCursor < len(m.instanceList) && m.instanceList[m.instanceCursor].ID == instances.LegacyID {
+					legacy, err := instances.Read(m.dataRoot, instances.LegacyID)
+					if err == nil {
+						m.copySource, err = instances.GameDir(m.dataRoot, legacy)
+					}
+					if err != nil {
+						m.instanceErr = err
+						return m, nil
+					}
+					m.instanceErr = nil
+					m.creatingInstance = false
+					m.copyingInstance = true
+					m.creationVersion = ""
+					m.state = versionsScreen
+					for i, version := range m.versions {
+						if version == m.versionSelect {
+							m.cursorVersions = i
+							break
+						}
+					}
+				} else {
+					m.instanceErr = fmt.Errorf("select the existing installation before copying")
 				}
 				return m, nil
 			}
@@ -466,8 +585,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
+		case " ":
+			if m.state == instanceCopySelectScreen && len(m.copyItems) > 0 {
+				item := m.copyItems[m.copyCursor]
+				if item.Exists && item.Error == "" {
+					m.copySelected[item.Name] = !m.copySelected[item.Name]
+				}
+			} else if m.state == instanceCopyConfirmScreen {
+				m.state = instanceCopySelectScreen
+			}
+
+		case "d", "D":
+			if m.state == instanceCopyResultScreen && m.copyStage != "" {
+				m.state = instanceCopyCleanupConfirmScreen
+			}
+
 		case "esc":
-			if m.state == instancesScreen {
+			if m.state == instanceCopySelectScreen {
+				m.state = instanceNameScreen
+			} else if m.state == instanceCopyConfirmScreen {
+				m.state = instanceCopySelectScreen
+			} else if m.state == instanceCopyCleanupConfirmScreen {
+				m.state = instanceCopyResultScreen
+			} else if m.state == instanceCopyResultScreen {
+				m.copyingInstance = false
+				if m.copyErr == nil && m.copyResult.Instance.ID != "" {
+					m.state = menuScreen
+				} else {
+					m.state = instancesScreen
+					m.instanceList, m.instanceErr = instances.List(m.dataRoot)
+				}
+			} else if m.state == instancesScreen {
 				m.state = menuScreen
 				m.instanceErr = nil
 			} else if m.state == instanceNameScreen {
@@ -475,12 +623,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.instanceErr = nil
 				m.instanceRenameID = ""
 				m.creatingInstance = false
+				m.copyingInstance = false
 				m.creationVersion = ""
 				m.input.CharLimit = 16
 				m.input.Placeholder = "Type your name..."
 			} else if m.state == versionsScreen {
-				if m.creatingInstance {
+				if m.creatingInstance || m.copyingInstance {
 					m.creatingInstance = false
+					m.copyingInstance = false
 					m.state = instancesScreen
 				} else {
 					m.state = menuScreen
@@ -500,6 +650,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // updateResetKey keeps a purge impossible without a mode choice and a fresh
 // explicit confirmation. Bubble Tea executes commands asynchronously.
+func (m Model) startInstanceCopy() (tea.Model, tea.Cmd) {
+	selected := make([]string, 0, len(m.copySelected))
+	for _, item := range m.copyItems {
+		if m.copySelected[item.Name] {
+			selected = append(selected, item.Name)
+		}
+	}
+	root, source, name, version, memory := m.dataRoot, m.copySource, m.copyName, m.creationVersion, m.memoryMB
+	m.copyErr = nil
+	m.copyCleaning = false
+	m.state = instanceCopyRunningScreen
+	return m, func() tea.Msg {
+		result, err := instances.CopyFromLegacy(root, source, name, version, selected, memory)
+		return InstanceCopyDoneMsg{Result: result, Err: err}
+	}
+}
+
 func (m Model) updateResetKey(key string) (tea.Model, tea.Cmd) {
 	if m.state != resetPickerScreen && m.state != resetRunningScreen {
 		switch key {

@@ -39,6 +39,12 @@ const (
 	javaPickerScreen
 	instancesScreen
 	instanceNameScreen
+	instanceCopyInspectScreen
+	instanceCopySelectScreen
+	instanceCopyConfirmScreen
+	instanceCopyRunningScreen
+	instanceCopyResultScreen
+	instanceCopyCleanupConfirmScreen
 	gameStartingScreen
 	gameRunningScreen
 	gameResultScreen
@@ -72,6 +78,20 @@ type ResetDoneMsg struct {
 	Err    error
 }
 
+type InstanceCopyInspectDoneMsg struct {
+	Items []instances.CopyItem
+	Err   error
+}
+
+type InstanceCopyDoneMsg struct {
+	Result instances.CopyResult
+	Err    error
+}
+
+type InstanceCopyCleanupDoneMsg struct {
+	Err error
+}
+
 // Model is the root Bubble Tea model for mcTUI.
 type LaunchConfig struct {
 	GameDir, RuntimeDir          string
@@ -100,7 +120,17 @@ type Model struct {
 	instanceCursor   int
 	instanceRenameID string
 	creatingInstance bool
+	copyingInstance  bool
 	creationVersion  string
+	copySource       string
+	copyItems        []instances.CopyItem
+	copySelected     map[string]bool
+	copyCursor       int
+	copyName         string
+	copyStage        string
+	copyErr          error
+	copyResult       instances.CopyResult
+	copyCleaning     bool
 	pickerForJava    bool
 	launch           LaunchConfig
 	latestRelease    updater.Release // zero value = no update available

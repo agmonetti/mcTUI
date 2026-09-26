@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"unicode"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -22,6 +23,9 @@ func (m Model) View() string {
 	}
 	if m.state == instanceNameScreen {
 		return m.renderInstanceNameScreen()
+	}
+	if m.state >= instanceCopyInspectScreen && m.state <= instanceCopyCleanupConfirmScreen {
+		return m.renderInstanceCopyScreen()
 	}
 	// ── Download screen completo (tapa todo el TUI) ──────────────────────────
 	if m.state == downloadScreen {
@@ -882,14 +886,115 @@ func (m Model) renderInstancesScreen() string {
 			fmt.Fprintf(&b, "%s%s — %s %s%s\n", marker, in.Name, in.MinecraftVersion, loader, selected)
 		}
 	}
-	b.WriteString("\n[↑/↓] Move  [Enter] Select  [n] New Vanilla  [r] Rename  [Esc] Back\n")
+	b.WriteString("\n[↑/↓] Move  [Enter] Select  [n] New Vanilla  [c] Copy legacy  [r] Rename  [Esc] Back\n")
 	b.WriteString("\nNew instances use the shared runtime and private game data.")
 	return lipgloss.NewStyle().Padding(1, 2).Render(b.String())
 }
 
+func (m Model) renderInstanceCopyScreen() string {
+	var b strings.Builder
+	footer := "[Esc] Back"
+	switch m.state {
+	case instanceCopyInspectScreen:
+		b.WriteString("INSPECTING EXISTING INSTALLATION\n\nCalculating selected-folder sizes and checking file types...\n\nPlease wait.")
+		footer = "Inspection in progress..."
+	case instanceCopySelectScreen:
+		b.WriteString("COPY FROM EXISTING INSTALLATION\n────────────────────────────────────────\n\n")
+		fmt.Fprintf(&b, "Source: %s\nDestination: %s/instances/<new-id>/minecraft\nMinecraft: %s (Vanilla)\n\nChoose items to copy:\n", m.copySource, m.dataRoot, m.creationVersion)
+		selected := false
+		for i, item := range m.copyItems {
+			selected = selected || m.copySelected[item.Name]
+			cursor := "  "
+			if i == m.copyCursor {
+				cursor = "► "
+			}
+			mark := "[ ]"
+			if m.copySelected[item.Name] {
+				mark = "[x]"
+			}
+			status := formatCopySize(item.Bytes)
+			if item.Error != "" {
+				status = "unavailable: " + item.Error
+			} else if !item.Exists {
+				status = "not present"
+			}
+			fmt.Fprintf(&b, "%s%s %s  (%s)\n", cursor, mark, item.Name, status)
+		}
+		if !selected {
+			b.WriteString("\nSelect at least one available item to continue.")
+		}
+		b.WriteString("\nSource data is copied, not moved. mcTUI creates/reuses .mctui-operation.lock in the source. Mods and mod-dependent worlds may not work with this version.")
+		footer = "[↑/↓] Navigate  [Space] Toggle  [Enter] Review  [Esc] Cancel"
+	case instanceCopyConfirmScreen:
+		b.WriteString("CONFIRM SELECTIVE COPY\n────────────────────────────────────────\n\n")
+		fmt.Fprintf(&b, "Source: %s\nDestination: %s/instances/<new-id>/minecraft\nName: %s\nMinecraft: %s (Vanilla)\n\nSelected content:\n", m.copySource, m.dataRoot, m.copyName, m.creationVersion)
+		var total int64
+		for _, item := range m.copyItems {
+			if m.copySelected[item.Name] {
+				fmt.Fprintf(&b, "  - %s (%s)\n", item.Name, formatCopySize(item.Bytes))
+				total += item.Bytes
+			}
+		}
+		fmt.Fprintf(&b, "\nEstimated total: %s\nLegacy data will not be moved or overwritten; mcTUI creates/reuses .mctui-operation.lock there.\n", formatCopySize(total))
+		b.WriteString("Minecraft and loader compatibility is not guaranteed; worlds using mods may lose content if opened without those mods.")
+		footer = "[y] Confirm copy  [n/Esc] Back"
+	case instanceCopyRunningScreen:
+		if m.copyCleaning {
+			fmt.Fprintf(&b, "REMOVING PARTIAL COPY\n\n%s\n\nPlease wait.", m.copyStage)
+		} else {
+			fmt.Fprintf(&b, "COPYING LEGACY DATA\n\n%s\n→ %s/instances/<new-id>/minecraft\n\nDo not close mcTUI.", m.copySource, m.dataRoot)
+		}
+		footer = "Operation in progress..."
+	case instanceCopyResultScreen:
+		b.WriteString("COPY RESULT\n────────────────────────────────────────\n\n")
+		if m.copyResult.Instance.ID != "" {
+			gameDir, _ := instances.GameDir(m.dataRoot, m.copyResult.Instance)
+			fmt.Fprintf(&b, "Copy completed.\nInstance: %s\nGame data: %s\nCopied: %s\n", m.copyResult.Instance.Name, gameDir, strings.Join(m.copyResult.Copied, ", "))
+			if m.copyErr != nil {
+				fmt.Fprintf(&b, "\nWarning: instance was copied but could not be selected: %v\n", m.copyErr)
+			}
+		} else if m.copyErr != nil {
+			fmt.Fprintf(&b, "Copy/cleanup error: %v\n", m.copyErr)
+		} else {
+			b.WriteString("Partial staging data removed.\n")
+		}
+		if m.copyStage != "" {
+			fmt.Fprintf(&b, "\nPartial copy retained at:\n%s\n", m.copyStage)
+			footer = "[d] Discard partial copy  [Enter/Esc] Back"
+		} else {
+			footer = "[Enter/Esc] Continue"
+		}
+	case instanceCopyCleanupConfirmScreen:
+		fmt.Fprintf(&b, "CONFIRM CLEANUP\n────────────────────────────────────────\n\nPermanently remove partial staging data?\n%s\n\nOnly this temporary migration directory will be removed.", m.copyStage)
+		footer = "[y] Delete partial data  [n/Esc] Keep it"
+	}
+	return lipgloss.NewStyle().Padding(1, 2).Render(safeCopyText(b.String() + "\n\n" + footer))
+}
+
+func safeCopyText(text string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) && r != '\n' && r != '\t' {
+			return '�'
+		}
+		return r
+	}, text)
+}
+
+func formatCopySize(size int64) string {
+	if size < 1<<10 {
+		return fmt.Sprintf("%d B", size)
+	}
+	if size < 1<<20 {
+		return fmt.Sprintf("%.1f KiB", float64(size)/(1<<10))
+	}
+	return fmt.Sprintf("%.1f MiB", float64(size)/(1<<20))
+}
+
 func (m Model) renderInstanceNameScreen() string {
 	title := "NEW VANILLA INSTANCE"
-	if m.instanceRenameID != "" {
+	if m.copyingInstance {
+		title = "COPY FROM EXISTING INSTALLATION"
+	} else if m.instanceRenameID != "" {
 		title = "RENAME INSTANCE"
 	}
 	var b strings.Builder
@@ -899,6 +1004,8 @@ func (m Model) renderInstanceNameScreen() string {
 	}
 	if m.instanceRenameID != "" {
 		b.WriteString("\n[Enter] Save name  [Esc] Cancel")
+	} else if m.copyingInstance {
+		b.WriteString("\nMinecraft: " + m.creationVersion + " (Vanilla)\n[Enter] Choose content  [Esc] Cancel")
 	} else {
 		b.WriteString("\nMinecraft: " + m.creationVersion + "\n[Enter] Create  [Esc] Cancel")
 	}
