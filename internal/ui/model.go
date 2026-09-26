@@ -14,6 +14,7 @@ import (
 	"mcTUI/internal/instances"
 	"mcTUI/internal/java"
 	"mcTUI/internal/launcher"
+	"mcTUI/internal/modrinth"
 	"mcTUI/internal/mods"
 	"mcTUI/internal/resetconfigs"
 	"mcTUI/internal/updater"
@@ -60,12 +61,22 @@ const (
 	modsPickerScreen
 	modsConfirmScreen
 	modsWorkingScreen
+	modrinthSearchScreen
+	modrinthDetailScreen
+	modrinthReviewScreen
+	modrinthUpdatesScreen
+	modrinthWorkingScreen
+	configScreen
 )
 
 // menuOptionsCount must match len(menuOptions) in View(). Centralized
 // here so Update()'s cursor bounds check doesn't drift from the menu's
 // actual length if options are added/removed.
-const menuOptionsCount = 10
+// menuOptionsCount must match len(menuOptions) in View() for the main menu.
+const menuOptionsCount = 5
+
+// configOptionsCount must match len(configOptions) in View() for the config submenu.
+const configOptionsCount = 7
 
 // DownloadDoneMsg señala que la descarga finalizó completamente.
 type DownloadDoneMsg struct {
@@ -127,54 +138,76 @@ type LaunchConfig struct {
 type Model struct {
 	state          screenState
 	cursorMenu     int
+	cursorConfig   int
 	cursorVersions int
 	cursorWorlds   int
 
-	username              string
-	versionSelect         string
-	memoryMB              int
-	modloader             string
-	versions              []string
-	worlds                []worlds.Info
-	dataRoot              string
-	instanceList          []instances.Instance
-	instance              instances.Instance
-	instanceErr           error
-	instanceCursor        int
-	instanceRenameID      string
-	creatingInstance      bool
-	copyingInstance       bool
-	creationVersion       string
-	creationLoaderVersion string
-	fabricLoaderRequest   uint64
-	copySource            string
-	copySourceID          string
-	copyLoader            string
-	copyItems             []instances.CopyItem
-	copySelected          map[string]bool
-	copyCursor            int
-	copyName              string
-	copyStage             string
-	copyErr               error
-	copyResult            instances.CopyResult
-	copyCleaning          bool
-	retiredList           []instances.Instance
-	retiredCursor         int
-	removeTarget          instances.Instance
-	removeAction          string
-	removeFromTrash       bool
-	removeErr             error
-	pickerForJava         bool
-	pickerForMods         bool
-	modStore              mods.Store
-	modItems              []mods.Mod
-	modCursor             int
-	modErr                error
-	modBusy               error
-	modRequest            uint64
-	modTarget             mods.Mod
-	launch                LaunchConfig
-	latestRelease         updater.Release // zero value = no update available
+	username               string
+	versionSelect          string
+	memoryMB               int
+	modloader              string
+	versions               []string
+	worlds                 []worlds.Info
+	dataRoot               string
+	instanceList           []instances.Instance
+	instance               instances.Instance
+	instanceErr            error
+	instanceCursor         int
+	instanceRenameID       string
+	creatingInstance       bool
+	copyingInstance        bool
+	creationVersion        string
+	creationLoaderVersion  string
+	fabricLoaderRequest    uint64
+	copySource             string
+	copySourceID           string
+	copyLoader             string
+	copyItems              []instances.CopyItem
+	copySelected           map[string]bool
+	copyCursor             int
+	copyName               string
+	copyStage              string
+	copyErr                error
+	copyResult             instances.CopyResult
+	copyCleaning           bool
+	retiredList            []instances.Instance
+	retiredCursor          int
+	removeTarget           instances.Instance
+	removeAction           string
+	removeFromTrash        bool
+	removeErr              error
+	pickerForJava          bool
+	pickerForMods          bool
+	modStore               mods.Store
+	modItems               []mods.Mod
+	modCursor              int
+	modErr                 error
+	modBusy                error
+	modRequest             uint64
+	modTarget              mods.Mod
+	catalogQuery           string
+	catalogResults         modrinth.SearchResponse
+	catalogCursor          int
+	catalogOffset          int
+	catalogLoading         bool
+	catalogRequest         uint64
+	catalogProject         modrinth.Project
+	catalogVersion         modrinth.Version
+	catalogPlan            modrinth.InstallPlan
+	catalogOptional        map[string]bool
+	catalogUpdates         []modrinth.Version
+	catalogUpdateRecords   []mods.Record
+	catalogSelected        map[string]bool
+	catalogCursorUpdate    int
+	catalogErr             error
+	catalogCancel          context.CancelFunc
+	catalogContext         context.Context
+	catalogEvents          chan tea.Msg
+	catalogDownloaded      int64
+	catalogTotal           int64
+	catalogModifiedConfirm bool
+	launch                 LaunchConfig
+	latestRelease          updater.Release // zero value = no update available
 
 	// Download progress (usado en downloadScreen)
 	dlProgressFrame int

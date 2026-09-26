@@ -41,7 +41,7 @@ func (m Model) View() string {
 		m.state == instanceLoaderScreen ||
 		(m.state >= instanceCopyInspectScreen && m.state <= instanceCopyCleanupConfirmScreen) ||
 		(m.state >= instanceTrashScreen && m.state <= instanceRemoveResultScreen)
-	modsActive := m.state >= modsScreen && m.state <= modsWorkingScreen
+	modsActive := m.state >= modsScreen && m.state <= modrinthWorkingScreen
 
 	hasUpdate := m.latestRelease.TagName != ""
 
@@ -59,8 +59,13 @@ func (m Model) View() string {
 	profileCard := renderProfileCard(m.username, m.versionSelect, m.modloader)
 
 	menuStr := strings.Builder{}
+	isConfigScreen := m.state == configScreen
+	menuHeader := i18n.T("menu.options")
+	if isConfigScreen {
+		menuHeader = i18n.T("menu.configs")
+	}
 	header := lipgloss.NewStyle().
-		Foreground(colorBlue).Bold(true).Render(i18n.T("menu.options"))
+		Foreground(colorBlue).Bold(true).Render(menuHeader)
 	divLine := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 24))
 	menuStr.WriteString(header + "\n" + divLine + "\n")
 
@@ -77,34 +82,57 @@ func (m Model) View() string {
 		loaderLabel += " " + m.instance.LoaderVersion
 	}
 	versionLabel := versionOption(m.instance, m.versionSelect)
+
+	// ── Main menu (5 options) ─────────────────────────────────────────────────
 	menuOptions := []string{
 		i18n.T("menu.play", m.versionSelect),
-		i18n.T("menu.change_name"),
-		versionLabel,
 		i18n.T("menu.worlds"),
-		i18n.T("menu.modloader", lipgloss.NewStyle().Foreground(colorAccent2).Render(loaderLabel)),
-		i18n.T("menu.memory", m.memoryMB),
-		i18n.T("menu.reset"),
-		i18n.T("menu.java", javaLabel),
-		i18n.T("menu.language", i18n.T("menu.language_name")),
+		i18n.T("menu.change_instances"),
+		i18n.T("menu.configs"),
 		i18n.T("menu.quit"),
 	}
 
-	for i, option := range menuOptions {
-		if m.cursorMenu == i && !instancesActive && !modsActive {
-			line := lipgloss.NewStyle().
-				Foreground(colorAccent).Bold(true).
-				Render(fmt.Sprintf("► %s", option))
-			menuStr.WriteString(lipgloss.NewStyle().MaxWidth(27).Render(line) + "\n")
-		} else {
-			line := lipgloss.NewStyle().Foreground(colorGray).
-				Render(fmt.Sprintf("  %s", option))
-			menuStr.WriteString(lipgloss.NewStyle().MaxWidth(27).Render(line) + "\n")
+	showConfigs := isConfigScreen || resetActive
+	if showConfigs {
+		configOptions := []string{
+			i18n.T("menu.change_name"),
+			versionLabel,
+			i18n.T("menu.modloader", lipgloss.NewStyle().Foreground(colorAccent2).Render(loaderLabel)),
+			i18n.T("menu.memory", m.memoryMB),
+			i18n.T("menu.reset"),
+			i18n.T("menu.java", javaLabel),
+			i18n.T("menu.language", i18n.T("menu.language_name")),
+		}
+		for i, option := range configOptions {
+			if m.cursorConfig == i && !instancesActive && !modsActive {
+				line := lipgloss.NewStyle().
+					Foreground(colorAccent).Bold(true).
+					Render(fmt.Sprintf("► %s", option))
+				menuStr.WriteString(lipgloss.NewStyle().MaxWidth(27).Render(line) + "\n")
+			} else {
+				line := lipgloss.NewStyle().Foreground(colorGray).
+					Render(fmt.Sprintf("  %s", option))
+				menuStr.WriteString(lipgloss.NewStyle().MaxWidth(27).Render(line) + "\n")
+			}
+		}
+	} else {
+		for i, option := range menuOptions {
+			isActive := m.cursorMenu == i && !instancesActive && !modsActive
+			if isActive {
+				line := lipgloss.NewStyle().
+					Foreground(colorAccent).Bold(true).
+					Render(fmt.Sprintf("► %s", option))
+				menuStr.WriteString(lipgloss.NewStyle().MaxWidth(27).Render(line) + "\n")
+			} else {
+				line := lipgloss.NewStyle().Foreground(colorGray).
+					Render(fmt.Sprintf("  %s", option))
+				menuStr.WriteString(lipgloss.NewStyle().MaxWidth(27).Render(line) + "\n")
+			}
 		}
 	}
 
 	leftBorderColor := colorBorder
-	if m.state == menuScreen || resetActive {
+	if m.state == menuScreen || resetActive || isConfigScreen {
 		leftBorderColor = colorAccent
 	}
 	leftPanel := lipgloss.NewStyle().
@@ -127,10 +155,16 @@ func (m Model) View() string {
 	case instancesActive:
 		contentStr.WriteString(m.renderInstancesContent())
 	case modsActive:
-		contentStr.WriteString(m.renderMods())
-	case m.state == menuScreen && m.cursorMenu == 5:
+		if m.state >= modrinthSearchScreen {
+			contentStr.WriteString(m.renderCatalog())
+		} else {
+			contentStr.WriteString(m.renderMods())
+		}
+	case isConfigScreen && m.cursorConfig == 3:
 		m.renderMemoryPanel(&contentStr)
-	case m.state == menuScreen && m.cursorMenu == 3:
+	case isConfigScreen:
+		m.renderActiveSession(&contentStr)
+	case m.state == menuScreen && m.cursorMenu == 1:
 		m.renderWorldsHint(&contentStr)
 	case m.state == menuScreen:
 		m.renderActiveSession(&contentStr)
@@ -577,7 +611,7 @@ func (m Model) controlsHint() string {
 	switch m.state {
 	case nameScreen:
 		return i18n.T("footer.save")
-	case versionsScreen:
+	case configScreen, versionsScreen:
 		return i18n.T("footer.choose")
 	case worldsScreen:
 		return i18n.T("footer.select")
@@ -638,7 +672,11 @@ func (m Model) renderWorldsHint(c *strings.Builder) {
 }
 
 func (m Model) renderActiveSession(c *strings.Builder) {
-	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("menu.session_title"))
+	titleText := i18n.T("menu.session_title")
+	if m.state == configScreen {
+		titleText = i18n.T("topbar.configs")
+	}
+	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(titleText)
 	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 	c.WriteString(title + "\n" + div + "\n\n")
 

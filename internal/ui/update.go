@@ -74,6 +74,9 @@ func fabricLoaderCmd(version string, request uint64) tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if next, cmd, handled := m.updateCatalog(msg); handled {
+		return next, cmd
+	}
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
@@ -298,6 +301,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		if m.state >= modrinthSearchScreen && m.state <= modrinthWorkingScreen {
+			return m.updateCatalogKey(msg.String())
+		}
 		if m.state >= modsScreen && m.state <= modsWorkingScreen {
 			return m.updateModsKey(msg.String())
 		}
@@ -330,9 +336,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		switch msg.String() {
-		case "ctrl+c", "q":
+		case "ctrl+c":
+			return m, tea.Quit
+
+		case "q":
 			if m.state == menuScreen {
 				return m, tea.Quit
+			} else if m.state == configScreen {
+				m.state = menuScreen
 			}
 
 		case "m":
@@ -359,6 +370,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.instanceCursor--
 			} else if m.state == menuScreen && m.cursorMenu > 0 {
 				m.cursorMenu--
+			} else if m.state == configScreen && m.cursorConfig > 0 {
+				m.cursorConfig--
 			} else if m.state == versionsScreen && m.cursorVersions > 0 {
 				m.cursorVersions--
 			} else if m.state == worldsScreen && m.cursorWorlds > 0 {
@@ -372,6 +385,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.instanceCursor++
 			} else if m.state == menuScreen && m.cursorMenu < menuOptionsCount-1 {
 				m.cursorMenu++
+			} else if m.state == configScreen && m.cursorConfig < configOptionsCount-1 {
+				m.cursorConfig++
 			} else if m.state == versionsScreen && m.cursorVersions < len(m.versions)-1 {
 				m.cursorVersions++
 			} else if m.state == worldsScreen && m.cursorWorlds < len(m.worlds)-1 {
@@ -459,14 +474,42 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.state = menuScreen
 				}
 			} else if m.state == menuScreen {
-				if m.cursorMenu == 0 {
+				switch m.cursorMenu {
+				case 0: // Play
 					m.state = confirmScreen
-				} else if m.cursorMenu == 1 {
+				case 1: // Worlds
+					gameDir, err := instances.GameDir(m.dataRoot, m.instance)
+					if err != nil {
+						m.instanceErr = err
+					} else {
+						m.worlds = worlds.List(gameDir)
+					}
+					m.state = worldsScreen
+					m.cursorWorlds = 0
+				case 2: // Change Instances
+					m.instanceList, m.instanceErr = instances.List(m.dataRoot)
+					m.instanceCursor = 0
+					for i, in := range m.instanceList {
+						if in.ID == m.instance.ID {
+							m.instanceCursor = i
+							break
+						}
+					}
+					m.state = instancesScreen
+				case 3: // Configs
+					m.cursorConfig = 0
+					m.state = configScreen
+				case 4: // Quit
+					return m, tea.Quit
+				}
+			} else if m.state == configScreen {
+				switch m.cursorConfig {
+				case 0: // Change Name
 					m.state = nameScreen
 					m.input.CharLimit = 16
 					m.input.Placeholder = i18n.T("input.username_placeholder")
 					m.input.SetValue(m.username)
-				} else if m.cursorMenu == 2 {
+				case 1: // Change Version
 					if m.isManaged() {
 						m.instanceErr = fmt.Errorf("%s", i18n.T("error.version_fixed"))
 					} else {
@@ -478,16 +521,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							}
 						}
 					}
-				} else if m.cursorMenu == 3 {
-					gameDir, err := instances.GameDir(m.dataRoot, m.instance)
-					if err != nil {
-						m.instanceErr = err
-					} else {
-						m.worlds = worlds.List(gameDir)
-					}
-					m.state = worldsScreen
-					m.cursorWorlds = 0
-				} else if m.cursorMenu == 4 {
+				case 2: // Modloader
 					if m.isManaged() {
 						m.instanceErr = fmt.Errorf("%s", i18n.T("error.fabric_version_required"))
 					} else if m.modloader == "Vanilla" {
@@ -496,7 +530,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.modloader = "Vanilla"
 					}
 					m.save()
-				} else if m.cursorMenu == 5 {
+				case 3: // Memory
 					steps := []int{1024, 2048, 4096, 6144, 8192}
 					for i, v := range steps {
 						if v == m.memoryMB {
@@ -520,13 +554,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					} else {
 						m.save()
 					}
-				} else if m.cursorMenu == 6 {
+				case 4: // Resets Configs
 					m.resetDir, m.resetBackupRoot, m.resetErr = "", "", nil
 					m.resetInstance = m.instance.Name
 					if m.resetInstance == "" {
 						m.resetInstance = i18n.T("instances.legacy_name")
 					}
-					if m.instance.ID == "" { // legacy-only models used before instance selection is loaded
+					if m.instance.ID == "" {
 						m.resetDir, m.resetErr = config.MinecraftDirChecked()
 						m.resetBackupRoot = filepath.Join(m.resetDir, "mctui-backups")
 					} else {
@@ -551,25 +585,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.resetIsRestore = false
 					m.resetScroll = 0
 					m.state = resetModeScreen
-				} else if m.cursorMenu == 7 {
+				case 5: // Java
 					if m.isManaged() {
 						m.openJavaPicker()
 					} else {
 						m.instanceErr = fmt.Errorf("%s", i18n.T("error.java_managed_only"))
 					}
-				} else if m.cursorMenu == 8 {
+				case 6: // Language
 					i18n.NextLanguage()
 					cfg := config.Load()
 					cfg.Language = i18n.CurrentLanguage()
 					config.Save(cfg)
-				} else if m.cursorMenu == 9 {
-					return m, tea.Quit
 				}
 			} else if m.state == nameScreen {
 				if validUsername(m.input.Value()) {
 					m.username = m.input.Value()
 					m.save()
-					m.state = menuScreen
+					m.state = configScreen
 				}
 				// else: stay on nameScreen, showing the validation hint
 			} else if m.state == versionsScreen {
@@ -586,7 +618,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					m.versionSelect = version
 					m.save()
-					m.state = menuScreen
+					m.state = configScreen
 				}
 			} else if m.state == worldsScreen {
 				if len(m.worlds) > 0 {
@@ -807,9 +839,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.copyingInstance = false
 					m.state = instancesScreen
 				} else {
-					m.state = menuScreen
+					m.state = configScreen
 				}
-			} else if m.state == nameScreen || m.state == worldsScreen || m.state == confirmScreen {
+			} else if m.state == nameScreen {
+				m.state = configScreen
+			} else if m.state == worldsScreen || m.state == confirmScreen || m.state == configScreen {
 				m.state = menuScreen
 			}
 		}
@@ -874,7 +908,7 @@ func (m Model) updateResetKey(key string) (tea.Model, tea.Cmd) {
 	case resetModeScreen:
 		switch key {
 		case "esc", "q":
-			m.state = menuScreen
+			m.state = configScreen
 		case "up", "k":
 			if m.resetChoice > 0 {
 				m.resetChoice--
@@ -1010,7 +1044,7 @@ func (m Model) updateResetKey(key string) (tea.Model, tea.Cmd) {
 	case resetResultScreen:
 		switch key {
 		case "esc", "enter", "q":
-			m.state = menuScreen
+			m.state = configScreen
 		}
 	}
 	return m, nil

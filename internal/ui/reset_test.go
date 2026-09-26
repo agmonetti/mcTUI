@@ -43,7 +43,7 @@ func TestResetFlow(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	m := Model{state: menuScreen, cursorMenu: 6, height: 40, width: 160}
+	m := Model{state: configScreen, cursorConfig: 4, height: 40, width: 160}
 	m, _ = resetKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
 	if m.state != resetModeScreen || m.resetDir != dir || m.resetMode != resetconfigs.Backup || len(m.resetFound) != 1 || !strings.Contains(m.View(), "[Enter] Continue") {
 		t.Fatalf("inspection or mode prompt failed: %+v", m)
@@ -71,7 +71,7 @@ func TestResetFlow(t *testing.T) {
 	}
 	m, _ = resetKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
 	m, _ = resetKey(t, m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.state != menuScreen {
+	if m.state != configScreen {
 		t.Fatal("cancel failed")
 	}
 	if _, err := os.Stat(filepath.Join(dir, "mods", "data")); err != nil {
@@ -170,7 +170,7 @@ func TestBackupPickerSelectsExternalDirectory(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	m := Model{state: menuScreen, cursorMenu: 6, width: 160, height: 40}
+	m := Model{state: configScreen, cursorConfig: 4, width: 160, height: 40}
 	m, _ = resetKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
 	m, _ = resetKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
 	if m.state != resetPickerScreen || !strings.Contains(m.View(), "BACKUP DESTINATION") || !strings.Contains(m.View(), "OPTIONS") {
@@ -240,7 +240,7 @@ func TestRestoreFlowRequiresPerActionConfirmation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m := Model{state: menuScreen, cursorMenu: 6, width: 160, height: 40}
+	m := Model{state: configScreen, cursorConfig: 4, width: 160, height: 40}
 	m, _ = resetKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
 	m, _ = resetKey(t, m, tea.KeyMsg{Type: tea.KeyDown})
 	m, _ = resetKey(t, m, tea.KeyMsg{Type: tea.KeyDown})
@@ -377,7 +377,7 @@ func TestManagedResetHistoryIsPerInstance(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	m := Model{state: menuScreen, cursorMenu: 6, dataRoot: root, instance: a, height: 40, width: 160}
+	m := Model{state: configScreen, cursorConfig: 4, dataRoot: root, instance: a, height: 40, width: 160}
 	m, _ = resetKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
 	if m.resetDir != aDir || m.resetBackupRoot != filepath.Join(root, "backups", a.ID) || len(m.resetFound) != 1 {
 		t.Fatalf("managed reset targets wrong paths: %+v", m)
@@ -440,7 +440,7 @@ func TestResetModeScrollsBothDirectionsWithoutLooping(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "mods"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	m := Model{state: menuScreen, cursorMenu: 6, height: 26, width: 90}
+	m := Model{state: configScreen, cursorConfig: 4, height: 26, width: 90}
 	m, _ = resetKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
 	if m.state != resetModeScreen {
 		t.Fatal("not in resetModeScreen")
@@ -512,7 +512,7 @@ func TestResetResultShowsMoreLines(t *testing.T) {
 
 func TestResetKeepsDashboardAtNormalSize(t *testing.T) {
 	for _, height := range []int{34, 35, 36, 40} {
-		m := Model{state: resetModeScreen, cursorMenu: 6, width: 160, height: height,
+		m := Model{state: resetModeScreen, cursorConfig: 4, width: 160, height: height,
 			resetDir: "/minecraft", resetFound: []string{"mods", "config"}}
 		view := m.View()
 		for _, want := range []string{"Minecraft Terminal UI", "CURRENT SETUP", "[OPERATOR]", "OPTIONS", "RESETS CONFIGS", "AFFECTED FOLDERS", "[Enter] Continue"} {
@@ -533,7 +533,7 @@ func TestResetScreensFitTerminal(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	for _, size := range [][2]int{{80, 24}, {90, 26}, {122, 24}, {160, 24}, {160, 32}, {160, 34}, {160, 35}, {160, 36}, {122, 40}, {160, 40}} {
 		for _, state := range []screenState{resetModeScreen, resetConfirmScreen, resetPickerScreen, resetResultScreen} {
-			m := Model{state: state, cursorMenu: 6, width: size[0], height: size[1],
+			m := Model{state: state, cursorConfig: 4, width: size[0], height: size[1],
 				resetDir: "/minecraft", resetFound: []string{"mods", "config"}, resetMode: resetconfigs.Purge,
 				pickerPath: "/minecraft", pickerEntries: nil}
 			view := m.View()

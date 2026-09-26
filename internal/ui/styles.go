@@ -164,16 +164,11 @@ func renderTopBar(cursorMenu int, hasUpdate bool, state screenState, width int) 
 	}
 	tabs := []tabEntry{
 		{i18n.T("topbar.play"), 0},
-		{i18n.T("topbar.name"), 1},
-		{i18n.T("topbar.version"), 2},
-		{i18n.T("topbar.worlds"), 3},
-		{i18n.T("topbar.modloader"), 4},
-		{i18n.T("topbar.memory"), 5},
-		{i18n.T("topbar.reset"), 6},
-		{i18n.T("topbar.language"), 8},
-		{i18n.T("topbar.instances"), 10},
-		{i18n.T("topbar.mods"), 11},
-		{i18n.T("topbar.quit"), 9},
+		{i18n.T("topbar.worlds"), 1},
+		{i18n.T("topbar.instances"), 2},
+		{i18n.T("topbar.configs"), 3},
+		{i18n.T("topbar.mods"), 10},
+		{i18n.T("topbar.quit"), 4},
 	}
 
 	// Determine which tab to highlight.
@@ -182,11 +177,20 @@ func renderTopBar(cursorMenu int, hasUpdate bool, state screenState, width int) 
 		state == instanceLoaderScreen ||
 		(state >= instanceCopyInspectScreen && state <= instanceCopyCleanupConfirmScreen) ||
 		(state >= instanceTrashScreen && state <= instanceRemoveResultScreen)
-	modsActive := state >= modsScreen && state <= modsWorkingScreen
+	modsActive := state >= modsScreen && state <= modrinthWorkingScreen
+	configsActive := state == configScreen || state == javaPickerScreen ||
+		(state >= resetModeScreen && state <= resetResultScreen) ||
+		(!instancesActive && (state == nameScreen || state == versionsScreen))
 	if instancesActive {
-		activeIdx = 10
+		activeIdx = 2
 	} else if modsActive {
-		activeIdx = 11
+		activeIdx = 10
+	} else if state == worldsScreen {
+		activeIdx = 1
+	} else if state == confirmScreen {
+		activeIdx = 0
+	} else if configsActive {
+		activeIdx = 3
 	}
 
 	var parts []string

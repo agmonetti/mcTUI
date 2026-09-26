@@ -368,18 +368,19 @@ echo 'openjdk version "21.0.1"' >&2
 	m.loadPickerDir()
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
-	if m.state != menuScreen || m.instance.JavaPath != javaPath || m.javaOverrideMajor != 21 {
+	if m.state != configScreen || m.instance.JavaPath != javaPath || m.javaOverrideMajor != 21 {
 		t.Fatalf("compatible Java override was not selected: state=%v path=%q major=%d", m.state, m.instance.JavaPath, m.javaOverrideMajor)
 	}
 
-	m.cursorMenu = 5
+	m.state = configScreen
+	m.cursorConfig = 3
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
-	m.cursorMenu = 2
+	m.cursorConfig = 1
 	m.versions = []string{"1.21.1"}
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
-	if m.state != menuScreen || m.versionSelect != "1.20.4" {
+	if m.state != configScreen || m.versionSelect != "1.20.4" {
 		t.Fatalf("managed Minecraft version changed: state=%v version=%q", m.state, m.versionSelect)
 	}
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})

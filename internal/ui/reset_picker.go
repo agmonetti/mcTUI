@@ -83,7 +83,7 @@ func isJavaEntry(dir string, entry os.DirEntry) bool {
 func (m Model) updateJavaPicker(key string) (tea.Model, tea.Cmd) {
 	switch key {
 	case "esc", "q":
-		m.state = menuScreen
+		m.state = configScreen
 	case "d":
 		in := m.instance
 		in.JavaPath = ""
@@ -91,7 +91,7 @@ func (m Model) updateJavaPicker(key string) (tea.Model, tea.Cmd) {
 		if m.pickerErr == nil {
 			m.instance = in
 			m.javaOverrideMajor = 0
-			m.state = menuScreen
+			m.state = configScreen
 		}
 	case "up", "k":
 		m.pickerCursor = max(0, m.pickerCursor-1)
@@ -125,7 +125,7 @@ func (m Model) updateJavaPicker(key string) (tea.Model, tea.Cmd) {
 					} else {
 						m.instance = in
 						m.javaOverrideMajor = major
-						m.state = menuScreen
+						m.state = configScreen
 					}
 				}
 			}
