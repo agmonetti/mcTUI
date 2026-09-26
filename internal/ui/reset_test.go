@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"mcTUI/internal/config"
+	"mcTUI/internal/instances"
 	"mcTUI/internal/resetconfigs"
 )
 
@@ -95,7 +96,7 @@ func TestResetFlow(t *testing.T) {
 	}
 	updated, _ := m.Update(cmd())
 	m = updated.(Model)
-	if m.state != resetResultScreen || m.play || m.resetErr != nil || len(m.resetResult.Errors) != 0 {
+	if m.state != resetResultScreen || m.resetErr != nil || len(m.resetResult.Errors) != 0 {
 		t.Fatalf("incorrect result: %+v", m)
 	}
 	if !strings.Contains(m.View(), "mods/: moved") {
@@ -138,7 +139,7 @@ func TestResetFlow(t *testing.T) {
 	}
 	updated, _ = m.Update(cmd())
 	m = updated.(Model)
-	if m.state != resetResultScreen || m.play || m.resetResult.Folders[0].Status != resetconfigs.Deleted || len(m.resetResult.Errors) != 0 {
+	if m.state != resetResultScreen || m.resetResult.Folders[0].Status != resetconfigs.Deleted || len(m.resetResult.Errors) != 0 {
 		t.Fatalf("purge result incorrect: %+v", m)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "mods")); !os.IsNotExist(err) {
@@ -281,6 +282,147 @@ func TestRestoreFlowRequiresPerActionConfirmation(t *testing.T) {
 	}
 	if _, err := os.Stat(created.BackupPath); !os.IsNotExist(err) {
 		t.Fatal("confirmed consumed backup remains:", err)
+	}
+}
+
+func TestResetCommandsKeepCapturedDirectoryAfterSelectionChanges(t *testing.T) {
+	home := t.TempDir()
+	if runtime.GOOS == "windows" {
+		t.Setenv("APPDATA", home)
+	} else {
+		t.Setenv("HOME", home)
+	}
+	legacy, err := config.MinecraftDirChecked()
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	b, err := instances.Create(root, "B", "1.20.4", "Vanilla", "", 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bDir, err := instances.GameDir(root, b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{legacy, bDir} {
+		if err := os.MkdirAll(filepath.Join(dir, "mods"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "mods", "data"), []byte(dir), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m := Model{state: resetConfirmScreen, resetDir: legacy, resetBackupRoot: filepath.Join(legacy, "mctui-backups"), resetMode: resetconfigs.Backup}
+	m, cmd := resetKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m.instance = b // A selection change must not redirect an already confirmed command.
+	msg := cmd().(ResetDoneMsg)
+	if msg.Err != nil || len(msg.Result.Errors) != 0 {
+		t.Fatalf("backup: %v, %+v", msg.Err, msg.Result.Errors)
+	}
+	if _, err := os.Stat(filepath.Join(bDir, "mods", "data")); err != nil {
+		t.Fatal("B changed during A backup:", err)
+	}
+	if err := os.Mkdir(filepath.Join(legacy, "mods"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(legacy, "mods", "active"), []byte("active"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	m.state = resetRestoreConfirmScreen
+	m.resetBackup = resetconfigs.BackupInfo{Path: msg.Result.BackupPath}
+	m.resetRetention = resetconfigs.KeepBackup
+	m.resetReplace = true
+	m.resetConflicts = []string{"mods"}
+	m, cmd = resetKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m.instance = b
+	msg = cmd().(ResetDoneMsg)
+	if msg.Err != nil || len(msg.Result.Errors) != 0 {
+		t.Fatalf("restore: %v, %+v", msg.Err, msg.Result.Errors)
+	}
+	if _, err := os.Stat(filepath.Join(legacy, "mods", "data")); err != nil {
+		t.Fatal("A was not restored:", err)
+	}
+	if _, err := os.Stat(filepath.Join(bDir, "mods", "data")); err != nil {
+		t.Fatal("B changed during A restore:", err)
+	}
+}
+
+func TestManagedResetHistoryIsPerInstance(t *testing.T) {
+	home, root := t.TempDir(), t.TempDir()
+	if runtime.GOOS == "windows" {
+		t.Setenv("APPDATA", home)
+	} else {
+		t.Setenv("HOME", home)
+	}
+	legacy, err := config.MinecraftDirChecked()
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := instances.Create(root, "A", "1.20.4", "Vanilla", "", 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := instances.Create(root, "B", "1.20.4", "Vanilla", "", 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	aDir, _ := instances.GameDir(root, a)
+	bDir, _ := instances.GameDir(root, b)
+	for _, dir := range []string{legacy, aDir, bDir} {
+		if err := os.MkdirAll(filepath.Join(dir, "mods"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "mods", "data"), []byte(dir), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m := Model{state: menuScreen, cursorMenu: 6, dataRoot: root, instance: a, height: 40, width: 160}
+	m, _ = resetKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.resetDir != aDir || m.resetBackupRoot != filepath.Join(root, "backups", a.ID) || len(m.resetFound) != 1 {
+		t.Fatalf("managed reset targets wrong paths: %+v", m)
+	}
+	m, _ = resetKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.state != resetConfirmScreen || m.resetBackupDir != "" {
+		t.Fatal("managed backup must use its own history without external picker")
+	}
+	m, cmd := resetKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m.instance = b
+	msg := cmd().(ResetDoneMsg)
+	if msg.Err != nil || len(msg.Result.Errors) != 0 || filepath.Dir(msg.Result.BackupPath) != filepath.Join(root, "backups", a.ID) {
+		t.Fatalf("managed backup failed or escaped its history: %+v, %v", msg.Result, msg.Err)
+	}
+	for _, dir := range []string{legacy, bDir} {
+		if _, err := os.Stat(filepath.Join(dir, "mods", "data")); err != nil {
+			t.Fatalf("other installation changed (%s): %v", dir, err)
+		}
+	}
+	if _, _, err := resetconfigs.RestorePlanAtRoot(bDir, filepath.Join(root, "backups", b.ID), msg.Result.BackupPath); err == nil {
+		t.Fatal("B accepted A's backup")
+	}
+	m.resetBackups, err = resetconfigs.ListBackupsAtRoot(aDir, m.resetBackupRoot)
+	if err != nil || len(m.resetBackups) != 1 {
+		t.Fatalf("A history: %v, %+v", err, m.resetBackups)
+	}
+	m.state = resetBackupListScreen
+	m, _ = resetKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+	m, _ = resetKey(t, m, tea.KeyMsg{Type: tea.KeyDown}) // keep backup
+	m, _ = resetKey(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.state != resetRestoreConfirmScreen {
+		t.Fatalf("restore confirmation: %v, %v", m.state, m.resetErr)
+	}
+	m, cmd = resetKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	msg = cmd().(ResetDoneMsg)
+	if msg.Err != nil || len(msg.Result.Errors) != 0 {
+		t.Fatalf("managed restore: %+v, %v", msg.Result, msg.Err)
+	}
+	if _, err := os.Stat(filepath.Join(aDir, "mods", "data")); err != nil {
+		t.Fatal("A restore missed data:", err)
+	}
+	for _, dir := range []string{legacy, bDir} {
+		if _, err := os.Stat(filepath.Join(dir, "mods", "data")); err != nil {
+			t.Fatalf("other installation changed during restore (%s): %v", dir, err)
+		}
 	}
 }
 

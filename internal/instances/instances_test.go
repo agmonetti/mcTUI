@@ -87,6 +87,12 @@ func TestRejectLinkedManagedGameAndRuntimeDirectories(t *testing.T) {
 	if _, err := RuntimeDir(root, in); err == nil {
 		t.Fatal("linked runtime directory accepted")
 	}
+	if err := os.Symlink(outside, filepath.Join(root, "backups")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BackupDir(root, in); err == nil {
+		t.Fatal("linked backup directory accepted")
+	}
 }
 
 func TestRejectLinkedInstancesDirectory(t *testing.T) {
@@ -99,6 +105,26 @@ func TestRejectLinkedInstancesDirectory(t *testing.T) {
 	}
 	if _, err := Create(root, "A", "1.20.4", "Vanilla", "", 1024); err == nil {
 		t.Fatal("linked instances directory accepted for creation")
+	}
+}
+
+func TestUpdateSettingsKeepsManagedMinecraftAndLoaderFixed(t *testing.T) {
+	root := t.TempDir()
+	in, err := Create(root, "A", "1.20.4", "Vanilla", "", 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.MemoryMB = 4096
+	if err := UpdateSettings(root, in); err != nil {
+		t.Fatal("mutable settings rejected:", err)
+	}
+	in.MinecraftVersion = "1.21.1"
+	if err := UpdateSettings(root, in); err == nil {
+		t.Fatal("managed Minecraft version change accepted")
+	}
+	in.MinecraftVersion, in.Loader, in.LoaderVersion = "1.20.4", "Fabric", "0.15.11"
+	if err := UpdateSettings(root, in); err == nil {
+		t.Fatal("managed loader change accepted")
 	}
 }
 

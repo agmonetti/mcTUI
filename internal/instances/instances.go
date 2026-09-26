@@ -63,6 +63,27 @@ func RuntimeDir(root string, in Instance) (string, error) {
 	return runtimeDir, nil
 }
 
+// BackupDir keeps managed Reset history separate from mutable game data.
+// The legacy entry retains its existing in-game history unchanged.
+func BackupDir(root string, in Instance) (string, error) {
+	if in.ID == LegacyID && in.Kind == "legacy" {
+		gameDir, err := config.MinecraftDirChecked()
+		return filepath.Join(gameDir, "mctui-backups"), err
+	}
+	if in.Kind != "managed" || !validID(in.ID) || !filepath.IsAbs(root) {
+		return "", fmt.Errorf("invalid managed backup path")
+	}
+	parent := filepath.Join(root, "backups")
+	if err := checkManagedDirectory(parent, true); err != nil {
+		return "", err
+	}
+	path := filepath.Join(parent, in.ID)
+	if err := checkManagedDirectory(path, true); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
 func legacy() Instance {
 	cfg := config.Load()
 	return Instance{SchemaVersion: 1, ID: LegacyID, Name: "Instalación existente", Kind: "legacy", MinecraftVersion: cfg.Version, Loader: cfg.Modloader, MemoryMB: cfg.MemoryMB}
@@ -179,8 +200,12 @@ func UpdateSettings(root string, in Instance) error {
 	if in.Kind != "managed" || in.ID == LegacyID || !validID(in.ID) || in.SchemaVersion != 1 || !validName(in.Name) || !validVersion(in.MinecraftVersion) || !validLoader(in.Loader, in.LoaderVersion) || in.MemoryMB <= 0 || (in.JavaPath != "" && !filepath.IsAbs(in.JavaPath)) {
 		return fmt.Errorf("invalid instance settings")
 	}
-	if _, err := Read(root, in.ID); err != nil {
+	current, err := Read(root, in.ID)
+	if err != nil {
 		return err
+	}
+	if in.MinecraftVersion != current.MinecraftVersion || in.Loader != current.Loader || in.LoaderVersion != current.LoaderVersion {
+		return fmt.Errorf("Minecraft version and loader are fixed for managed instances")
 	}
 	return save(filepath.Join(root, "instances", in.ID), in)
 }

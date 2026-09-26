@@ -3,60 +3,30 @@ package ui
 import (
 	"context"
 	"fmt"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"mcTUI/internal/launcher"
 )
 
-// StartDownloadCmd prepares the requested version using the same engine as
-// Launch; the runtime and selection are fixed when the command starts.
+type downloadAnimationTickMsg struct{}
+
+func downloadAnimationTickCmd() tea.Cmd {
+	return tea.Tick(80*time.Millisecond, func(time.Time) tea.Msg { return downloadAnimationTickMsg{} })
+}
+
+// StartDownloadCmd prepares the requested version asynchronously using the shared launcher.
 func StartDownloadCmd(ctx context.Context, runtimeDir, version, modloader, javaPath string) tea.Cmd {
 	return func() tea.Msg {
-		ch := startDownload(ctx, runtimeDir, version, modloader, javaPath)
-		return downloadChanMsg{ch: ch, msg: <-ch}
-	}
-}
-
-type downloadChanMsg struct {
-	ch  <-chan interface{}
-	msg interface{}
-}
-
-func nextDownloadCmd(ch <-chan interface{}) tea.Cmd {
-	return func() tea.Msg {
-		msg, ok := <-ch
-		if !ok {
-			msg = DownloadDoneMsg{Err: fmt.Errorf("preparation stopped without a result")}
-		}
-		return downloadChanMsg{ch: ch, msg: msg}
-	}
-}
-
-func startDownload(ctx context.Context, runtimeDir, version, modloader, javaPath string) <-chan interface{} {
-	ch := make(chan interface{}, 64)
-	go func() {
-		defer close(ch)
 		if runtimeDir == "" {
-			ch <- DownloadDoneMsg{Err: fmt.Errorf("runtime directory is empty")}
-			return
+			return DownloadDoneMsg{Err: fmt.Errorf("runtime directory is empty")}
 		}
-		done := 0
-		prepared, err := launcher.PrepareContext(ctx, runtimeDir, version, modloader, func(file string) {
-			done++
-			select {
-			case ch <- DownloadProgressMsg{Done: done, File: file}:
-			case <-ctx.Done():
-			}
-		})
+		prepared, err := launcher.PrepareContext(ctx, runtimeDir, version, modloader, nil)
+		var javaBinary string
 		if err == nil {
-			_, err = launcher.ResolvePreparedJava(runtimeDir, prepared, javaPath)
+			javaBinary, err = launcher.ResolvePreparedJava(runtimeDir, prepared, javaPath)
 		}
-		select {
-		case ch <- DownloadDoneMsg{Err: err}:
-		case <-ctx.Done():
-			// The UI may have quit; never block a canceled worker.
-		}
-	}()
-	return ch
+		return DownloadDoneMsg{Prepared: prepared, JavaBinary: javaBinary, Err: err}
+	}
 }

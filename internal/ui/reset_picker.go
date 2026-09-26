@@ -174,7 +174,7 @@ func (m Model) pickerLines() []string {
 		hidden = "hidden on"
 	}
 	lines := []string{"Choose backup location", "Current: " + m.pickerPath,
-		"[d] Use default: " + filepath.Join(m.resetDir, "mctui-backups"), "",
+		"[d] Use default: " + m.resetBackupRoot, "",
 		"DIRECTORIES  [→] Open  [←] Parent", "[Ctrl+H] " + hidden}
 	if m.pickerForJava {
 		required := mojang.RequiredJavaVersion(m.runtimeDir(), m.versionSelect)

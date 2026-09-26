@@ -7,6 +7,7 @@ package launcher
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -15,46 +16,18 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/google/uuid"
 
 	"mcTUI/internal/java"
 	"mcTUI/internal/mojang"
+	"mcTUI/internal/operationlock"
 )
 
 // maxConcurrentDownloads caps simultaneous downloads for libraries and
 // Fabric dependencies (assets use their own, larger limit below) to avoid
 // overwhelming the connection with hundreds of simultaneous requests.
 const maxConcurrentDownloads = 20
-
-// Launch starts Minecraft for the given configuration. It prints progress
-// and any errors to stdout, and never panics on network failures — if
-// everything required is already cached locally, it can run fully
-// offline.
-func Launch(gameDir, runtimeDir, username, targetVersion, modloader string, memoryMB int, javaPath string) {
-	fmt.Print("\033[H\033[2J")
-	fmt.Println(strings.Repeat("=", 75))
-	fmt.Println(" MODE: Offline / LAN")
-	fmt.Println(" (The server must have 'online-mode=false' in server.properties)")
-	fmt.Println(strings.Repeat("=", 75))
-	fmt.Println()
-
-	fmt.Printf("Starting engine for player: %s (Version: %s - Modloader: %s)\n", username, targetVersion, modloader)
-	fmt.Println("1. Verifying Vanilla Engine and Libraries...")
-
-	prepared, err := Prepare(runtimeDir, targetVersion, modloader, nil)
-	if err != nil {
-		fmt.Println("[!] Cannot prepare game:", err)
-		return
-	}
-	javaBinary, err := ResolvePreparedJava(runtimeDir, prepared, javaPath)
-	if err != nil {
-		fmt.Println("[!] Cannot select Java:", err)
-		return
-	}
-	runGame(gameDir, runtimeDir, javaBinary, prepared.classpath, prepared.mainClass, username, targetVersion, prepared.assetIndexID, memoryMB, prepared.nativesDir)
-}
 
 // ResolvePreparedJava applies the shared selection and compatibility rules
 // after preparation has loaded the selected Minecraft version's metadata.
@@ -129,90 +102,72 @@ func downloadAssetObjects(mcDir, indexPath string, wg *sync.WaitGroup, download 
 	return nil
 }
 
-// runGame execs java with the assembled classpath and arguments, then
-// watches for an early crash (process exits within a few seconds) and
-// surfaces the JVM log if so.
-func runGame(gameDir, runtimeDir, javaBinary, classpath, mainClass, username, targetVersion, assetIndexID string, memoryMB int, nativesDir string) {
-	sessionUUID := uuid.New().String()
+// Game owns Java, its log and the instance lock until Wait completes.
+type Game struct {
+	cmd     *exec.Cmd
+	log     *os.File
+	release func() error
+	LogPath string
+}
 
-	args := []string{
-		fmt.Sprintf("-Xmx%dM", memoryMB),
+// StartPrepared launches artifacts already verified by PrepareContext. It does
+// not prepare again, and refuses to start when this game directory is busy.
+func StartPrepared(gameDir, runtimeDir, javaBinary, username, targetVersion string, memoryMB int, prepared Prepared) (*Game, error) {
+	if !filepath.IsAbs(gameDir) || !filepath.IsAbs(runtimeDir) || javaBinary == "" || memoryMB <= 0 || prepared.mainClass == "" || prepared.classpath == "" || prepared.assetIndexID == "" {
+		return nil, fmt.Errorf("incomplete launch configuration")
 	}
-
-	// macOS requires GLFW (and therefore Minecraft's render thread) to run
-	// on the first thread of the process. The official launcher adds this
-	// flag automatically on macOS; without it, the JVM crashes on init.
+	if err := os.MkdirAll(gameDir, 0755); err != nil {
+		return nil, err
+	}
+	info, err := os.Lstat(gameDir)
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("unsafe game directory %s: %v", gameDir, err)
+	}
+	release, err := operationlock.Acquire(gameDir)
+	if err != nil {
+		return nil, err
+	}
+	logPath := filepath.Join(gameDir, "mctui_latest.log")
+	logFile, err := os.Create(logPath)
+	if err != nil {
+		_ = release()
+		return nil, err
+	}
+	args := []string{fmt.Sprintf("-Xmx%dM", memoryMB)}
 	if runtime.GOOS == "darwin" {
 		args = append(args, "-XstartOnFirstThread")
 	}
-
-	// Point the JVM to the extracted native libraries (.so, .dll, .dylib)
-	if nativesDir != "" {
-		args = append(args, "-Djava.library.path="+nativesDir)
+	if prepared.nativesDir != "" {
+		args = append(args, "-Djava.library.path="+prepared.nativesDir)
 	}
-
 	args = append(args,
-		"-cp", classpath,
-		mainClass,
+		"-cp", prepared.classpath, prepared.mainClass,
 		"--username", username,
 		"--version", targetVersion,
 		"--gameDir", gameDir,
 		"--assetsDir", filepath.Join(runtimeDir, "assets"),
-		"--assetIndex", assetIndexID,
-		"--uuid", sessionUUID,
+		"--assetIndex", prepared.assetIndexID,
+		"--uuid", uuid.New().String(),
 		"--accessToken", "0",
 		"--userType", "legacy",
 		"--versionType", "release",
 	)
-
-	// javaBinary is either "java" from PATH or a locally probed JRE; exec.Command does not invoke a shell.
 	cmd := exec.Command(javaBinary, args...) // nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command
-	cmd.Dir = gameDir
-
-	if err := os.MkdirAll(gameDir, 0755); err != nil {
-		fmt.Println("[!] Cannot create game directory:", err)
-		return
-	}
-	logFile, err := os.Create(filepath.Join(gameDir, "mctui_latest.log"))
-	if err == nil {
-		cmd.Stdout = logFile
-		cmd.Stderr = logFile
-	}
-
-	if logFile != nil {
-		defer logFile.Close()
-	}
+	cmd.Dir, cmd.Stdout, cmd.Stderr = gameDir, logFile, logFile
 	if err := cmd.Start(); err != nil {
-		fmt.Println("\n[!] Error starting process:", err)
-		return
+		_ = logFile.Close()
+		_ = release()
+		return nil, err
 	}
+	return &Game{cmd: cmd, log: logFile, release: release, LogPath: logPath}, nil
+}
 
-	fmt.Println("   Minecraft is starting in the background...")
-
-	done := make(chan error, 1)
-	go func() {
-		done <- cmd.Wait()
-	}()
-
-	select {
-	case waitErr := <-done:
-		fmt.Println()
-		if waitErr != nil {
-			fmt.Println("[!] Minecraft exited early with an error.")
-		} else {
-			fmt.Println("[!] Minecraft exited almost immediately.")
-		}
-		fmt.Println("[!] Last lines of the log:")
-		fmt.Println(strings.Repeat("-", 60))
-		printLogTail(filepath.Join(gameDir, "mctui_latest.log"), 25)
-		fmt.Println(strings.Repeat("-", 60))
-
-	case <-time.After(8 * time.Second):
-		fmt.Println()
-		fmt.Println("   Minecraft is running.")
-		fmt.Println("   You can close this window — the game will keep running")
-		fmt.Println("   in the background as a separate process.")
-	}
+// Wait reaps Java, closes the log and releases the lock even after a crash.
+func (game *Game) Wait() (int, error) {
+	err := game.cmd.Wait()
+	code := game.cmd.ProcessState.ExitCode()
+	err = errors.Join(err, game.log.Close(), game.release())
+	return code, err
 }
 
 // deduplicateClasspath removes duplicate libraries from the classpath,
@@ -319,21 +274,4 @@ func versionGreaterThan(a, b string) bool {
 		}
 	}
 	return false
-}
-
-// printLogTail prints the last n lines of the file at path.
-func printLogTail(path string, n int) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		fmt.Println("(could not read log file:", err, ")")
-		return
-	}
-	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
-	start := len(lines) - n
-	if start < 0 {
-		start = 0
-	}
-	for _, line := range lines[start:] {
-		fmt.Println(line)
-	}
 }

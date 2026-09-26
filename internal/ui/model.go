@@ -12,6 +12,7 @@ import (
 	"mcTUI/internal/config"
 	"mcTUI/internal/instances"
 	"mcTUI/internal/java"
+	"mcTUI/internal/launcher"
 	"mcTUI/internal/resetconfigs"
 	"mcTUI/internal/updater"
 	"mcTUI/internal/worlds"
@@ -38,6 +39,9 @@ const (
 	javaPickerScreen
 	instancesScreen
 	instanceNameScreen
+	gameStartingScreen
+	gameRunningScreen
+	gameResultScreen
 )
 
 // menuOptionsCount must match len(menuOptions) in View(). Centralized
@@ -45,16 +49,21 @@ const (
 // actual length if options are added/removed.
 const menuOptionsCount = 9
 
-// DownloadProgressMsg es enviado por la goroutine de descarga al TUI
-// cada vez que un archivo termina de descargarse.
-type DownloadProgressMsg struct {
-	Done int    // archivos comprobados (total desconocido)
-	File string // nombre corto del archivo actual
-}
-
 // DownloadDoneMsg señala que la descarga finalizó completamente.
 type DownloadDoneMsg struct {
-	Err error
+	Prepared   launcher.Prepared
+	JavaBinary string
+	Err        error
+}
+
+type GameStartedMsg struct {
+	Game *launcher.Game
+	Err  error
+}
+
+type GameExitedMsg struct {
+	Code int
+	Err  error
 }
 
 // ResetDoneMsg is independent of the download/launch flow.
@@ -90,19 +99,22 @@ type Model struct {
 	instanceErr      error
 	instanceCursor   int
 	instanceRenameID string
+	creatingInstance bool
+	creationVersion  string
 	pickerForJava    bool
 	launch           LaunchConfig
 	latestRelease    updater.Release // zero value = no update available
 
 	// Download progress (usado en downloadScreen)
-	dlDone     int
-	dlFile     string
-	dlErr      error
-	dlFinished bool
-	dlContext  context.Context
-	dlCancel   context.CancelFunc
+	dlProgressFrame int
+	dlErr           error
+	dlFinished      bool
+	dlContext       context.Context
+	dlCancel        context.CancelFunc
 
 	resetDir         string
+	resetInstance    string
+	resetBackupRoot  string
 	resetFound       []string
 	resetMode        resetconfigs.Mode
 	resetBackupDir   string
@@ -123,8 +135,10 @@ type Model struct {
 	resetErr         error
 	resetScroll      int
 
-	input textinput.Model
-	play  bool
+	input        textinput.Model
+	gameErr      error
+	gameExitCode int
+	gameLog      string
 
 	width             int
 	height            int
@@ -153,7 +167,6 @@ func New(versions []string, cfg config.Data, roadmap []string, latest updater.Re
 		roadmap:       roadmap,
 		latestRelease: latest,
 		input:         ti,
-		play:          false,
 	}
 	m.loadInstanceSelection()
 	return m
@@ -162,20 +175,6 @@ func New(versions []string, cfg config.Data, roadmap []string, latest updater.Re
 func (m Model) Init() tea.Cmd {
 	return textinput.Blink
 }
-
-// PlaySelected reports whether the user chose to launch the game, after
-// the Bubble Tea program exits.
-func (m Model) PlaySelected() bool {
-	return m.play
-}
-
-// Username, VersionSelect, Modloader, and MemoryMB expose the final
-// values needed by launcher.Launch after the program exits.
-func (m Model) Username() string           { return m.username }
-func (m Model) VersionSelect() string      { return m.launch.Version }
-func (m Model) Modloader() string          { return m.launch.Modloader }
-func (m Model) MemoryMB() int              { return m.launch.MemoryMB }
-func (m Model) LaunchConfig() LaunchConfig { return m.launch }
 
 func (m *Model) loadInstanceSelection() {
 	m.dataRoot, m.instanceErr = config.DataDirChecked()

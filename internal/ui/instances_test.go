@@ -75,12 +75,26 @@ func TestInstancePickerAndLaunchPathsStayIsolated(t *testing.T) {
 	}
 }
 
-func TestInstanceCreateShortcutDoesNotBecomeNameInput(t *testing.T) {
-	m := Model{state: instancesScreen, dataRoot: t.TempDir(), input: textinput.New()}
+func TestNewManagedInstanceSelectsVersionBeforeName(t *testing.T) {
+	root := t.TempDir()
+	m := Model{state: instancesScreen, dataRoot: root, versions: []string{"1.20.4", "1.21.1"}, versionSelect: "1.20.4", memoryMB: 2048, input: textinput.New()}
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
 	m = updated.(Model)
-	if m.state != instanceNameScreen || m.input.Value() != "" {
-		t.Fatalf("create screen/input = %v/%q, want name screen with empty input", m.state, m.input.Value())
+	if m.state != versionsScreen || !m.creatingInstance {
+		t.Fatalf("new-instance flow = %v, creating=%v; want version picker", m.state, m.creatingInstance)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(Model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if m.state != instanceNameScreen || m.creationVersion != "1.21.1" {
+		t.Fatalf("selected creation version = %q, state=%v", m.creationVersion, m.state)
+	}
+	m.input.SetValue("Fresh")
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if m.state != menuScreen || m.instance.MinecraftVersion != "1.21.1" {
+		t.Fatalf("created instance = %+v, state=%v", m.instance, m.state)
 	}
 }
 
@@ -157,11 +171,14 @@ echo 'openjdk version "21.0.1"' >&2
 	m.versions = []string{"1.21.1"}
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
+	if m.state != menuScreen || m.versionSelect != "1.20.4" {
+		t.Fatalf("managed Minecraft version changed: state=%v version=%q", m.state, m.versionSelect)
+	}
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
 	stored, err := instances.Read(root, in.ID)
-	if err != nil || stored.JavaPath != javaPath || stored.MemoryMB != 4096 || stored.MinecraftVersion != "1.21.1" {
-		t.Fatalf("managed settings not persisted: %+v, %v", stored, err)
+	if err != nil || stored.JavaPath != javaPath || stored.MemoryMB != 4096 || stored.MinecraftVersion != "1.20.4" {
+		t.Fatalf("managed settings not persisted or version changed: %+v, %v", stored, err)
 	}
 	launch, err := m.launchConfig()
 	if err != nil || launch.JavaPath != javaPath {

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"mcTUI/internal/config"
+	"mcTUI/internal/operationlock"
 )
 
 type Mode string
@@ -73,9 +74,12 @@ func Inspect() (string, []string, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	found, err := inspectAt(dir)
+	found, err := InspectAt(dir)
 	return dir, found, err
 }
+
+// InspectAt checks resettable folders under an explicit game directory.
+func InspectAt(dir string) ([]string, error) { return inspectAt(dir) }
 
 // Run performs the chosen reset. Call only after explicit user confirmation.
 func Run(mode Mode) (Result, error) {
@@ -88,7 +92,26 @@ func RunTo(mode Mode, base string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	return runAtBase(dir, mode, base)
+	return RunAt(dir, mode, base)
+}
+
+// RunAt applies a reset to the game directory captured by the caller.
+func RunAt(dir string, mode Mode, base string) (Result, error) {
+	return RunAtWithBackups(dir, filepath.Join(dir, "mctui-backups"), mode, base)
+}
+
+// RunAtWithBackups keeps a managed instance's history outside its game directory.
+func RunAtWithBackups(dir, backupRoot string, mode Mode, base string) (result Result, err error) {
+	release, err := operationlock.Acquire(dir)
+	if err != nil {
+		return Result{}, err
+	}
+	defer func() {
+		if releaseErr := release(); err == nil {
+			err = releaseErr
+		}
+	}()
+	return runAtBaseIn(dir, backupRoot, mode, base)
 }
 
 // ListBackups returns valid reset backups, newest first.
@@ -97,7 +120,16 @@ func ListBackups() ([]BackupInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return listBackupsAt(dir)
+	return ListBackupsAt(dir)
+}
+
+// ListBackupsAt lists backups associated with an explicit game directory.
+func ListBackupsAt(dir string) ([]BackupInfo, error) {
+	return ListBackupsAtRoot(dir, filepath.Join(dir, "mctui-backups"))
+}
+
+func ListBackupsAtRoot(dir, backupRoot string) ([]BackupInfo, error) {
+	return listBackupsIn(dir, backupRoot)
 }
 
 // RestorePlan identifies active folders that contain data and would be replaced.
@@ -106,11 +138,24 @@ func RestorePlan(name string) (BackupInfo, []string, error) {
 	if err != nil {
 		return BackupInfo{}, nil, err
 	}
-	return restorePlanAt(dir, name)
+	return RestorePlanAt(dir, name)
+}
+
+// RestorePlanAt checks conflicts at the explicit game directory.
+func RestorePlanAt(dir, name string) (BackupInfo, []string, error) {
+	return RestorePlanAtRoot(dir, filepath.Join(dir, "mctui-backups"), name)
+}
+
+func RestorePlanAtRoot(dir, backupRoot, name string) (BackupInfo, []string, error) {
+	return restorePlanIn(dir, backupRoot, name)
 }
 
 func restorePlanAt(dir, name string) (BackupInfo, []string, error) {
-	backup, err := backupInfoAt(dir, name)
+	return restorePlanIn(dir, filepath.Join(dir, "mctui-backups"), name)
+}
+
+func restorePlanIn(dir, backupRoot, name string) (BackupInfo, []string, error) {
+	backup, err := backupInfoIn(dir, backupRoot, name)
 	if err != nil {
 		return BackupInfo{}, nil, err
 	}
@@ -142,7 +187,25 @@ func Restore(name string, mode RestoreMode, replaceFolders []string) (Result, er
 	if err != nil {
 		return Result{}, err
 	}
-	return restoreAt(dir, name, mode, replaceFolders)
+	return RestoreAt(dir, name, mode, replaceFolders)
+}
+
+// RestoreAt restores only to the game directory captured by the caller.
+func RestoreAt(dir, name string, mode RestoreMode, replaceFolders []string) (Result, error) {
+	return RestoreAtRoot(dir, filepath.Join(dir, "mctui-backups"), name, mode, replaceFolders)
+}
+
+func RestoreAtRoot(dir, backupRoot, name string, mode RestoreMode, replaceFolders []string) (result Result, err error) {
+	release, err := operationlock.Acquire(dir)
+	if err != nil {
+		return Result{}, err
+	}
+	defer func() {
+		if releaseErr := release(); err == nil {
+			err = releaseErr
+		}
+	}()
+	return restoreIn(dir, backupRoot, name, mode, replaceFolders)
 }
 
 // checkedDir rejects links (including Windows junctions reported as links by
@@ -189,6 +252,10 @@ func runAt(dir string, mode Mode) (Result, error) {
 }
 
 func runAtBase(dir string, mode Mode, base string) (Result, error) {
+	return runAtBaseIn(dir, filepath.Join(dir, "mctui-backups"), mode, base)
+}
+
+func runAtBaseIn(dir, backupRoot string, mode Mode, base string) (Result, error) {
 	if mode != Backup && mode != Purge {
 		return Result{}, fmt.Errorf("unknown reset mode: %q", mode)
 	}
@@ -205,20 +272,17 @@ func runAtBase(dir string, mode Mode, base string) (Result, error) {
 	}
 	if mode == Backup {
 		if base == "" {
-			base = filepath.Join(dir, "mctui-backups")
-			if _, err := checkedDir(base, true); err != nil {
+			base = backupRoot
+			if err := mkdirBackupRoot(base); err != nil {
 				return result, err
 			}
-			if err := os.Mkdir(base, 0700); err != nil && !errors.Is(err, os.ErrExist) {
-				return result, err
-			}
-		} else if err := validateBackupBase(dir, base); err != nil {
+		} else if err := validateBackupBaseIn(dir, backupRoot, base); err != nil {
 			return result, err
 		}
 		if _, err := checkedDir(base, false); err != nil {
 			return result, err
 		}
-		if err := rememberBackupBase(dir, base); err != nil {
+		if err := rememberBackupBaseIn(dir, backupRoot, base); err != nil {
 			return result, err
 		}
 		for n := 0; ; n++ {
@@ -251,7 +315,7 @@ func runAtBase(dir string, mode Mode, base string) (Result, error) {
 		} else if _, err := checkedDir(folder.Path, false); err != nil {
 			folder.Err = err
 		} else if mode == Backup {
-			if err := validateBackupBase(dir, base); err != nil {
+			if err := validateBackupBaseIn(dir, backupRoot, base); err != nil {
 				folder.Err = err
 			} else if _, err := checkedDir(result.BackupPath, false); err != nil {
 				folder.Err = err
@@ -310,7 +374,40 @@ func runAtBase(dir string, mode Mode, base string) (Result, error) {
 
 // validateBackupBase refuses links in every ancestor and destinations inside
 // folders that a reset moves or deletes.
+// mkdirBackupRoot creates only ordinary directories; never follows an existing link.
+func mkdirBackupRoot(base string) error {
+	if !filepath.IsAbs(base) || filepath.Clean(base) != base {
+		return fmt.Errorf("unsafe backup root: %q", base)
+	}
+	var paths []string
+	for path := base; ; path = filepath.Dir(path) {
+		paths = append(paths, path)
+		if path == filepath.Dir(path) {
+			break
+		}
+	}
+	for i := len(paths) - 1; i >= 0; i-- {
+		if _, err := checkedDir(paths[i], true); err != nil {
+			return err
+		}
+		if err := os.Mkdir(paths[i], 0700); err != nil && !errors.Is(err, os.ErrExist) {
+			return err
+		}
+		if _, err := checkedDir(paths[i], false); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func validateBackupBase(dir, base string) error {
+	return validateBackupBaseIn(dir, filepath.Join(dir, "mctui-backups"), base)
+}
+
+func validateBackupBaseIn(dir, backupRoot, base string) error {
+	if !filepath.IsAbs(backupRoot) || filepath.Clean(backupRoot) != backupRoot {
+		return fmt.Errorf("unsafe backup root: %q", backupRoot)
+	}
 	if !filepath.IsAbs(base) || filepath.Clean(base) != base {
 		return fmt.Errorf("unsafe backup directory: %q", base)
 	}
@@ -328,11 +425,11 @@ func validateBackupBase(dir, base string) error {
 			return fmt.Errorf("backup directory cannot be inside %s/", name)
 		}
 	}
-	defaultBase := filepath.Join(dir, "mctui-backups")
+	defaultBase := backupRoot
 	if rel, err := filepath.Rel(defaultBase, base); err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
 		return fmt.Errorf("backup directory cannot be nested inside %s", defaultBase)
 	}
-	bases, err := backupBases(dir)
+	bases, err := backupBasesIn(dir, backupRoot)
 	if err != nil {
 		return err
 	}
@@ -346,10 +443,17 @@ func validateBackupBase(dir, base string) error {
 }
 
 func backupBases(dir string) ([]string, error) {
+	return backupBasesIn(dir, filepath.Join(dir, "mctui-backups"))
+}
+
+func backupBasesIn(dir, backupRoot string) ([]string, error) {
 	if _, err := checkedDir(dir, false); err != nil {
 		return nil, err
 	}
-	defaultBase := filepath.Join(dir, "mctui-backups")
+	if !filepath.IsAbs(backupRoot) || filepath.Clean(backupRoot) != backupRoot {
+		return nil, fmt.Errorf("unsafe backup root: %q", backupRoot)
+	}
+	defaultBase := backupRoot
 	bases := []string{defaultBase}
 	exists, err := checkedDir(defaultBase, true)
 	if err != nil || !exists {
@@ -378,17 +482,18 @@ func backupBases(dir string) ([]string, error) {
 }
 
 func rememberBackupBase(dir, base string) error {
-	defaultBase := filepath.Join(dir, "mctui-backups")
+	return rememberBackupBaseIn(dir, filepath.Join(dir, "mctui-backups"), base)
+}
+
+func rememberBackupBaseIn(dir, backupRoot, base string) error {
+	defaultBase := backupRoot
 	if base == defaultBase {
 		return nil
 	}
-	if _, err := checkedDir(defaultBase, true); err != nil {
+	if err := mkdirBackupRoot(defaultBase); err != nil {
 		return err
 	}
-	if err := os.Mkdir(defaultBase, 0700); err != nil && !errors.Is(err, os.ErrExist) {
-		return err
-	}
-	bases, err := backupBases(dir)
+	bases, err := backupBasesIn(dir, backupRoot)
 	if err != nil || slices.Contains(bases, base) {
 		return err
 	}
@@ -412,7 +517,11 @@ func rememberBackupBase(dir, base string) error {
 }
 
 func listBackupsAt(dir string) ([]BackupInfo, error) {
-	bases, err := backupBases(dir)
+	return listBackupsIn(dir, filepath.Join(dir, "mctui-backups"))
+}
+
+func listBackupsIn(dir, backupRoot string) ([]BackupInfo, error) {
+	bases, err := backupBasesIn(dir, backupRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -433,7 +542,7 @@ func listBackupsAt(dir string) ([]BackupInfo, error) {
 			if !entry.IsDir() || !strings.HasPrefix(entry.Name(), "reset-") {
 				continue
 			}
-			info, err := backupInfoAt(dir, filepath.Join(base, entry.Name()))
+			info, err := backupInfoIn(dir, backupRoot, filepath.Join(base, entry.Name()))
 			if err != nil {
 				continue // skip invalid entries without blocking the rest
 			}
@@ -447,21 +556,25 @@ func listBackupsAt(dir string) ([]BackupInfo, error) {
 }
 
 func backupInfoAt(dir, name string) (BackupInfo, error) {
-	base := filepath.Join(dir, "mctui-backups")
+	return backupInfoIn(dir, filepath.Join(dir, "mctui-backups"), name)
+}
+
+func backupInfoIn(dir, backupRoot, name string) (BackupInfo, error) {
+	base := backupRoot
 	if filepath.IsAbs(name) {
 		base = filepath.Dir(name)
 	}
 	if !strings.HasPrefix(filepath.Base(name), "reset-") || filepath.Base(name) == "reset-" {
 		return BackupInfo{}, fmt.Errorf("invalid backup name: %q", name)
 	}
-	bases, err := backupBases(dir)
+	bases, err := backupBasesIn(dir, backupRoot)
 	if err != nil {
 		return BackupInfo{}, err
 	}
 	if !slices.Contains(bases, base) {
 		return BackupInfo{}, fmt.Errorf("backup location is not registered: %s", base)
 	}
-	if err := validateBackupBase(dir, base); err != nil {
+	if err := validateBackupBaseIn(dir, backupRoot, base); err != nil {
 		return BackupInfo{}, err
 	}
 	path := filepath.Join(base, filepath.Base(name))
@@ -490,10 +603,14 @@ func backupInfoAt(dir, name string) (BackupInfo, error) {
 }
 
 func restoreAt(dir, name string, mode RestoreMode, replaceFolders []string) (Result, error) {
+	return restoreIn(dir, filepath.Join(dir, "mctui-backups"), name, mode, replaceFolders)
+}
+
+func restoreIn(dir, backupRoot, name string, mode RestoreMode, replaceFolders []string) (Result, error) {
 	if mode != KeepBackup && mode != ConsumeBackup {
 		return Result{}, fmt.Errorf("unknown restore mode: %q", mode)
 	}
-	backup, err := backupInfoAt(dir, name)
+	backup, err := backupInfoIn(dir, backupRoot, name)
 	if err != nil {
 		return Result{}, err
 	}
@@ -516,7 +633,7 @@ func restoreAt(dir, name string, mode RestoreMode, replaceFolders []string) (Res
 	}
 	for _, folder := range backup.Folders {
 		source, dest := filepath.Join(backup.Path, folder), filepath.Join(dir, folder)
-		status, err := restoreFolder(dir, source, dest, mode, slices.Contains(replaceFolders, folder))
+		status, err := restoreFolderIn(dir, backupRoot, source, dest, mode, slices.Contains(replaceFolders, folder))
 		fr := FolderResult{Name: folder, Path: dest, Status: status, Err: err}
 		result.Folders = append(result.Folders, fr)
 		if err != nil {
@@ -533,10 +650,14 @@ func restoreAt(dir, name string, mode RestoreMode, replaceFolders []string) (Res
 }
 
 func restoreFolder(dir, source, dest string, mode RestoreMode, replace bool) (FolderStatus, error) {
+	return restoreFolderIn(dir, filepath.Join(dir, "mctui-backups"), source, dest, mode, replace)
+}
+
+func restoreFolderIn(dir, backupRoot, source, dest string, mode RestoreMode, replace bool) (FolderStatus, error) {
 	if _, err := checkedDir(dir, false); err != nil {
 		return Failed, err
 	}
-	if err := validateBackupBase(dir, filepath.Dir(filepath.Dir(source))); err != nil {
+	if err := validateBackupBaseIn(dir, backupRoot, filepath.Dir(filepath.Dir(source))); err != nil {
 		return Failed, err
 	}
 	if _, err := checkedDir(source, false); err != nil {

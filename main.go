@@ -7,7 +7,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"mcTUI/internal/config"
-	"mcTUI/internal/launcher"
 	"mcTUI/internal/mojang"
 	"mcTUI/internal/roadmap"
 	"mcTUI/internal/ui"
@@ -42,14 +41,8 @@ func main() {
 		tea.WithMouseCellMotion(),
 	)
 
-	finalModel, err := p.Run()
-	if err != nil {
+	if _, err := p.Run(); err != nil {
 		fmt.Printf("TUI Error: %v\n", err)
 		os.Exit(1)
-	}
-
-	if m, ok := finalModel.(ui.Model); ok && m.PlaySelected() {
-		launch := m.LaunchConfig()
-		launcher.Launch(launch.GameDir, launch.RuntimeDir, launch.Username, launch.Version, launch.Modloader, launch.MemoryMB, launch.JavaPath)
 	}
 }

@@ -3,6 +3,8 @@ package ui
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -10,6 +12,7 @@ import (
 	"mcTUI/internal/config"
 	"mcTUI/internal/fabric"
 	"mcTUI/internal/instances"
+	"mcTUI/internal/launcher"
 	"mcTUI/internal/mojang"
 	"mcTUI/internal/resetconfigs"
 	"mcTUI/internal/worlds"
@@ -52,6 +55,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case downloadAnimationTickMsg:
+		if m.state == downloadScreen && !m.dlFinished {
+			m.dlProgressFrame++
+			return m, downloadAnimationTickCmd()
+		}
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -62,6 +72,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.resetErr = msg.Err
 			m.resetScroll = 0
 			m.state = resetResultScreen
+		}
+		return m, nil
+
+	case GameStartedMsg:
+		if m.state != gameStartingScreen {
+			return m, nil
+		}
+		if msg.Err != nil {
+			m.gameErr = msg.Err
+			m.state = gameResultScreen
+			return m, nil
+		}
+		m.gameLog = msg.Game.LogPath
+		m.state = gameRunningScreen
+		return m, func() tea.Msg {
+			code, err := msg.Game.Wait()
+			return GameExitedMsg{Code: code, Err: err}
+		}
+
+	case GameExitedMsg:
+		if m.state == gameRunningScreen {
+			m.gameExitCode, m.gameErr = msg.Code, msg.Err
+			m.state = gameResultScreen
 		}
 		return m, nil
 
@@ -85,36 +118,41 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-	// ── Mensajes de progreso de descarga ───────────────────────────────────
-	case downloadChanMsg:
+	case DownloadDoneMsg:
 		if m.state != downloadScreen {
 			return m, nil
 		}
-		// Procesa el mensaje portado y encadena la espera del siguiente.
-		switch inner := msg.msg.(type) {
-		case DownloadProgressMsg:
-			m.dlDone = inner.Done
-			m.dlFile = inner.File
-			return m, nextDownloadCmd(msg.ch)
-		case DownloadDoneMsg:
-			m.dlFinished = true
-			if m.dlContext != nil && m.dlContext.Err() != nil {
-				inner.Err = m.dlContext.Err()
-			}
-			if m.dlCancel != nil {
-				m.dlCancel()
-				m.dlCancel = nil
-			}
-			if inner.Err != nil {
-				m.dlErr = inner.Err
-				return m, nil
-			}
-			// Descarga completada → lanzar el juego
-			m.play = true
-			return m, tea.Quit
+		m.dlFinished = true
+		if m.dlContext != nil && m.dlContext.Err() != nil {
+			msg.Err = m.dlContext.Err()
+		}
+		if m.dlCancel != nil {
+			m.dlCancel()
+			m.dlCancel = nil
+		}
+		if msg.Err != nil {
+			m.dlErr = msg.Err
+			return m, nil
+		}
+		// Launch only the verified artifacts; never prepare a second time.
+		launch := m.launch
+		m.gameErr, m.gameLog = nil, ""
+		m.state = gameStartingScreen
+		return m, func() tea.Msg {
+			game, err := launcher.StartPrepared(launch.GameDir, launch.RuntimeDir, msg.JavaBinary, launch.Username, launch.Version, launch.MemoryMB, msg.Prepared)
+			return GameStartedMsg{Game: game, Err: err}
 		}
 
 	case tea.KeyMsg:
+		if m.state == gameStartingScreen || m.state == gameRunningScreen {
+			return m, nil // wait for Java; never detach or kill it implicitly
+		}
+		if m.state == gameResultScreen {
+			if msg.String() == "enter" || msg.String() == "esc" {
+				m.state = menuScreen
+			}
+			return m, nil
+		}
 		if m.state == javaPickerScreen {
 			return m.updateJavaPicker(msg.String())
 		}
@@ -201,7 +239,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.state = instancesScreen
 					}
 				} else {
-					in, err := instances.Create(m.dataRoot, name, m.versionSelect, "Vanilla", "", m.memoryMB)
+					in, err := instances.Create(m.dataRoot, name, m.creationVersion, "Vanilla", "", m.memoryMB)
 					if err != nil {
 						m.instanceErr = err
 					} else if err = m.setInstance(in); err != nil {
@@ -210,6 +248,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.input.CharLimit = 16
 						m.input.Placeholder = "Type your name..."
 						m.instanceList, m.instanceErr = instances.List(m.dataRoot)
+						m.creatingInstance = false
+						m.creationVersion = ""
 						m.state = menuScreen
 					}
 				}
@@ -229,11 +269,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.input.Placeholder = "Type your name..."
 					m.input.SetValue(m.username)
 				} else if m.cursorMenu == 2 {
-					m.state = versionsScreen
-					for i, v := range m.versions {
-						if v == m.versionSelect {
-							m.cursorVersions = i
-							break
+					if m.isManaged() {
+						m.instanceErr = fmt.Errorf("Minecraft version is fixed for this managed instance")
+					} else {
+						m.state = versionsScreen
+						for i, v := range m.versions {
+							if v == m.versionSelect {
+								m.cursorVersions = i
+								break
+							}
 						}
 					}
 				} else if m.cursorMenu == 3 {
@@ -279,17 +323,36 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.save()
 					}
 				} else if m.cursorMenu == 6 {
-					if m.isManaged() {
-						m.instanceErr = fmt.Errorf("Reset Configs is limited to the existing installation until A10")
-					} else {
-						m.resetDir, m.resetFound, m.resetErr = resetconfigs.Inspect()
-						m.resetMode = resetconfigs.Backup
-						m.resetBackupDir = ""
-						m.resetChoice = 0
-						m.resetIsRestore = false
-						m.resetScroll = 0
-						m.state = resetModeScreen
+					m.resetDir, m.resetBackupRoot, m.resetErr = "", "", nil
+					m.resetInstance = m.instance.Name
+					if m.resetInstance == "" {
+						m.resetInstance = "Instalación existente"
 					}
+					if m.instance.ID == "" { // legacy-only models used before instance selection is loaded
+						m.resetDir, m.resetErr = config.MinecraftDirChecked()
+						m.resetBackupRoot = filepath.Join(m.resetDir, "mctui-backups")
+					} else {
+						m.resetDir, m.resetErr = instances.GameDir(m.dataRoot, m.instance)
+						if m.resetErr == nil {
+							m.resetBackupRoot, m.resetErr = instances.BackupDir(m.dataRoot, m.instance)
+						}
+					}
+					if m.resetErr == nil && m.isManaged() {
+						if err := os.Mkdir(m.resetDir, 0700); err != nil && !os.IsExist(err) {
+							m.resetErr = err
+						} else {
+							_, m.resetErr = instances.GameDir(m.dataRoot, m.instance)
+						}
+					}
+					if m.resetErr == nil {
+						m.resetFound, m.resetErr = resetconfigs.InspectAt(m.resetDir)
+					}
+					m.resetMode = resetconfigs.Backup
+					m.resetBackupDir = ""
+					m.resetChoice = 0
+					m.resetIsRestore = false
+					m.resetScroll = 0
+					m.state = resetModeScreen
 				} else if m.cursorMenu == 7 {
 					if m.isManaged() {
 						m.openJavaPicker()
@@ -308,19 +371,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// else: stay on nameScreen, showing the validation hint
 			} else if m.state == versionsScreen {
 				version := m.versions[m.cursorVersions]
-				if m.isManaged() {
-					updated := m.instance
-					updated.MinecraftVersion = version
-					m.instanceErr = instances.UpdateSettings(m.dataRoot, updated)
-					if m.instanceErr == nil {
-						m.instance = updated
-						m.versionSelect = version
-					}
+				if m.creatingInstance {
+					m.creationVersion = version
+					m.state = instanceNameScreen
+					m.instanceErr = nil
+					m.input.SetValue("")
+					m.input.CharLimit = 80
+					m.input.Placeholder = "Instance name"
+					m.input.Focus()
 				} else {
 					m.versionSelect = version
 					m.save()
+					m.state = menuScreen
 				}
-				m.state = menuScreen
 			} else if m.state == worldsScreen {
 				if len(m.worlds) > 0 {
 					target := m.worlds[m.cursorWorlds].Version
@@ -344,13 +407,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.launch = launch
 				m.state = downloadScreen
-				m.dlDone = 0
-				m.dlFile = "Initializing..."
+				m.dlProgressFrame = 0
 				m.dlErr = nil
 				m.dlFinished = false
 				ctx, cancel := context.WithCancel(context.Background())
 				m.dlContext, m.dlCancel = ctx, cancel
-				return m, StartDownloadCmd(ctx, launch.RuntimeDir, launch.Version, launch.Modloader, launch.JavaPath)
+				return m, tea.Batch(downloadAnimationTickCmd(), StartDownloadCmd(ctx, launch.RuntimeDir, launch.Version, launch.Modloader, launch.JavaPath))
 			}
 
 		case "y", "Y":
@@ -362,13 +424,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.launch = launch
 				m.state = downloadScreen
-				m.dlDone = 0
-				m.dlFile = "Initializing..."
+				m.dlProgressFrame = 0
 				m.dlErr = nil
 				m.dlFinished = false
 				ctx, cancel := context.WithCancel(context.Background())
 				m.dlContext, m.dlCancel = ctx, cancel
-				return m, StartDownloadCmd(ctx, launch.RuntimeDir, launch.Version, launch.Modloader, launch.JavaPath)
+				return m, tea.Batch(downloadAnimationTickCmd(), StartDownloadCmd(ctx, launch.RuntimeDir, launch.Version, launch.Modloader, launch.JavaPath))
 			}
 
 		case "n", "N":
@@ -377,11 +438,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if m.state == instancesScreen {
 				m.instanceErr = nil
 				m.instanceRenameID = ""
-				m.state = instanceNameScreen
-				m.input.SetValue("")
-				m.input.CharLimit = 80
-				m.input.Placeholder = "Instance name"
-				m.input.Focus()
+				m.creatingInstance = true
+				m.state = versionsScreen
+				for i, version := range m.versions {
+					if version == m.versionSelect {
+						m.cursorVersions = i
+						break
+					}
+				}
 				return m, nil
 			}
 
@@ -410,9 +474,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state = instancesScreen
 				m.instanceErr = nil
 				m.instanceRenameID = ""
+				m.creatingInstance = false
+				m.creationVersion = ""
 				m.input.CharLimit = 16
 				m.input.Placeholder = "Type your name..."
-			} else if m.state == nameScreen || m.state == versionsScreen || m.state == worldsScreen || m.state == confirmScreen {
+			} else if m.state == versionsScreen {
+				if m.creatingInstance {
+					m.creatingInstance = false
+					m.state = instancesScreen
+				} else {
+					m.state = menuScreen
+				}
+			} else if m.state == nameScreen || m.state == worldsScreen || m.state == confirmScreen {
 				m.state = menuScreen
 			}
 		}
@@ -471,7 +544,7 @@ func (m Model) updateResetKey(key string) (tea.Model, tea.Cmd) {
 			}
 		case "enter":
 			if m.resetChoice == 2 {
-				m.resetBackups, m.resetErr = resetconfigs.ListBackups()
+				m.resetBackups, m.resetErr = resetconfigs.ListBackupsAtRoot(m.resetDir, m.resetBackupRoot)
 				m.resetBackupIndex = 0
 				m.resetScroll = 0
 				m.state = resetBackupListScreen
@@ -479,7 +552,12 @@ func (m Model) updateResetKey(key string) (tea.Model, tea.Cmd) {
 				m.resetIsRestore = false
 				if m.resetChoice == 0 {
 					m.resetMode = resetconfigs.Backup
-					m.openResetPicker()
+					if m.isManaged() {
+						m.resetBackupDir = ""
+						m.state = resetConfirmScreen // managed history stays under backups/<id>
+					} else {
+						m.openResetPicker()
+					}
 				} else {
 					m.resetMode = resetconfigs.Purge
 					m.state = resetConfirmScreen
@@ -493,17 +571,17 @@ func (m Model) updateResetKey(key string) (tea.Model, tea.Cmd) {
 		case "esc", "n", "N":
 			m.state = resetModeScreen
 		case "y", "Y":
-			mode, base := m.resetMode, m.resetBackupDir
+			dir, root, mode, base := m.resetDir, m.resetBackupRoot, m.resetMode, m.resetBackupDir
 			m.state = resetRunningScreen
 			return m, func() tea.Msg {
-				result, err := resetconfigs.RunTo(mode, base)
+				result, err := resetconfigs.RunAtWithBackups(dir, root, mode, base)
 				return ResetDoneMsg{Result: result, Err: err}
 			}
 		}
 	case resetBackupListScreen:
 		switch key {
 		case "esc", "q":
-			m.resetDir, m.resetFound, m.resetErr = resetconfigs.Inspect()
+			m.resetFound, m.resetErr = resetconfigs.InspectAt(m.resetDir)
 			m.state = resetModeScreen
 		case "up", "k":
 			if m.resetBackupIndex > 0 {
@@ -522,7 +600,7 @@ func (m Model) updateResetKey(key string) (tea.Model, tea.Cmd) {
 		case "enter":
 			if m.resetErr == nil && len(m.resetBackups) > 0 {
 				var err error
-				m.resetBackup, m.resetConflicts, err = resetconfigs.RestorePlan(m.resetBackups[m.resetBackupIndex].Path)
+				m.resetBackup, m.resetConflicts, err = resetconfigs.RestorePlanAtRoot(m.resetDir, m.resetBackupRoot, m.resetBackups[m.resetBackupIndex].Path)
 				m.resetErr = err
 				m.resetReplace = false
 				m.resetRetention = ""
@@ -568,7 +646,7 @@ func (m Model) updateResetKey(key string) (tea.Model, tea.Cmd) {
 		case "esc", "n", "N":
 			m.state = resetRetentionScreen
 		case "y", "Y":
-			name, mode := m.resetBackup.Path, m.resetRetention
+			dir, root, name, mode := m.resetDir, m.resetBackupRoot, m.resetBackup.Path, m.resetRetention
 			var replaceFolders []string
 			if m.resetReplace {
 				replaceFolders = append(replaceFolders, m.resetConflicts...)
@@ -576,7 +654,7 @@ func (m Model) updateResetKey(key string) (tea.Model, tea.Cmd) {
 			m.resetIsRestore = true
 			m.state = resetRunningScreen
 			return m, func() tea.Msg {
-				result, err := resetconfigs.Restore(name, mode, replaceFolders)
+				result, err := resetconfigs.RestoreAtRoot(dir, root, name, mode, replaceFolders)
 				return ResetDoneMsg{Result: result, Err: err}
 			}
 		}

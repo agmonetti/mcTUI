@@ -2,12 +2,12 @@ package ui
 
 import (
 	"fmt"
-	"path/filepath"
 	"runtime"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 
+	"mcTUI/internal/instances"
 	"mcTUI/internal/mojang"
 	"mcTUI/internal/resetconfigs"
 	"mcTUI/internal/worlds"
@@ -26,6 +26,9 @@ func (m Model) View() string {
 	// ── Download screen completo (tapa todo el TUI) ──────────────────────────
 	if m.state == downloadScreen {
 		return m.renderDownloadScreen()
+	}
+	if m.state >= gameStartingScreen && m.state <= gameResultScreen {
+		return m.renderGameScreen()
 	}
 	resetActive := m.state >= resetModeScreen && m.state <= resetResultScreen
 	if resetActive && m.compactReset() {
@@ -69,11 +72,11 @@ func (m Model) View() string {
 	menuOptions := []string{
 		fmt.Sprintf("Play (%s)", m.versionSelect),
 		"Change Name",
-		"Change Version",
+		versionOption(m.instance, m.versionSelect),
 		"Worlds",
 		fmt.Sprintf("Modloader: %s", lipgloss.NewStyle().Foreground(colorAccent2).Render(m.modloader)),
 		fmt.Sprintf("Memory: %d MB", m.memoryMB),
-		"Resets Configs (legacy only)",
+		"Resets Configs",
 		"Java: " + javaLabel,
 		"Quit",
 	}
@@ -228,12 +231,13 @@ func (m Model) resetLines() []string {
 	switch m.state {
 	case resetModeScreen, resetConfirmScreen:
 		if m.resetErr != nil {
-			return []string{"INSTALLATION", "Minecraft directory: " + m.resetDir, "", "Cannot inspect installation: " + m.resetErr.Error()}
+			return []string{"INSTALLATION", "Instance: " + m.resetInstance, "Minecraft directory: " + m.resetDir, "", "Cannot inspect installation: " + m.resetErr.Error()}
 		}
 		var lines []string
 		if len(m.resetFound) == 0 {
 			lines = []string{
 				"INSTALLATION",
+				"Instance: " + m.resetInstance,
 				"Minecraft directory: " + m.resetDir,
 				"",
 				"STATUS",
@@ -243,6 +247,7 @@ func (m Model) resetLines() []string {
 		} else {
 			lines = []string{
 				"INSTALLATION",
+				"Instance: " + m.resetInstance,
 				"Minecraft directory: " + m.resetDir,
 				"Close Minecraft before resetting; open files may be locked.",
 				"",
@@ -270,11 +275,11 @@ func (m Model) resetLines() []string {
 		}
 		dest := m.resetBackupDir
 		if dest == "" {
-			dest = filepath.Join(m.resetDir, "mctui-backups")
+			dest = m.resetBackupRoot
 		}
 		return append(lines, "Backup destination: "+dest, "Move affected folders into a new timestamped backup?")
 	case resetBackupListScreen:
-		lines := []string{"Backups in: " + filepath.Join(m.resetDir, "mctui-backups")}
+		lines := []string{"Instance: " + m.resetInstance, "Backups in: " + m.resetBackupRoot}
 		if m.resetErr != nil {
 			return append(lines, "Cannot list backups: "+m.resetErr.Error())
 		}
@@ -290,14 +295,14 @@ func (m Model) resetLines() []string {
 		}
 		return lines
 	case resetReplaceConfirmScreen:
-		lines := []string{"Backup: " + m.resetBackup.Name, "Folders to restore: " + strings.Join(m.resetBackup.Folders, ", "),
+		lines := []string{"Instance: " + m.resetInstance, "Minecraft directory: " + m.resetDir, "Backup: " + m.resetBackup.Name, "Folders to restore: " + strings.Join(m.resetBackup.Folders, ", "),
 			"Existing content will be replaced in:"}
 		for _, folder := range m.resetConflicts {
 			lines = append(lines, "  - "+folder+"/")
 		}
 		return append(lines, "This permanently removes the current contents of those folders.")
 	case resetRetentionScreen:
-		lines := []string{"Restore backup: " + m.resetBackup.Name, "Folders: " + strings.Join(m.resetBackup.Folders, ", ")}
+		lines := []string{"Instance: " + m.resetInstance, "Minecraft directory: " + m.resetDir, "Restore backup: " + m.resetBackup.Name, "Folders: " + strings.Join(m.resetBackup.Folders, ", ")}
 		if m.resetReplace {
 			lines = append(lines, "Confirmed to replace current contents of: "+strings.Join(m.resetConflicts, ", "))
 		}
@@ -315,7 +320,7 @@ func (m Model) resetLines() []string {
 		if m.resetRetention == resetconfigs.ConsumeBackup {
 			text = "The selected backup will be moved into Minecraft and removed from history."
 		}
-		return []string{"Restore: " + m.resetBackup.Name, "Folders: " + strings.Join(m.resetBackup.Folders, ", "), text}
+		return []string{"Instance: " + m.resetInstance, "Minecraft directory: " + m.resetDir, "Restore: " + m.resetBackup.Name, "Folders: " + strings.Join(m.resetBackup.Folders, ", "), text}
 	case resetRunningScreen:
 		if m.resetIsRestore {
 			return []string{"Restoring " + m.resetBackup.Name + "...", "Please wait; do not close mcTUI."}
@@ -521,10 +526,11 @@ func (m Model) renderDownloadScreen() string {
 	title := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("VERIFYING FILES")
 	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 60))
 
-	fileLabel := lipgloss.NewStyle().Foreground(colorGray).Render("FILE  ")
-	fileVal := lipgloss.NewStyle().Foreground(colorWhite).Render(m.dlFile)
-	countLabel := lipgloss.NewStyle().Foreground(colorGray).Render("DONE  ")
-	countVal := lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(fmt.Sprintf("%d files checked", m.dlDone))
+	const width, segment = 36, 8
+	position := m.dlProgressFrame % (width - segment + 1)
+	progress := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", position)) +
+		lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(strings.Repeat("━", segment)) +
+		lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", width-position-segment))
 
 	var errLine string
 	if m.dlErr != nil {
@@ -538,8 +544,8 @@ func (m Model) renderDownloadScreen() string {
 	}
 	hint := lipgloss.NewStyle().Foreground(colorDimGray).Render(hintText)
 
-	body := fmt.Sprintf("%s\n%s\n\n%s%s\n%s%s\n\n%s%s",
-		title, div, fileLabel, fileVal, countLabel, countVal, errLine, hint)
+	body := fmt.Sprintf("%s\n%s\n\nPreparing game files...\n%s%s\n\n%s",
+		title, div, progress, errLine, hint)
 
 	panel := lipgloss.NewStyle().
 		Width(64).
@@ -548,6 +554,31 @@ func (m Model) renderDownloadScreen() string {
 		Padding(1, 3).
 		Render(body)
 
+	if m.width > 0 && m.height > 0 {
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, panel)
+	}
+	return "\n" + panel
+}
+
+func (m Model) renderGameScreen() string {
+	status := "Starting Minecraft..."
+	hint := "Please wait; mcTUI will not close or detach while the game is running."
+	switch m.state {
+	case gameRunningScreen:
+		status = "Minecraft is running. Close the game to return to mcTUI."
+	case gameResultScreen:
+		status = fmt.Sprintf("Minecraft exited (code %d).", m.gameExitCode)
+		if m.gameErr != nil {
+			status = "Minecraft could not start or exited with an error: " + m.gameErr.Error()
+		}
+		hint = "[Enter/Esc] Return to menu"
+	}
+	body := "INSTANCE: " + m.launch.GameDir + "\n" + status
+	if m.gameLog != "" {
+		body += "\nLog: " + m.gameLog
+	}
+	body += "\n\n" + hint
+	panel := lipgloss.NewStyle().Width(64).Border(lipgloss.NormalBorder()).BorderForeground(colorAccent).Padding(1, 3).Render(body)
 	if m.width > 0 && m.height > 0 {
 		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, panel)
 	}
@@ -722,6 +753,9 @@ func (m Model) renderNameScreen(c *strings.Builder) {
 
 func (m Model) renderVersionsScreen(c *strings.Builder) {
 	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("SELECT VERSION")
+	if m.creatingInstance {
+		title = lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("SELECT VERSION FOR NEW INSTANCE")
+	}
 	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 	c.WriteString(title + "\n" + div + "\n\n")
 
@@ -814,6 +848,13 @@ func windowAround(cursor, total, before, windowSize int) (int, int) {
 	return start, end
 }
 
+func versionOption(in instances.Instance, version string) string {
+	if in.Kind == "managed" {
+		return "Minecraft: " + version + " (fixed)"
+	}
+	return "Change Version"
+}
+
 func (m Model) renderInstancesScreen() string {
 	var b strings.Builder
 	b.WriteString("SELECT INSTANCE\n────────────────────────────────────────\n\n")
@@ -859,7 +900,7 @@ func (m Model) renderInstanceNameScreen() string {
 	if m.instanceRenameID != "" {
 		b.WriteString("\n[Enter] Save name  [Esc] Cancel")
 	} else {
-		b.WriteString("\nMinecraft: " + m.versionSelect + "\n[Enter] Create  [Esc] Cancel")
+		b.WriteString("\nMinecraft: " + m.creationVersion + "\n[Enter] Create  [Esc] Cancel")
 	}
 	return lipgloss.NewStyle().Padding(1, 2).Render(b.String())
 }

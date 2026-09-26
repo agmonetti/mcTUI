@@ -12,6 +12,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"mcTUI/internal/operationlock"
 )
 
 func TestPrepareSharedRuntimeWorksOfflineAndRejectsCorruptCache(t *testing.T) {
@@ -108,6 +110,61 @@ func TestInvalidAssetIndexNeverQueuesDownloads(t *testing.T) {
 	}
 }
 
+func TestPreparedGameHoldsLockAndLogUntilExit(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell Java stub is Unix-only")
+	}
+	game, runtimeDir := t.TempDir(), t.TempDir()
+	java := filepath.Join(t.TempDir(), "java")
+	if err := os.WriteFile(java, []byte("#!/bin/sh\necho simulated-java\nwhile [ ! -f finished ]; do sleep .05; done\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	started, err := StartPrepared(game, runtimeDir, java, "Player", "1.20.4", 1024, Prepared{classpath: "fake-classpath", mainClass: "fake.Main", assetIndexID: "assets"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.WriteFile(filepath.Join(game, "finished"), nil, 0600)
+	if _, err := operationlock.Acquire(game); err == nil {
+		t.Fatal("running Java did not block another instance operation")
+	}
+	if err := os.WriteFile(filepath.Join(game, "finished"), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if code, err := started.Wait(); err != nil || code != 0 {
+		t.Fatalf("game exited %d: %v", code, err)
+	}
+	if data, err := os.ReadFile(started.LogPath); err != nil || !strings.Contains(string(data), "simulated-java") {
+		t.Fatalf("game log = %q: %v", data, err)
+	}
+	release, err := operationlock.Acquire(game)
+	if err != nil {
+		t.Fatal("lock remained after Java exited:", err)
+	}
+	if err := release(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(java, []byte("#!/bin/sh\nexit 7\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	started, err = StartPrepared(game, runtimeDir, java, "Player", "1.20.4", 1024, Prepared{classpath: "fake-classpath", mainClass: "fake.Main", assetIndexID: "assets"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code, err := started.Wait(); err == nil || code != 7 {
+		t.Fatalf("failed game exited %d: %v", code, err)
+	}
+	if _, err := StartPrepared(game, runtimeDir, filepath.Join(game, "missing-java"), "Player", "1.20.4", 1024, Prepared{classpath: "fake-classpath", mainClass: "fake.Main", assetIndexID: "assets"}); err == nil {
+		t.Fatal("missing Java executable started")
+	}
+	release, err = operationlock.Acquire(game)
+	if err != nil {
+		t.Fatal("start failure left instance locked:", err)
+	}
+	if err := release(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRunGameUsesSeparateGameAndRuntimeDirs(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("requires a POSIX shell script")
@@ -118,11 +175,20 @@ func TestRunGameUsesSeparateGameAndRuntimeDirs(t *testing.T) {
 	argsFile := filepath.Join(root, "args")
 	pwdFile := filepath.Join(root, "pwd")
 	java := filepath.Join(root, "java")
+	if err := os.MkdirAll(filepath.Dir(game), 0700); err != nil {
+		t.Fatal(err)
+	}
 	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > '" + argsFile + "'\npwd > '" + pwdFile + "'\n"
 	if err := os.WriteFile(java, []byte(script), 0700); err != nil {
 		t.Fatal(err)
 	}
-	runGame(game, runtimeDir, java, "fake-classpath", "fake.Main", "Player", "1.20.4", "assets", 1024, "")
+	started, err := StartPrepared(game, runtimeDir, java, "Player", "1.20.4", 1024, Prepared{classpath: "fake-classpath", mainClass: "fake.Main", assetIndexID: "assets"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code, err := started.Wait(); err != nil || code != 0 {
+		t.Fatalf("Java exited %d: %v", code, err)
+	}
 	args, err := os.ReadFile(argsFile)
 	if err != nil {
 		t.Fatal(err)

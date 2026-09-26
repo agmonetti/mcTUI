@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"mcTUI/internal/operationlock"
 )
 
 func makeFolder(t *testing.T, dir, name string) {
@@ -53,6 +55,42 @@ func TestReset(t *testing.T) {
 				t.Fatalf("empty reset: %+v, %v", again, err)
 			}
 		})
+	}
+}
+
+func TestResetAndRestoreRejectBusyInstance(t *testing.T) {
+	dir := t.TempDir()
+	makeFolder(t, dir, "mods")
+	root := filepath.Join(dir, "mctui-backups")
+	release, err := operationlock.Acquire(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RunAtWithBackups(dir, root, Purge, ""); err == nil {
+		t.Fatal("purge ignored another operation")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "mods", "example.jar")); err != nil {
+		t.Fatal("busy instance was modified:", err)
+	}
+	if err := release(); err != nil {
+		t.Fatal(err)
+	}
+	result, err := RunAtWithBackups(dir, root, Backup, "")
+	if err != nil || len(result.Errors) != 0 {
+		t.Fatalf("backup after unlock: %+v, %v", result, err)
+	}
+	release, err = operationlock.Acquire(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RestoreAtRoot(dir, root, result.BackupPath, KeepBackup, nil); err == nil {
+		t.Fatal("restore ignored another operation")
+	}
+	if err := release(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RestoreAtRoot(dir, root, result.BackupPath, KeepBackup, nil); err != nil {
+		t.Fatal("restore after unlock:", err)
 	}
 }
 
