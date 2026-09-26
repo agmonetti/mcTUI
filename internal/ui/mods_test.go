@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"mcTUI/internal/i18n"
 	"mcTUI/internal/instances"
 	"mcTUI/internal/operationlock"
 )
@@ -135,5 +137,78 @@ func TestLegacyModsRegistryDoesNotBreakInstanceList(t *testing.T) {
 	list, err := instances.List(root)
 	if err != nil || len(list) != 1 || list[0].ID != instances.LegacyID {
 		t.Fatalf("%+v %v", list, err)
+	}
+}
+
+func TestModsViewWidthAndFooterConsistency(t *testing.T) {
+	if err := i18n.Init("es"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = i18n.Init("en") })
+
+	root := t.TempDir()
+	in, err := instances.Create(root, "Instalación existente", "1.21", "Fabric", "0.16.0", 4096)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mMenu := Model{
+		state:         menuScreen,
+		cursorMenu:    2,
+		username:      "aguZzan",
+		versionSelect: "1.21",
+		modloader:     "Fabric",
+		memoryMB:      4096,
+		dataRoot:      root,
+		instance:      in,
+		width:         160,
+		height:        40,
+	}
+
+	mMods := Model{
+		state:         modsScreen,
+		cursorMenu:    2,
+		username:      "aguZzan",
+		versionSelect: "1.21",
+		modloader:     "Fabric",
+		memoryMB:      4096,
+		dataRoot:      root,
+		instance:      in,
+		width:         160,
+		height:        40,
+	}
+
+	// 1. Center width must be identical between menu and mods
+	if mMenu.centerWidth() != mMods.centerWidth() {
+		t.Fatalf("centerWidth changed between menu (%d) and mods (%d)", mMenu.centerWidth(), mMods.centerWidth())
+	}
+
+	// 2. Rendered views must have the exact same width
+	wMenu, _ := lipgloss.Size(mMenu.View())
+	wMods, _ := lipgloss.Size(mMods.View())
+	if wMenu != wMods {
+		t.Fatalf("view width changed between menu (%d) and mods (%d)", wMenu, wMods)
+	}
+
+	// 3. Mods view must contain empty state message when 0 items
+	modsView := mMods.View()
+	if !strings.Contains(modsView, "No hay mods locales instalados") {
+		t.Errorf("mods view missing empty state message:\n%s", modsView)
+	}
+
+	// 4. Footer must be formatted on multiple lines, not a single compact run-on line
+	if !strings.Contains(modsView, "0 archivos · Canal: Estable") {
+		t.Errorf("mods view missing status line:\n%s", modsView)
+	}
+	if !strings.Contains(modsView, "[Espacio] Activar") {
+		t.Errorf("mods view missing local actions:\n%s", modsView)
+	}
+
+	// 5. Global footer controls must show mods navigation, not generic [Enter] Select [q] Quit
+	if strings.Contains(modsView, "[Enter] Elegir  [q] Salir") {
+		t.Errorf("mods view still showing generic default footer:\n%s", modsView)
+	}
+	if !strings.Contains(modsView, "[Espacio] Activar") || !strings.Contains(modsView, "[s] Buscar") {
+		t.Errorf("mods view global footer missing mods controls:\n%s", modsView)
 	}
 }

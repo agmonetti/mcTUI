@@ -48,12 +48,15 @@ func (m Model) View() string {
 	// ── Logo ─────────────────────────────────────────────────────────────────
 	logo := getAsciiArt()
 
+	centerWidth := m.centerWidth()
+	panelsWidth := 30 + centerWidth + 2
+
 	// ── Topbar de tabs ───────────────────────────────────────────────────────
-	topBar := renderTopBar(m.cursorMenu, hasUpdate, m.state, m.width)
+	topBar := renderTopBar(m.cursorMenu, hasUpdate, m.state, panelsWidth)
 
 	// ── Featured Banner ──────────────────────────────────────────────────────
 	cached := filesCached(m.runtimeDir(), m.versionSelect, m.modloader, m.instance.LoaderVersion)
-	banner := renderFeaturedBanner(m.versionSelect, m.modloader, m.memoryMB, cached, m.width)
+	banner := renderFeaturedBanner(m.versionSelect, m.modloader, m.memoryMB, cached, panelsWidth)
 
 	// ── Panel izquierdo: Profile Card + menú ────────────────────────────────
 	profileCard := renderProfileCard(m.username, m.versionSelect, m.modloader)
@@ -178,12 +181,12 @@ func (m Model) View() string {
 	case m.state == confirmScreen:
 		m.renderConfirmScreen(&contentStr)
 	}
-	centerStyle := panelContent
+	centerStyle := panelContent.Copy().Width(centerWidth)
 	if resetActive || instancesActive || modsActive {
 		if m.width > 0 {
-			centerStyle = panelContent.Copy().Width(max(50, m.width-68)).Height(max(16, min(40, m.height-17)))
+			centerStyle = centerStyle.Height(max(16, min(40, m.height-17)))
 		} else {
-			centerStyle = panelContent.Copy().UnsetWidth().UnsetHeight()
+			centerStyle = centerStyle.UnsetWidth().UnsetHeight()
 		}
 	}
 	centerPanel := centerStyle.Render(contentStr.String())
@@ -216,15 +219,15 @@ func (m Model) View() string {
 	topPanels := lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, centerPanel)
 
 	sections := []string{logo}
-	if !resetActive || m.height >= 37 {
+	if (!resetActive && !modsActive) || m.height >= 37 {
 		sections = append(sections, "")
 	}
 	sections = append(sections, topBar)
-	if !resetActive || m.height >= 36 {
+	if (!resetActive && !modsActive) || m.height >= 36 {
 		sections = append(sections, "")
 	}
 	sections = append(sections, banner)
-	if !resetActive || m.height >= 35 {
+	if (!resetActive && !modsActive) || m.height >= 35 {
 		sections = append(sections, "")
 	}
 	sections = append(sections, topPanels, panelFooter.Render(footerContent))
@@ -630,6 +633,22 @@ func (m Model) controlsHint() string {
 		return i18n.T("footer.wait")
 	case resetConfirmScreen, resetReplaceConfirmScreen, resetRestoreConfirmScreen:
 		return " " + i18n.T("common.confirm") + "  " + i18n.T("common.cancel")
+	case modsScreen:
+		return i18n.T("footer.mods")
+	case modsPickerScreen:
+		return i18n.T("mods.picker_hint")
+	case modsConfirmScreen:
+		return " " + i18n.T("mods.delete_hint") + "  " + i18n.T("common.cancel")
+	case modsRollbackScreen:
+		return " " + i18n.T("mods.rollback_hint")
+	case modrinthSearchScreen:
+		return i18n.T("modrinth.search_hint")
+	case modrinthDetailScreen:
+		return i18n.T("modrinth.detail_hint")
+	case modrinthReviewScreen:
+		return i18n.T("modrinth.review_hint")
+	case modrinthUpdatesScreen:
+		return i18n.T("modrinth.updates_hint")
 	default:
 		return i18n.T("footer.default")
 	}

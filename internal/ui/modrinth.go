@@ -509,30 +509,33 @@ func (m Model) renderCatalog() string {
 	switch m.state {
 	case modrinthSearchScreen:
 		b.WriteString(i18n.T("modrinth.search_label", modText(m.catalogQuery)) + "\n")
-		lines := make([]string, 0, len(m.catalogResults.Hits))
-		useTable := m.width >= 75
+		textWidth := m.catalogWidth()
+		useTable := m.width >= 75 && textWidth >= 55
+		descWidth := max(10, textWidth-54)
 		if useTable && len(m.catalogResults.Hits) > 0 {
-			header := "  " + padCol(i18n.T("modrinth.col_name"), 22) + "  " + padCol(i18n.T("modrinth.col_author"), 14) + "  " + padCol(i18n.T("modrinth.col_downloads"), 10) + "  " + i18n.T("modrinth.col_description")
-			lines = append(lines, lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(header))
-			divWidth := min(max(40, m.width-18), 76)
-			lines = append(lines, lipgloss.NewStyle().Foreground(colorDimGray).Render("  "+strings.Repeat("─", divWidth)))
+			header := "  " + padCol(i18n.T("modrinth.col_name"), 22) + "  " + padCol(i18n.T("modrinth.col_author"), 14) + "  " + padCol(i18n.T("modrinth.col_downloads"), 10) + "  " + padCol(i18n.T("modrinth.col_description"), descWidth)
+			b.WriteString(lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(header) + "\n")
+			divWidth := max(40, textWidth-2)
+			b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("  "+strings.Repeat("─", divWidth)) + "\n")
 		}
+		lines := make([]string, 0, len(m.catalogResults.Hits))
 		for i, hit := range m.catalogResults.Hits {
 			prefix := "  "
 			if i == m.catalogCursor {
 				prefix = "► "
 			}
 			if useTable {
-				lines = append(lines, prefix+padCol(modText(hit.Title), 22)+"  "+padCol(modText(hit.Author), 14)+"  "+padCol(formatDownloads(hit.Downloads), 10)+"  "+modText(hit.Description))
+				desc := padCol(modText(hit.Description), descWidth)
+				lines = append(lines, prefix+padCol(modText(hit.Title), 22)+"  "+padCol(modText(hit.Author), 14)+"  "+padCol(formatDownloads(hit.Downloads), 10)+"  "+desc)
 			} else {
 				lines = append(lines, prefix+modText(hit.Title)+" · "+modText(hit.Author)+" · "+formatDownloads(hit.Downloads)+" — "+modText(hit.Description))
 			}
 		}
-		offsetCursor := m.catalogCursor
+		reserve := 7
 		if useTable && len(m.catalogResults.Hits) > 0 {
-			offsetCursor += 2
+			reserve = 9
 		}
-		b.WriteString(m.catalogPage(lines, offsetCursor, 7))
+		b.WriteString(m.catalogPage(lines, m.catalogCursor, reserve))
 		b.WriteString(i18n.T("modrinth.search_results_count", len(m.catalogResults.Hits), m.catalogResults.Total) + "\n")
 		b.WriteString(i18n.T("modrinth.search_hint"))
 	case modrinthDetailScreen:
@@ -758,12 +761,10 @@ func (m Model) catalogUpdateName(id string) string {
 
 // catalogPage leaves the selected row visible and the confirmation footer accessible.
 func (m Model) catalogPage(lines []string, cursor, reserve int) string {
-	visible := max(1, max(16, min(40, m.height-17))-reserve)
+	centerHeight := max(16, min(24, m.height-18))
+	visible := max(1, centerHeight-reserve)
 	start := min(max(0, cursor-visible+1), max(0, len(lines)-visible))
-	width := m.width - 12
-	if width < 24 {
-		width = 60
-	}
+	width := m.catalogWidth()
 	var b strings.Builder
 	if start > 0 {
 		b.WriteString("↑\n")

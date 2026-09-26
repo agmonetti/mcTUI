@@ -144,14 +144,15 @@ func renderFeaturedBanner(version, modloader string, memoryMB int, cached bool, 
 
 	bannerWidth := 78
 	if width > 0 {
-		bannerWidth = max(1, min(bannerWidth, width-6))
+		bannerWidth = max(70, width-2)
 	}
+	innerWidth := max(1, bannerWidth-4)
 	return lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(colorBorderHi).
 		Width(bannerWidth).
 		Padding(0, 2).
-		Render(lipgloss.NewStyle().MaxWidth(bannerWidth).Render(content))
+		Render(lipgloss.NewStyle().MaxWidth(innerWidth).Render(content))
 }
 
 // renderTopBar renders the CS:GO-style navigation tab bar.
@@ -210,7 +211,7 @@ func renderTopBar(cursorMenu int, hasUpdate bool, state screenState, width int) 
 	bar := lipgloss.JoinHorizontal(lipgloss.Center, parts...)
 	barWidth := 82
 	if width > 0 {
-		barWidth = min(barWidth, width)
+		barWidth = max(82, width)
 	}
 	divider := lipgloss.NewStyle().
 		Foreground(colorBorder).

@@ -244,7 +244,7 @@ func (m Model) renderMods() string {
 	var b strings.Builder
 
 	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("mods.title"))
-	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", max(46, m.centerWidth()-4)))
 	b.WriteString(title + "\n" + div + "\n\n")
 
 	b.WriteString(labelStyle.Render(i18n.T("common.instance_label")) + "  " +
@@ -306,6 +306,9 @@ func (m Model) renderMods() string {
 		if m.modErr != nil {
 			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+modText(displayError(m.modErr))) + "\n\n")
 		}
+		if len(m.modItems) == 0 {
+			b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("  "+i18n.T("mods.empty")) + "\n\n")
+		}
 		count := max(1, m.height-14)
 		start := max(0, m.modCursor-count+1)
 		for i := start; i < min(len(m.modItems), start+count); i++ {
@@ -337,15 +340,18 @@ func (m Model) renderMods() string {
 			if len(flags) > 0 {
 				row += "  " + strings.Join(flags, " / ")
 			}
+			rowWidth := max(44, m.centerWidth()-6)
 			if i == m.modCursor {
-				b.WriteString(cursorStyle.Render("► ") + lipgloss.NewStyle().MaxWidth(44).Render(row) + "\n")
+				b.WriteString(cursorStyle.Render("► ") + lipgloss.NewStyle().MaxWidth(rowWidth).Render(row) + "\n")
 			} else {
-				b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("  ") + lipgloss.NewStyle().MaxWidth(44).Render(row) + "\n")
+				b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("  ") + lipgloss.NewStyle().MaxWidth(rowWidth).Render(row) + "\n")
 			}
 		}
-		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render(
-			i18n.T("mods.footer", len(m.modItems), i18n.T("modrinth.channel."+m.catalogChannel()))))
+		b.WriteString("\n")
+		footerRaw := i18n.T("mods.footer", len(m.modItems), i18n.T("modrinth.channel."+m.catalogChannel()))
+		for _, fl := range strings.Split(footerRaw, "\n") {
+			b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("  "+fl) + "\n")
+		}
 	}
-
 	return b.String()
 }

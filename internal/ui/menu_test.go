@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"mcTUI/internal/config"
 	"mcTUI/internal/i18n"
 	"mcTUI/internal/instances"
@@ -367,4 +368,56 @@ func TestConfigSubmenuActions(t *testing.T) {
 	cfg := config.Load()
 	cfg.Language = origLang
 	config.Save(cfg)
+}
+
+func TestInitialViewLayoutWidth(t *testing.T) {
+	if err := i18n.Init("es"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = i18n.Init("en") })
+
+	root := t.TempDir()
+	in, err := instances.Create(root, "Instalación existente", "1.21", "Fabric", "0.16.0", 4096)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	m := Model{
+		state:         menuScreen,
+		cursorMenu:    0,
+		username:      "aguZzan",
+		versionSelect: "1.21",
+		modloader:     "Fabric",
+		memoryMB:      4096,
+		dataRoot:      root,
+		instance:      in,
+		width:         160,
+		height:        40,
+	}
+
+	view := m.View()
+
+	// 1. Banner must have full "FALTAN ARCHIVOS" on a single line and not break into "ARCHI"
+	if strings.Contains(view, "\nARCHI") || strings.Contains(view, "\n ARCHI") {
+		t.Errorf("banner broke ARCHIVOS into newline ARCHI:\n%s", view)
+	}
+	if !strings.Contains(view, "FALTAN ARCHIVOS") {
+		t.Errorf("banner missing FALTAN ARCHIVOS:\n%s", view)
+	}
+
+	// 2. Center panel must have "Faltan archivos – podría necesitarse conexión" without breaking "conexión" onto a separate line
+	if strings.Contains(view, "\nconexión") || strings.Contains(view, "\n conexión") {
+		t.Errorf("center panel broke conexión into newline:\n%s", view)
+	}
+
+	// 3. View should fit within the terminal boundaries
+	w, h := lipgloss.Size(view)
+	if w > m.width || h > m.height {
+		t.Errorf("view size %dx%d exceeds terminal size %dx%d", w, h, m.width, m.height)
+	}
+
+	// 4. On wide terminal (160), total dashboard width must be spacious (> 100 cols)
+	if w < 100 {
+		t.Errorf("expected spacious layout on wide terminal (w >= 100), got width %d", w)
+	}
 }

@@ -360,3 +360,21 @@ func (m Model) launchConfig() (LaunchConfig, error) {
 	}
 	return LaunchConfig{GameDir: gameDir, RuntimeDir: runtimeDir, Username: m.username, Version: m.versionSelect, Modloader: m.modloader, LoaderVersion: m.instance.LoaderVersion, MemoryMB: m.memoryMB, JavaPath: m.instance.JavaPath}, nil
 }
+
+func (m Model) centerWidth() int {
+	if m.width > 0 {
+		return min(80, max(46, m.width-34))
+	}
+	return 76
+}
+
+func (m Model) catalogWidth() int {
+	w := m.centerWidth() - 2
+	if w < 78 && m.width >= 100 {
+		w = 78
+	}
+	if w < 60 {
+		w = 60
+	}
+	return w
+}

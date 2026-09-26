@@ -17,6 +17,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"mcTUI/internal/instances"
 	"mcTUI/internal/modrinth"
 	"mcTUI/internal/mods"
@@ -451,5 +452,100 @@ func TestCatalogTableColumnsRendering(t *testing.T) {
 	viewCompact := m.renderCatalog()
 	if !strings.Contains(viewCompact, "Sodium · jellysquid3 · 42.1M — Modern rendering") {
 		t.Errorf("compact search view missing single-line format:\n%s", viewCompact)
+	}
+}
+
+func TestCatalogTableLongDescriptionNoWrap(t *testing.T) {
+	m := Model{
+		state: modrinthSearchScreen,
+		instance: instances.Instance{
+			Name:             "Instalación existente",
+			Loader:           "Fabric",
+			MinecraftVersion: "1.21.1",
+		},
+		catalogResults: modrinth.SearchResponse{
+			Hits: []modrinth.SearchResult{
+				{
+					Title:       "Fabric API",
+					Author:      "modmuss50",
+					Downloads:   261300000,
+					Description: "Lightweight and modular API providing common hooks and intercompatibility measures utilizing Fabric loader and its various subsystems",
+				},
+				{
+					Title:       "Sodium",
+					Author:      "jellysquid3",
+					Downloads:   231000000,
+					Description: "A high-performance rendering engine replacement for Minecraft, which greatly improves frame rates and stuttering",
+				},
+			},
+			Total: 2,
+		},
+		width:  160,
+		height: 40,
+	}
+
+	view := m.View()
+
+	// 1. Logo, topBar, and banner must NOT be cut off at the top
+	for _, headerPart := range []string{"mcTUI  LAUNCHER", "PLAY", "MODS", "CURRENT SETUP"} {
+		if !strings.Contains(view, headerPart) {
+			t.Errorf("header element %q was cut off from the top of the view in catalog search:\n%s", headerPart, view)
+		}
+	}
+
+	// 2. Mod descriptions must not wrap onto column 0 of a newline
+	if strings.Contains(view, "\nproviding common hooks") || strings.Contains(view, "\nengine replacement") {
+		t.Errorf("mod description wrapped onto newline in table view:\n%s", view)
+	}
+
+	// 3. View fits within terminal size
+	w, h := lipgloss.Size(view)
+	if w > m.width || h > m.height {
+		t.Errorf("catalog search view %dx%d exceeds terminal size %dx%d", w, h, m.width, m.height)
+	}
+}
+
+func TestCatalogHeaderRemainsPinnedOnScroll(t *testing.T) {
+	hits := make([]modrinth.SearchResult, 20)
+	for i := range 20 {
+		hits[i] = modrinth.SearchResult{
+			Title:       fmt.Sprintf("Mod-%02d", i),
+			Author:      fmt.Sprintf("Author-%d", i),
+			Downloads:   int64(1000 * (20 - i)),
+			Description: fmt.Sprintf("Description for mod %d", i),
+		}
+	}
+	m := Model{
+		state: modrinthSearchScreen,
+		instance: instances.Instance{
+			Name:             "Instalación existente",
+			Loader:           "Fabric",
+			MinecraftVersion: "1.21.1",
+		},
+		catalogResults: modrinth.SearchResponse{
+			Hits:  hits,
+			Total: 20,
+		},
+		width:  160,
+		height: 40,
+	}
+
+	// Test with cursor at index 0, 9, 10, 15, 19
+	for _, cursor := range []int{0, 9, 10, 15, 19} {
+		m.catalogCursor = cursor
+		view := m.View()
+
+		// The column header and divider line must ALWAYS be present, regardless of scroll position!
+		for _, col := range []string{"Name", "Author", "Downloads", "Short description"} {
+			if !strings.Contains(view, col) {
+				t.Fatalf("cursor %d: table header column %q disappeared from view:\n%s", cursor, col, view)
+			}
+		}
+
+		// The selected item must be visible
+		expectedMod := fmt.Sprintf("► Mod-%02d", cursor)
+		if !strings.Contains(view, expectedMod) {
+			t.Fatalf("cursor %d: selected item %q not in view:\n%s", cursor, expectedMod, view)
+		}
 	}
 }
