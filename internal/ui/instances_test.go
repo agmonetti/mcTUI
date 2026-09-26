@@ -110,7 +110,7 @@ func TestCopyNameAcceptsLetterC(t *testing.T) {
 }
 
 func TestInstanceCopyViewEscapesTerminalControlsFromPaths(t *testing.T) {
-	m := Model{state: instanceCopySelectScreen, copySource: "/tmp/legacy\x1b[31m", dataRoot: "/tmp/data", creationVersion: "1.21.1", copyItems: []instances.CopyItem{{Name: "mods", Exists: true}}}
+	m := Model{state: instanceCopySelectScreen, copySourceID: instances.LegacyID, copySource: "/tmp/legacy\x1b[31m", dataRoot: "/tmp/data", creationVersion: "1.21.1", copyItems: []instances.CopyItem{{Name: "mods", Exists: true}}}
 	if view := m.View(); strings.Contains(view, "\x1b") || !strings.Contains(view, "COPY FROM EXISTING INSTALLATION") {
 		t.Fatalf("copy view did not sanitize terminal controls: %q", view)
 	}
@@ -198,6 +198,20 @@ func TestCopyLegacyFlowCreatesAndSelectsIndependentInstance(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join(gameDir, "mods", "example.jar"))
 	if err != nil || string(data) != "mod-data" {
 		t.Fatalf("destination shares source data: %q, %v", data, err)
+	}
+}
+
+func TestCopyManagedInstanceOpensNameWithoutVersionPicker(t *testing.T) {
+	root := t.TempDir()
+	in, err := instances.Create(root, "Original", "1.21.1", "Vanilla", "", 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := Model{state: instancesScreen, dataRoot: root, instanceList: []instances.Instance{in}, input: textinput.New()}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	m = updated.(Model)
+	if m.state != instanceNameScreen || m.copySourceID != in.ID || m.creationVersion != in.MinecraftVersion || m.input.Value() != "" {
+		t.Fatalf("managed copy setup = state %v, source %q, version %q, name %q", m.state, m.copySourceID, m.creationVersion, m.input.Value())
 	}
 }
 

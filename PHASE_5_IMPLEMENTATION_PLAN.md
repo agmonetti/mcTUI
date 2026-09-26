@@ -257,8 +257,8 @@ Depende de: estado actual de fases 1–4.
 - [x] **A01** Resolver decisiones de rutas/esquema y documentarlas en la sección 10 (diseño; implementación pendiente).
 - [ ] **A02** Separar gameDir y runtime; revisar todos los callers de `MinecraftDir()` (Play, mundos y Reset/restore usan rutas de instancia; falta validar ejecución real).
 - [ ] **A03** Persistir/listar/crear/seleccionar/renombrar instancias con ID estable (API y TUI completas para listar, crear Vanilla, cambiar activa y renombrar; falta validar el corte en ejecución).
-- [ ] **A04** Instancia heredada y copia selectiva no destructiva (copia manual de `saves/` exitosa y escritura de `c` confirmada; falta cerrar verificación de origen intacto e independencia del destino).
-- [ ] **A05** Duplicación independiente; política explícita de inclusión de mundos.
+- [x] **A04** Instancia heredada y copia selectiva no destructiva (copia manual de `saves/`; usuario confirma origen intacto e independencia del destino; ver §10.12).
+- [x] **A05** Duplicación independiente reutilizando la copia selectiva de A04; `saves/` solo se incluye si se selecciona explícitamente. Validación manual reportada por el usuario (§10.13).
 - [ ] **A06** Ajustes por instancia; versión Minecraft y loader inmutables tras crear managed; Java y memoria validados (selector Java automático/override persistido y preflight unificado). La TUI permite elegir versión al crear Vanilla; creación managed Fabric queda pendiente de soporte de loader exacto.
 - [ ] **A07** Preparación común con errores; corregir éxito falso y fallback silencioso (UI y lanzador reutilizan `launcher.Prepare`; índice/natives en §10.4 y contexto/integridad/cancelación en §10.5; faltan errores tipados y casos de arquitectura/extracción señalados allí).
 - [ ] **A08** Lanzamiento integrado con resultado/proceso/log en TUI; fijar `cmd.Dir` (supervisión en TUI y lock durante `Wait` implementados; falta validación de juego real y cierre forzado).
@@ -345,6 +345,7 @@ Usar tests Go con directorios temporales, `httptest` y procesos simulados para l
 | --- | --- | --- |
 | Aislamiento | Dos instancias, misma versión/loader | Mods/config/saves independientes |
 | Migración | Copia de instalación existente, error a mitad | Origen intacto; destino parcial identificable |
+| Migración manual | Copiar datos seleccionados desde legacy | Usuario confirma origen intacto y copia independiente (§10.12) |
 | Runtime | Dos loaders exactos para un Minecraft | Cachés y arranques no se confunden |
 | Loader | Fabric no resoluble | Error, nunca Vanilla implícito |
 | Descargas | 404, HTML, timeout, truncado, hash incorrecto | Error visible; ningún archivo activo inválido |
@@ -368,6 +369,8 @@ La entrada real a Minecraft por versión/loader se valida manualmente por el usu
 Usar un build de este árbol de trabajo (registrar `git rev-parse HEAD` y si hay cambios locales). En la TUI, crear dos instancias Vanilla de la misma versión con `i` → `n`; jugar A hasta el menú, salir normalmente y comprobar que `mctui_latest.log` quedó en el `minecraft/` de A. Repetir con B y confirmar que `mods/`, `config/` y `saves/` de A no aparecen en B. En A, probar backup y restauración desde Reset; cambiar a B y comprobar que sus datos e historial no cambiaron. Volver a la instalación heredada, comprobar que conserva su ruta e historial y jugarla sin alterar A/B. Durante una partida, intentar Reset desde otra TUI sobre esa misma instancia: debe responder «instance busy» sin mutaciones. **No** usar cierre forzado como prueba segura: si Java sobrevive a mcTUI, el lock puede liberarse; cerrar Minecraft antes de volver a operar.
 
 Anotar en la tabla siguiente OS/arquitectura, build, versión, loader, Java, preparación, llegada al menú, salida y log. Hacerlo en cada plataforma que se anuncie compatible; los binarios compilados para otro OS no prueban ejecución. No marcar A02/A03/A06/A08/A10/A11 como cerradas solo por tests o compilación.
+
+**Validaciones manuales adicionales reportadas por el usuario:** la copia selectiva dejó intacta la instalación legacy y produjo un destino independiente; Reset/restore de una instancia no afectó otra; la instalación legacy y su historial siguieron accesibles; y una segunda TUI recibió el bloqueo al intentar Reset mientras el juego estaba activo, sin mutaciones. Fecha, build y detalles de versión no fueron registrados. Estas pruebas se realizaron en el entorno disponible; la validación de otros sistemas operativos queda diferida hasta que el usuario tenga acceso a ellos, y no bloquea el trabajo restante de 5A en el entorno actual.
 
 #### Registro de intentos de ejecución real
 
@@ -484,13 +487,13 @@ Las rutas managed rechazan `minecraft/` o `runtime/` si son symlinks para evitar
 
 Las operaciones de Reset exponen variantes con `gameDir` explícito y la TUI fija esa raíz al confirmar el worker, sin resolverla otra vez durante la mutación. Se conservan las entradas heredadas y su historial existente. Un test cambia la selección a B tras confirmar backup/restauración de A y verifica que B no cambia.
 
-**Continuación:** Reset gestionado usa `datos-mctui/backups/<id>`; no ofrece selector de destino externo para evitar mezclar historiales de distintas instancias. El historial legacy y sus destinos externos previos permanecen intactos. La UI muestra la identidad y ruta capturadas al confirmar; tests con A, B y legacy prueban backup, rechazo de restaurar el backup de A en B y recuperación sin contaminación cruzada. Reset/restore y Play comparten lock entre procesos mientras mcTUI supervisa Java (límite de cierre forzado en §10.8). Pasan `go test ./...`, `go test -race ./...`, `go vet ./...` y `git diff --check`. **A10 permanece abierta** por validación manual en plataformas reales.
+**Continuación:** Reset gestionado usa `datos-mctui/backups/<id>`; no ofrece selector de destino externo para evitar mezclar historiales de distintas instancias. El historial legacy y sus destinos externos previos permanecen intactos. La UI muestra la identidad y ruta capturadas al confirmar; tests con A, B y legacy prueban backup, rechazo de restaurar el backup de A en B y recuperación sin contaminación cruzada. Reset/restore y Play comparten lock entre procesos mientras mcTUI supervisa Java (límite de cierre forzado en §10.8). Pasan `go test ./...`, `go test -race ./...`, `go vet ./...` y `git diff --check`. **Validación manual reportada por el usuario:** Reset/restore de una instancia no afectó otra y la instalación legacy conservó acceso a sus datos e historial. Fecha, build y detalles de versión no fueron registrados. La cobertura de otros sistemas operativos queda diferida (§9); evaluar el cierre total de A10 según las plataformas que se declaren compatibles.
 
 ### 10.8. A11 parcial — exclusión entre procesos para Reset/restore
 
 `RunAtWithBackups` y `RestoreAtRoot` mantienen un bloqueo no bloqueante del sistema operativo sobre un archivo estable del gameDir durante toda la mutación. No se elimina el archivo de bloqueo al liberar: un segundo proceso podría bloquear otro inode si se borrara. No depende de PID ni requiere recuperar locks obsoletos tras cerrar el proceso. Una TUI competidora recibe un error «instance busy» sin tocar `mods/` ni `config/`. Las confirmaciones de borrado y reemplazo siguen siendo explícitas. Tests prueban exclusión entre dos procesos y rechazo de purge/restore mientras se mantiene el bloqueo; compilación cruzada Windows/macOS, `go test ./...`, `go test -race ./...`, `go vet ./...` y `git diff --check` pasan.
 
-**No declarar A11 cerrada:** Play supervisado ahora mantiene el mismo lock hasta `Wait`, pero una terminación forzada de mcTUI puede soltarlo mientras Java continúa. Operaciones externas a mcTUI siguen siendo no verificables.
+**Validación manual reportada por el usuario:** una segunda TUI recibió el bloqueo al intentar Reset sobre la instancia con el juego activo, sin mutaciones. Fecha, build y detalles de versión no fueron registrados. **No declarar A11 cerrada:** una terminación forzada de mcTUI puede soltar el lock mientras Java continúa; operaciones externas a mcTUI siguen siendo no verificables.
 
 ### 10.9. A08 — ciclo de juego supervisado (DEC-03 resuelta)
 
@@ -514,7 +517,11 @@ El selector ofrece copiar desde la instalación heredada sin mover sus datos. El
 
 El motor rechaza enlaces y archivos especiales en el contenido seleccionado, adquiere el lock compartido sobre el gameDir heredado y copia con `os.Root`/`os.CopyFS`. Prepara metadata y archivos en `.mctui-copy-*` bajo la raíz de datos, fuera de `instances/`; solo publica la instancia mediante rename después de completar todo. Un error conserva el temporal y muestra su ruta; eliminarlo requiere confirmación explícita. El lock compartido crea/reutiliza `.mctui-operation.lock` en el origen, igual que Play/Reset; los datos seleccionados no se mueven ni modifican.
 
-Tests cubren selección, copia independiente, rechazo de enlaces, no publicación ante preflight fallido, limpieza acotada del temporal y escritura de la letra `c` en el nombre. Validación manual reportada: se copió `saves/` a una instancia Vanilla 1.21.10; inicialmente el atajo `c` consumía la primera letra (`copia` quedaba como `opia`), se corrigió y el usuario confirmó manualmente que `c` ya funciona. **A04 permanece abierta** hasta confirmar que legacy sigue intacta y la nueva instancia es independiente. La plataforma y las consecuencias de cambios concurrentes hechos por launchers externos requieren validación manual; el lock solo coordina mcTUI.
+Tests cubren selección, copia independiente, rechazo de enlaces, no publicación ante preflight fallido, limpieza acotada del temporal y escritura de la letra `c` en el nombre. Validación manual reportada: se copió `saves/` a una instancia Vanilla 1.21.10; inicialmente el atajo `c` consumía la primera letra (`copia` quedaba como `opia`), se corrigió y el usuario confirmó manualmente que `c` ya funciona. **Validación manual reportada por el usuario:** legacy permaneció intacta y la copia resultó independiente; junto con la copia de `saves/` y la prueba de la tecla `c`, esto cierra la validación manual de A04 en el entorno probado. Fecha, build y detalles de versión no fueron registrados. La cobertura de otros sistemas operativos queda diferida (§9); launchers externos no coordinan con el lock de mcTUI.
+
+### 10.13. A05 — duplicación selectiva de instancias managed
+
+`c` sobre una instancia managed crea otra con ID nuevo y conserva versión Minecraft, loader exacto, Java y memoria del origen. El usuario elige el nombre y cuáles de `mods/`, `config/`, `saves/`, `resourcepacks/`, `shaderpacks/` y `options.txt` copiar: **los mundos (`saves/`) no se incluyen salvo selección explícita**. No se copian runtime, logs ni historial de Reset; los archivos son copias independientes. Se reutilizan lock, preflight, staging y confirmación de borrado parcial de A04. La duplicación no cambia la instancia origen y selecciona la nueva tras publicar. Tests de copia de metadata, omisión de mundos e independencia añadidos. El test puntual `TestCopyInstancePreservesSettingsAndCopiesOnlySelectedData` pasó tras corregir la preparación de su directorio temporal; la suite completa no se ejecutó. **Validación manual reportada por el usuario:** copia de `saves/` correcta y checklist de A05 aprobado: copia desde una instancia managed sin cambiar versión/loader, nueva identidad y selección, omisión de `saves/` cuando no se elige, ajustes heredados, historial de Reset no copiado e independencia de archivos en ambas direcciones. Fecha, build, OS/arquitectura y versión exacta de estas pruebas no registrados; otros sistemas operativos se validarán más adelante (§9). A05 queda cerrada en el entorno probado.
 
 ## 11. Trazabilidad y seguimiento
 
@@ -538,7 +545,7 @@ Al cerrar tareas, sustituir «pendiente» por commit y evidencia. Documentar dif
 
 | Hito | Estado | Commit(s) | Evidencia / bloqueos |
 | --- | --- | --- | --- |
-| 5A | En curso (A01; A02/A03/A07/A08/A10/A11 parciales; A04 parcial) | `8e3c89d`, `c834078`, `e3079af`, `7c12b8a`, `c57fbe2`; cortes locales sin commit | §9 registra validación manual del corte según reporte del usuario. A04: copia de `saves/` exitosa y `c` confirmado; falta confirmar origen intacto e independencia (§10.12). A05/A12 y otros cierres parciales pendientes; DEC-05 resuelta |
+| 5A | En curso (A01; A02/A03/A07/A08/A10/A11 parciales; A04/A05 validadas) | `8e3c89d`, `c834078`, `e3079af`, `7c12b8a`, `c57fbe2`, `ed03252` | §9 registra validaciones manuales reportadas por el usuario: A04 (origen intacto/copia independiente), Reset/restore aislado entre instancias y legacy, y bloqueo de Reset desde segunda TUI durante el juego. A05 validada según reporte del usuario (§10.13); A12 y otros cierres parciales pendientes; validación en otros OS diferida; DEC-05 resuelta |
 | 5B | Pendiente | — | Requiere 5A; DEC-04 |
 | 5C | Pendiente | — | Requiere 5A/5B; DEC-06/10 |
 | 5D | Pendiente | — | Requiere 5A–5C; DEC-07/10 |

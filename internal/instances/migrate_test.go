@@ -76,6 +76,53 @@ func TestCopyFromLegacyCopiesSelectedItemsWithoutChangingSource(t *testing.T) {
 	}
 }
 
+func TestCopyInstancePreservesSettingsAndCopiesOnlySelectedData(t *testing.T) {
+	root := t.TempDir()
+	source, err := Create(root, "Original", "1.21.1", "Fabric", "0.16.0", 4096)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source.JavaPath = filepath.Join(root, "java")
+	if err := UpdateSettings(root, source); err != nil {
+		t.Fatal(err)
+	}
+	sourceDir, err := GameDir(root, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(sourceDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{"mods", "saves"} {
+		if err := os.Mkdir(filepath.Join(sourceDir, dir), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(sourceDir, dir, "data"), []byte(dir), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	copy, err := CopyInstance(root, source.ID, "Independent", []string{"mods"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if copy.Instance.ID == source.ID || copy.Instance.Name != "Independent" || copy.Instance.MinecraftVersion != source.MinecraftVersion || copy.Instance.Loader != source.Loader || copy.Instance.LoaderVersion != source.LoaderVersion || copy.Instance.JavaPath != source.JavaPath || copy.Instance.MemoryMB != source.MemoryMB {
+		t.Fatalf("duplicated settings = %+v", copy.Instance)
+	}
+	destDir, err := GameDir(root, copy.Instance)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(destDir, "saves")); !os.IsNotExist(err) {
+		t.Fatalf("worlds copied without selection: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(destDir, "mods", "data"), []byte("changed"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(filepath.Join(sourceDir, "mods", "data")); err != nil || string(data) != "mods" {
+		t.Fatalf("source data changed with copy: %q, %v", data, err)
+	}
+}
+
 func TestCopySourceRejectsLinksAndDoesNotPublish(t *testing.T) {
 	root, source := t.TempDir(), t.TempDir()
 	outside := t.TempDir()

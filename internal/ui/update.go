@@ -542,18 +542,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "c", "C":
 			if m.state == instancesScreen {
-				if m.instanceCursor >= 0 && m.instanceCursor < len(m.instanceList) && m.instanceList[m.instanceCursor].ID == instances.LegacyID {
-					legacy, err := instances.Read(m.dataRoot, instances.LegacyID)
-					if err == nil {
-						m.copySource, err = instances.GameDir(m.dataRoot, legacy)
-					}
-					if err != nil {
-						m.instanceErr = err
-						return m, nil
-					}
-					m.instanceErr = nil
-					m.creatingInstance = false
-					m.copyingInstance = true
+				if m.instanceCursor < 0 || m.instanceCursor >= len(m.instanceList) {
+					m.instanceErr = fmt.Errorf("select an instance before copying")
+					return m, nil
+				}
+				in, err := instances.Read(m.dataRoot, m.instanceList[m.instanceCursor].ID)
+				if err == nil {
+					m.copySource, err = instances.GameDir(m.dataRoot, in)
+				}
+				if err != nil {
+					m.instanceErr = err
+					return m, nil
+				}
+				m.copySourceID = in.ID
+				m.copyLoader = in.Loader
+				m.instanceErr = nil
+				m.creatingInstance = false
+				m.copyingInstance = true
+				m.input.SetValue("")
+				m.input.CharLimit = 80
+				m.input.Placeholder = "Instance name"
+				m.input.Focus()
+				if in.ID == instances.LegacyID {
+					m.copyLoader = "Vanilla"
 					m.creationVersion = ""
 					m.state = versionsScreen
 					for i, version := range m.versions {
@@ -563,7 +574,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 				} else {
-					m.instanceErr = fmt.Errorf("select the existing installation before copying")
+					m.creationVersion = in.MinecraftVersion
+					m.state = instanceNameScreen
 				}
 				return m, nil
 			}
@@ -657,12 +669,20 @@ func (m Model) startInstanceCopy() (tea.Model, tea.Cmd) {
 			selected = append(selected, item.Name)
 		}
 	}
-	root, source, name, version, memory := m.dataRoot, m.copySource, m.copyName, m.creationVersion, m.memoryMB
+	root, source, sourceID, name, version, memory := m.dataRoot, m.copySource, m.copySourceID, m.copyName, m.creationVersion, m.memoryMB
 	m.copyErr = nil
+	m.copyStage = ""
+	m.copyResult = instances.CopyResult{}
 	m.copyCleaning = false
 	m.state = instanceCopyRunningScreen
 	return m, func() tea.Msg {
-		result, err := instances.CopyFromLegacy(root, source, name, version, selected, memory)
+		var result instances.CopyResult
+		var err error
+		if sourceID == instances.LegacyID {
+			result, err = instances.CopyFromLegacy(root, source, name, version, selected, memory)
+		} else {
+			result, err = instances.CopyInstance(root, sourceID, name, selected)
+		}
 		return InstanceCopyDoneMsg{Result: result, Err: err}
 	}
 }

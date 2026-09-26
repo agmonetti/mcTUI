@@ -886,21 +886,25 @@ func (m Model) renderInstancesScreen() string {
 			fmt.Fprintf(&b, "%s%s — %s %s%s\n", marker, in.Name, in.MinecraftVersion, loader, selected)
 		}
 	}
-	b.WriteString("\n[↑/↓] Move  [Enter] Select  [n] New Vanilla  [c] Copy legacy  [r] Rename  [Esc] Back\n")
+	b.WriteString("\n[↑/↓] Move  [Enter] Select  [n] New Vanilla  [c] Copy selected  [r] Rename  [Esc] Back\n")
 	b.WriteString("\nNew instances use the shared runtime and private game data.")
 	return lipgloss.NewStyle().Padding(1, 2).Render(b.String())
 }
 
 func (m Model) renderInstanceCopyScreen() string {
 	var b strings.Builder
+	title := "COPY FROM EXISTING INSTALLATION"
+	if m.copySourceID != instances.LegacyID {
+		title = "DUPLICATE INSTANCE"
+	}
 	footer := "[Esc] Back"
 	switch m.state {
 	case instanceCopyInspectScreen:
-		b.WriteString("INSPECTING EXISTING INSTALLATION\n\nCalculating selected-folder sizes and checking file types...\n\nPlease wait.")
+		b.WriteString(title + "\n\nCalculating selected-folder sizes and checking file types...\n\nPlease wait.")
 		footer = "Inspection in progress..."
 	case instanceCopySelectScreen:
-		b.WriteString("COPY FROM EXISTING INSTALLATION\n────────────────────────────────────────\n\n")
-		fmt.Fprintf(&b, "Source: %s\nDestination: %s/instances/<new-id>/minecraft\nMinecraft: %s (Vanilla)\n\nChoose items to copy:\n", m.copySource, m.dataRoot, m.creationVersion)
+		b.WriteString(title + "\n────────────────────────────────────────\n\n")
+		fmt.Fprintf(&b, "Source: %s\nDestination: %s/instances/<new-id>/minecraft\nMinecraft: %s (%s)\n\nChoose items to copy (including saves/ only if wanted):\n", m.copySource, m.dataRoot, m.creationVersion, m.copyLoader)
 		selected := false
 		for i, item := range m.copyItems {
 			selected = selected || m.copySelected[item.Name]
@@ -927,7 +931,7 @@ func (m Model) renderInstanceCopyScreen() string {
 		footer = "[↑/↓] Navigate  [Space] Toggle  [Enter] Review  [Esc] Cancel"
 	case instanceCopyConfirmScreen:
 		b.WriteString("CONFIRM SELECTIVE COPY\n────────────────────────────────────────\n\n")
-		fmt.Fprintf(&b, "Source: %s\nDestination: %s/instances/<new-id>/minecraft\nName: %s\nMinecraft: %s (Vanilla)\n\nSelected content:\n", m.copySource, m.dataRoot, m.copyName, m.creationVersion)
+		fmt.Fprintf(&b, "Source: %s\nDestination: %s/instances/<new-id>/minecraft\nName: %s\nMinecraft: %s (%s)\n\nSelected content:\n", m.copySource, m.dataRoot, m.copyName, m.creationVersion, m.copyLoader)
 		var total int64
 		for _, item := range m.copyItems {
 			if m.copySelected[item.Name] {
@@ -935,14 +939,18 @@ func (m Model) renderInstanceCopyScreen() string {
 				total += item.Bytes
 			}
 		}
-		fmt.Fprintf(&b, "\nEstimated total: %s\nLegacy data will not be moved or overwritten; mcTUI creates/reuses .mctui-operation.lock there.\n", formatCopySize(total))
+		sourceLabel := "Source"
+		if m.copySourceID == instances.LegacyID {
+			sourceLabel = "Legacy"
+		}
+		fmt.Fprintf(&b, "\nEstimated total: %s\n%s data will not be moved or overwritten; mcTUI creates/reuses .mctui-operation.lock there.\n", formatCopySize(total), sourceLabel)
 		b.WriteString("Minecraft and loader compatibility is not guaranteed; worlds using mods may lose content if opened without those mods.")
 		footer = "[y] Confirm copy  [n/Esc] Back"
 	case instanceCopyRunningScreen:
 		if m.copyCleaning {
 			fmt.Fprintf(&b, "REMOVING PARTIAL COPY\n\n%s\n\nPlease wait.", m.copyStage)
 		} else {
-			fmt.Fprintf(&b, "COPYING LEGACY DATA\n\n%s\n→ %s/instances/<new-id>/minecraft\n\nDo not close mcTUI.", m.copySource, m.dataRoot)
+			fmt.Fprintf(&b, "COPYING INSTANCE DATA\n\n%s\n→ %s/instances/<new-id>/minecraft\n\nDo not close mcTUI.", m.copySource, m.dataRoot)
 		}
 		footer = "Operation in progress..."
 	case instanceCopyResultScreen:
@@ -994,6 +1002,9 @@ func (m Model) renderInstanceNameScreen() string {
 	title := "NEW VANILLA INSTANCE"
 	if m.copyingInstance {
 		title = "COPY FROM EXISTING INSTALLATION"
+		if m.copySourceID != instances.LegacyID {
+			title = "DUPLICATE INSTANCE"
+		}
 	} else if m.instanceRenameID != "" {
 		title = "RENAME INSTANCE"
 	}
@@ -1005,7 +1016,7 @@ func (m Model) renderInstanceNameScreen() string {
 	if m.instanceRenameID != "" {
 		b.WriteString("\n[Enter] Save name  [Esc] Cancel")
 	} else if m.copyingInstance {
-		b.WriteString("\nMinecraft: " + m.creationVersion + " (Vanilla)\n[Enter] Choose content  [Esc] Cancel")
+		b.WriteString("\nMinecraft: " + m.creationVersion + " (" + m.copyLoader + ")\n[Enter] Choose content  [Esc] Cancel")
 	} else {
 		b.WriteString("\nMinecraft: " + m.creationVersion + "\n[Enter] Create  [Esc] Cancel")
 	}

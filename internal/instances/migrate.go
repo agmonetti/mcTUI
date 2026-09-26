@@ -68,10 +68,32 @@ func InspectCopySource(source string) ([]CopyItem, error) {
 	return items, nil
 }
 
-// CopyFromLegacy copies selected items into a new Vanilla instance. The new
-// instance becomes visible only after its data and metadata are complete.
-func CopyFromLegacy(root, source, name, version string, selected []string, memoryMB int) (result CopyResult, returnErr error) {
-	if !filepath.IsAbs(root) || filepath.Clean(root) != root || !validName(name) || !validVersion(version) || memoryMB <= 0 || len(selected) == 0 {
+// CopyFromLegacy copies selected items into a new Vanilla instance.
+func CopyFromLegacy(root, source, name, version string, selected []string, memoryMB int) (CopyResult, error) {
+	return copyInstance(root, source, Instance{Name: name, MinecraftVersion: version, Loader: "Vanilla", MemoryMB: memoryMB}, selected)
+}
+
+// CopyInstance duplicates selected mutable data from a managed instance.
+// Version, loader, Java and memory are inherited; the new ID is independent.
+func CopyInstance(root, sourceID, name string, selected []string) (CopyResult, error) {
+	if sourceID == LegacyID {
+		return CopyResult{}, fmt.Errorf("use CopyFromLegacy for the existing installation")
+	}
+	in, err := Read(root, sourceID)
+	if err != nil {
+		return CopyResult{}, err
+	}
+	source, err := GameDir(root, in)
+	if err != nil {
+		return CopyResult{}, err
+	}
+	in.Name = name
+	return copyInstance(root, source, in, selected)
+}
+
+// copyInstance publishes metadata and data only after the copy completes.
+func copyInstance(root, source string, template Instance, selected []string) (result CopyResult, returnErr error) {
+	if !filepath.IsAbs(root) || filepath.Clean(root) != root || !validName(template.Name) || !validVersion(template.MinecraftVersion) || !validLoader(template.Loader, template.LoaderVersion) || template.MemoryMB <= 0 || len(selected) == 0 {
 		return CopyResult{}, fmt.Errorf("invalid migration settings")
 	}
 	seen := make(map[string]bool, len(selected))
@@ -142,7 +164,8 @@ func CopyFromLegacy(root, source, name, version string, selected []string, memor
 	if _, err := rand.Read(randomID[:]); err != nil {
 		return CopyResult{}, err
 	}
-	in := Instance{SchemaVersion: 1, ID: hex.EncodeToString(randomID[:]), Name: strings.TrimSpace(name), Kind: "managed", MinecraftVersion: version, Loader: "Vanilla", MemoryMB: memoryMB}
+	in := template
+	in.SchemaVersion, in.ID, in.Kind, in.Name = 1, hex.EncodeToString(randomID[:]), "managed", strings.TrimSpace(template.Name)
 	stage, err := os.MkdirTemp(root, ".mctui-copy-*")
 	if err != nil {
 		return CopyResult{}, err

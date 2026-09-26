@@ -123,6 +123,8 @@ type Model struct {
 	copyingInstance  bool
 	creationVersion  string
 	copySource       string
+	copySourceID     string
+	copyLoader       string
 	copyItems        []instances.CopyItem
 	copySelected     map[string]bool
 	copyCursor       int
