@@ -273,14 +273,14 @@ Depende de: estado actual de fases 1–4.
 
 Depende de: 5A.
 
-- [ ] **B01** Escanear carpeta, registrar origen y mostrar archivos desconocidos.
-- [ ] **B02** Leer metadata de JAR como ZIP sin ejecutarlo, inicialmente formatos soportados; limitar lecturas.
-- [ ] **B03** Agregar `.jar` desde selector integrado; validar origen, destino y colisiones.
-- [ ] **B04** Activar/desactivar de forma reversible; decidir convención de archivo/carpeta y verificar que el loader no lo cargue.
-- [ ] **B05** Retirar con confirmación; no borrar configuraciones ni dependencias usadas por otros mods automáticamente.
-- [ ] **B06** Señalar IDs duplicados cuando puedan identificarse, archivos corruptos y metadata desconocida.
-- [ ] **B07** Detectar cambios externos al refrescar y antes de modificar.
-- [ ] **B08** Mantener advertencia sobre mundos dependientes de mods eliminados/desactivados.
+- [x] **B01** Escanear carpeta, registrar origen y mostrar archivos desconocidos (`internal/mods.Store.Scan` y registro versionado en `instances/<id>/mods.json`).
+- [x] **B02** Leer metadata de JAR como ZIP sin ejecutarlo, inicialmente formatos soportados; limitar lecturas (`Inspect` con límites estrictos, verificación de CRC, cuota de descompresión y lectura segura de `fabric.mod.json`).
+- [x] **B03** Agregar `.jar` desde selector integrado; validar origen, destino y colisiones (`Store.Add` con staging temporal, reserva atómica de destino y picker de archivos `.jar` en TUI).
+- [x] **B04** Activar/desactivar de forma reversible; decidir convención de archivo/carpeta y verificar que el loader no lo cargue (`.jar` ↔ `.jar.disabled`, DEC-04 en §10.16; upstream Fabric ignora `.disabled`).
+- [x] **B05** Retirar con confirmación; no borrar configuraciones ni dependencias usadas por otros mods automáticamente (`Store.Remove` con diálogo de confirmación explícito `[y/n]` en TUI; `config/` intacto).
+- [x] **B06** Señalar IDs duplicados cuando puedan identificarse, archivos corruptos y metadata desconocida (marcado en UI como Duplicado, Corrupto o Desconocido).
+- [x] **B07** Detectar cambios externos al refrescar y antes de modificar (validación de hashes SHA-256 y timestamps mtime bajo `operationlock.Acquire`).
+- [x] **B08** Mantener advertencia sobre mundos dependientes de mods eliminados/desactivados (advertencia visible permanente en cabecera de la TUI de mods).
 
 **Salida:** importar, desactivar, reactivar y retirar funcionan offline, sin pérdida de contenido al alternar estados ni modificaciones en otra instancia.
 
@@ -410,7 +410,7 @@ Registrar decisión, motivo, fecha/commit y consecuencias. Las recomendaciones s
 | DEC-01 | Directorios de configuración/datos/runtime por OS | Resuelto en §10.1; sin migración automática | A01 |
 | DEC-02 | Caché compartida y compatibilidad con artefactos actuales | Resuelto en §10.2; no copiar ni enlazar artefactos heredados sin verificarlos | A02 |
 | DEC-03 | Comportamiento de TUI al cerrar con juego activo | Resuelto en §10.9: `q`/Ctrl+C no desacoplan ni matan Java; esperar salida del juego | A08 |
-| DEC-04 | Cómo desactivar archivos | Convención reversible comprobada con loaders soportados | B04 |
+| DEC-04 | Cómo desactivar archivos | Resuelta en §10.16: `.jar` ↔ `.jar.disabled` | B04 |
 | DEC-05 | Política de versión/canal | Resuelta en §10.11: Minecraft y loader managed fijos tras crear; versión se elige al crear. Cambio posterior requiere flujo explícito de compatibilidad. | A06/C08 |
 | DEC-06 | Recuperación/retención de actualizaciones | Proponer respaldo del conjunto reemplazado y explicitar consumo de disco | C11/D12 |
 | DEC-07 | Loaders/versions que se anuncian soportados | Vanilla/Fabric primero; ampliar con pruebas reales | D06/E03 |
@@ -547,6 +547,14 @@ En el selector, `d` sobre una instancia managed ofrece soft delete o borrado per
   - **A11:** Cerrada en alcance de 5A con exclusión mutua OS para Reset/Play y terminación desde TUI; límite de orfandad ante muerte externa de mcTUI documentado en §10.8 como techo de diseño conocido.
   - **Fase 5A:** Cerrada para el entorno probado (Linux x86_64) con compilación cruzada limpia para Windows amd64 y macOS arm64. La validación física en otros sistemas queda diferida sin bloquear el avance hacia 5B.
 
+### 10.16. DEC-04 — mods locales (5B)
+
+Decisión previa a implementación: activar/desactivar mediante renombrado `mod.jar` ↔ `mod.jar.disabled`, sin copiar contenido y sin sobrescribir destinos existentes. Prism reconoce el sufijo `disabled` en `launcher/minecraft/mod/Mod.cpp`; Fabric filtra exclusivamente nombres terminados en `.jar` en `DirectoryModCandidateFinder.isValidFile` (fuentes upstream consultadas durante este corte). Por tanto `.jar.disabled` no es candidato del loader Fabric; Vanilla no carga mods. No se extiende esta verificación a loaders todavía no soportados ni sustituye pruebas físicas por versión.
+
+Registro versionado en `instances/<id>/mods.json` (incluido `instances/legacy/mods.json` para no guardar metadata en la instalación heredada). Archivos desconocidos se muestran como externos; modificar uno explícitamente registra procedencia local/external. Hash y mtime se revalidan bajo el lock común antes de mutar. No borrar config ni resolver/eliminar dependencias. Advertir siempre sobre mundos dependientes y launchers externos que no respetan el lock. Los errores de persistencia posteriores a una operación deben informar el estado real y permitir refrescar; no prometer transacciones multiarchivo ni exclusión frente a programas ajenos a mcTUI.
+
+Fuentes: https://raw.githubusercontent.com/FabricMC/fabric-loader/master/src/main/java/net/fabricmc/loader/impl/discovery/DirectoryModCandidateFinder.java y https://raw.githubusercontent.com/PrismLauncher/PrismLauncher/develop/launcher/minecraft/mod/Mod.cpp .
+
 ## 11. Trazabilidad y seguimiento
 
 | Requisito original | Implementación rastreable |
@@ -570,7 +578,7 @@ Al cerrar tareas, sustituir «pendiente» por commit y evidencia. Documentar dif
 | Hito | Estado | Commit(s) | Evidencia / bloqueos |
 | --- | --- | --- | --- |
 | 5A | Cerrado (A01–A12 completadas; validación física en otros OS diferida sin bloqueo) | `8e3c89d`, `c834078`, `e3079af`, `7c12b8a`, `c57fbe2`, `ed03252`, `2a9f5e9`, `9058a72`, `8f32920`, `8da7bf9`, `784fc78` | Protocolo de validación manual en ejecución real completado y confirmado por el usuario en Linux x86_64 (§9). A06 cerrado con Fabric loader exacto (`784fc78`); A07 cerrado con errores tipados y cancelación (`8f32920`, `8da7bf9`); A08 cerrado con supervisión y cierre forzado en TUI (`9058a72`); A10/A11 cerrados con lock OS («instance busy») y límite de orfandad documentado; A12 cerrado con soft delete/restauración/purge. Compilación cruzada Windows amd64 y macOS arm64 verificada; validación física en dichos OS diferida sin bloquear 5B. |
-| 5B | Pendiente | — | Requiere 5A; DEC-04 |
+| 5B | Cerrado | árbol local | B01–B08 implementadas y verificadas con tests unitarios y de integración TUI. Escaneo y registro en `mods.json`, renombrado reversible `.jar` ↔ `.jar.disabled` (DEC-04), lectura segura de ZIP/`fabric.mod.json`, adición, toggle y borrado con confirmación explícita bajo lock OS (`operationlock`). Detección de colisiones, cambios externos y duplicados. Tests automatizados, `test -race`, `go vet`, compilación cruzada Windows amd64 y Darwin arm64 y `git diff --check` pasando limpiamente. Sin red ni dependencias externas (5C no iniciada). |
 | 5C | Pendiente | — | Requiere 5A/5B; DEC-06/10 |
 | 5D | Pendiente | — | Requiere 5A–5C; DEC-07/10 |
 | 5E | Pendiente por bloque | — | Aprobaciones y decisiones DEC-07/08/09/11 |
