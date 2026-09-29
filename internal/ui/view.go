@@ -42,11 +42,9 @@ func (m Model) View() string {
 		(m.state >= instanceCopyInspectScreen && m.state <= instanceCopyCleanupConfirmScreen) ||
 		(m.state >= instanceTrashScreen && m.state <= instanceRemoveResultScreen)
 	modsActive := m.state >= modsScreen && m.state <= modrinthWorkingScreen
+	packsActive := m.state >= modrinthHubScreen && m.state <= packWorkingScreen || m.state == modpackScreen
 
 	hasUpdate := m.latestRelease.TagName != ""
-
-	// ── Logo ─────────────────────────────────────────────────────────────────
-	logo := getAsciiArt()
 
 	centerWidth := m.centerWidth()
 	panelsWidth := 30 + centerWidth + 2
@@ -54,9 +52,8 @@ func (m Model) View() string {
 	// ── Topbar de tabs ───────────────────────────────────────────────────────
 	topBar := renderTopBar(m.cursorMenu, hasUpdate, m.state, panelsWidth)
 
-	// ── Featured Banner ──────────────────────────────────────────────────────
+	// ── Featured Banner status ───────────────────────────────────────────────
 	cached := filesCached(m.runtimeDir(), m.versionSelect, m.modloader, m.instance.LoaderVersion)
-	banner := renderFeaturedBanner(m.versionSelect, m.modloader, m.memoryMB, cached, panelsWidth)
 
 	// ── Panel izquierdo: Profile Card + menú ────────────────────────────────
 	profileCard := renderProfileCard(m.username, m.versionSelect, m.modloader)
@@ -86,11 +83,11 @@ func (m Model) View() string {
 	}
 	versionLabel := versionOption(m.instance, m.versionSelect)
 
-	// ── Main menu (6 options) ─────────────────────────────────────────────────
+	// ── Main menu ─────────────────────────────────────────────────────────────
 	menuOptions := []string{
 		i18n.T("menu.play", m.versionSelect),
 		i18n.T("menu.worlds"),
-		i18n.T("menu.mods"),
+		i18n.T("menu.modrinth"),
 		i18n.T("menu.change_instances"),
 		i18n.T("menu.configs"),
 		i18n.T("menu.quit"),
@@ -108,7 +105,7 @@ func (m Model) View() string {
 			i18n.T("menu.language", i18n.T("menu.language_name")),
 		}
 		for i, option := range configOptions {
-			if m.cursorConfig == i && !instancesActive && !modsActive {
+			if m.cursorConfig == i && !instancesActive && !modsActive && !packsActive {
 				line := lipgloss.NewStyle().
 					Foreground(colorAccent).Bold(true).
 					Render(fmt.Sprintf("► %s", option))
@@ -121,7 +118,7 @@ func (m Model) View() string {
 		}
 	} else {
 		for i, option := range menuOptions {
-			isActive := m.cursorMenu == i && !instancesActive && !modsActive
+			isActive := m.cursorMenu == i && !instancesActive && !modsActive && !packsActive
 			if isActive {
 				line := lipgloss.NewStyle().
 					Foreground(colorAccent).Bold(true).
@@ -158,6 +155,14 @@ func (m Model) View() string {
 		contentStr.WriteString(m.resetPanelContent())
 	case instancesActive:
 		contentStr.WriteString(m.renderInstancesContent())
+	case m.state == modpackScreen:
+		contentStr.WriteString(m.renderModpacks())
+	case packsActive:
+		if m.state >= packSearchScreen && m.state <= packReviewScreen {
+			contentStr.WriteString(m.renderPackCatalog())
+		} else {
+			contentStr.WriteString(m.renderPacks())
+		}
 	case modsActive:
 		if m.state >= modrinthSearchScreen {
 			contentStr.WriteString(m.renderCatalog())
@@ -178,18 +183,28 @@ func (m Model) View() string {
 		m.renderVersionsScreen(&contentStr)
 	case m.state == worldsScreen:
 		m.renderWorldsScreen(&contentStr)
+	case m.state >= worldCopyDestinationScreen && m.state <= worldCopyResultScreen:
+		m.renderWorldCopyScreen(&contentStr)
 	case m.state == confirmScreen:
 		m.renderConfirmScreen(&contentStr)
 	}
+	content := contentStr.String()
 	centerStyle := panelContent.Copy().Width(centerWidth)
-	if resetActive || instancesActive || modsActive {
+	if resetActive || instancesActive || modsActive || packsActive {
 		if m.width > 0 {
-			centerStyle = centerStyle.Height(max(16, min(40, m.height-17)))
+			panelHeight := max(16, min(40, m.height-17))
+			if modsActive || packsActive {
+				panelHeight = max(20, panelHeight)
+				// Height is only a minimum in Lip Gloss: long catalog pages
+				// must not grow the panel and push the footer off the terminal.
+				content = lipgloss.NewStyle().MaxWidth(centerWidth).MaxHeight(panelHeight).Render(content)
+			}
+			centerStyle = centerStyle.Height(panelHeight)
 		} else {
 			centerStyle = centerStyle.UnsetWidth().UnsetHeight()
 		}
 	}
-	centerPanel := centerStyle.Render(contentStr.String())
+	centerPanel := centerStyle.Render(content)
 
 	// ── Footer ───────────────────────────────────────────────────────────────
 	var statusPart string
@@ -200,8 +215,10 @@ func (m Model) View() string {
 	}
 	userPart := lipgloss.NewStyle().Foreground(colorGray).
 		Render(fmt.Sprintf("[%s · %s]", m.username, m.versionSelect))
-	controls := m.controlsHint()
-	controlsPart := lipgloss.NewStyle().Foreground(colorDimGray).Render(controls)
+	var controls string
+	if !modsActive && !packsActive {
+		controls = m.controlsHint()
+	}
 
 	var updatePart string
 	if hasUpdate {
@@ -209,8 +226,11 @@ func (m Model) View() string {
 			i18n.T("footer.update", m.latestRelease.TagName),
 		)
 	}
-	footerContent := fmt.Sprintf("%s   %s\n%s%s",
-		statusPart, userPart, controlsPart, updatePart)
+	footerContent := fmt.Sprintf("%s   %s", statusPart, userPart)
+	if controls != "" {
+		footerContent += "\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render(controls)
+	}
+	footerContent += updatePart
 	if m.width > 0 {
 		footerContent = lipgloss.NewStyle().MaxWidth(m.width).Render(footerContent)
 	}
@@ -218,19 +238,29 @@ func (m Model) View() string {
 	// ── Composición de paneles ────────────────────────────────────────────────
 	topPanels := lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, centerPanel)
 
-	sections := []string{logo}
-	if (!resetActive && !modsActive) || m.height >= 37 {
-		sections = append(sections, "")
+	compactLayout := resetActive || modsActive || packsActive
+	var sections []string
+	if (modsActive || packsActive) && m.height > 0 && m.height < 36 {
+		sections = []string{topBar}
+	} else {
+		sections = []string{getAsciiArt()}
+		if !compactLayout || m.height >= 37 {
+			sections = append(sections, "")
+		}
+		sections = append(sections, topBar)
+		if !compactLayout || m.height >= 36 {
+			sections = append(sections, "")
+		}
+		sections = append(sections, renderFeaturedBanner(m.instance.Name, m.versionSelect, m.modloader, m.memoryMB, cached, panelsWidth))
+		if !compactLayout || m.height >= 35 {
+			sections = append(sections, "")
+		}
 	}
-	sections = append(sections, topBar)
-	if (!resetActive && !modsActive) || m.height >= 36 {
-		sections = append(sections, "")
+	footerStyle := panelFooter
+	if controls == "" {
+		footerStyle = footerStyle.UnsetHeight()
 	}
-	sections = append(sections, banner)
-	if (!resetActive && !modsActive) || m.height >= 35 {
-		sections = append(sections, "")
-	}
-	sections = append(sections, topPanels, panelFooter.Render(footerContent))
+	sections = append(sections, topPanels, footerStyle.Render(footerContent))
 	fullInterface := lipgloss.JoinVertical(lipgloss.Left, sections...)
 
 	if m.width > 0 && m.height > 0 {
@@ -538,14 +568,29 @@ func (m Model) resetPanelContent() string {
 
 // ── Download Screen ───────────────────────────────────────────────────────────
 func (m Model) renderDownloadScreen() string {
-	title := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(i18n.T("status.verifying"))
+	titleText := i18n.T("status.verifying")
+	description := i18n.T("status.preparing")
+	if m.dlStage.Stage != "" {
+		titleText = i18n.T("status.downloading")
+		description = i18n.T("status.stage." + m.dlStage.Stage)
+	}
+	title := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(titleText)
 	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 60))
 
 	const width, segment = 36, 8
-	position := m.dlProgressFrame % (width - segment + 1)
-	progress := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", position)) +
-		lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(strings.Repeat("━", segment)) +
-		lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", width-position-segment))
+	var progress string
+	if m.dlStage.Total > 0 {
+		done := min(m.dlStage.Done, m.dlStage.Total)
+		filled := done * width / m.dlStage.Total
+		progress = lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(strings.Repeat("━", filled)) +
+			lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", width-filled)) +
+			"  " + fmt.Sprintf(i18n.T("status.files_progress"), done*100/m.dlStage.Total, done, m.dlStage.Total)
+	} else {
+		position := m.dlProgressFrame % (width - segment + 1)
+		progress = lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", position)) +
+			lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(strings.Repeat("━", segment)) +
+			lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", width-position-segment))
+	}
 
 	var errLine string
 	if m.dlErr != nil {
@@ -560,7 +605,7 @@ func (m Model) renderDownloadScreen() string {
 	hint := lipgloss.NewStyle().Foreground(colorDimGray).Render(hintText)
 
 	body := fmt.Sprintf("%s\n%s\n\n%s\n%s%s\n\n%s",
-		title, div, i18n.T("status.preparing"), progress, errLine, hint)
+		title, div, description, progress, errLine, hint)
 
 	panel := lipgloss.NewStyle().
 		Width(64).
@@ -638,7 +683,15 @@ func (m Model) controlsHint() string {
 	case configScreen, versionsScreen:
 		return i18n.T("footer.choose")
 	case worldsScreen:
-		return i18n.T("footer.select")
+		return i18n.T("worldcopy.worlds_hint")
+	case worldCopyDestinationScreen:
+		return i18n.T("worldcopy.destination_hint")
+	case worldCopyConfirmScreen:
+		return i18n.T("worldcopy.confirm_hint")
+	case worldCopyRunningScreen:
+		return i18n.T("worldcopy.running_hint")
+	case worldCopyResultScreen:
+		return i18n.T("worldcopy.result_hint")
 	case confirmScreen:
 		return i18n.T("footer.accept")
 	case resetModeScreen, resetBackupListScreen, resetRetentionScreen:
@@ -653,6 +706,22 @@ func (m Model) controlsHint() string {
 		return i18n.T("footer.wait")
 	case resetConfirmScreen, resetReplaceConfirmScreen, resetRestoreConfirmScreen:
 		return " " + i18n.T("common.confirm") + "  " + i18n.T("common.cancel")
+	case modrinthHubScreen:
+		return i18n.T("packs.hub_hint")
+	case modpackScreen:
+		return "[↑↓] Elegir  [Espacio] Alternar  [Enter] Confirmar  [Esc] Volver"
+	case packListScreen:
+		return i18n.T("packs.list_hint")
+	case packPickerScreen:
+		return i18n.T("packs.picker_hint")
+	case packSearchScreen:
+		return i18n.T("modrinth.search_hint")
+	case packDetailScreen:
+		return i18n.T("modrinth.detail_hint")
+	case packReviewScreen:
+		return i18n.T("modrinth.review_hint")
+	case packConfirmScreen:
+		return i18n.T("packs.confirm_hint")
 	case modsScreen:
 		return i18n.T("footer.mods")
 	case modsPickerScreen:
@@ -866,6 +935,7 @@ func (m Model) renderWorldsScreen(c *strings.Builder) {
 			c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("  "+w.LevelName) + versionPart + timePart + "\n")
 		}
 	}
+	c.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("worldcopy.worlds_hint")))
 }
 
 func (m Model) renderConfirmScreen(c *strings.Builder) {

@@ -8,6 +8,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/mattn/go-runewidth"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"mcTUI/internal/i18n"
@@ -70,14 +71,11 @@ func formatDownloads(n int64) string {
 }
 
 func padCol(s string, width int) string {
-	r := []rune(s)
-	if len(r) > width {
-		if width > 1 {
-			return string(r[:width-1]) + "…"
-		}
-		return string(r[:width])
+	w := runewidth.StringWidth(s)
+	if w > width {
+		return runewidth.Truncate(s, width, "…")
 	}
-	return s + strings.Repeat(" ", width-len(r))
+	return s + strings.Repeat(" ", width-w)
 }
 
 func (m Model) catalogClient() *modrinth.Client { return catalogAPI }
@@ -809,9 +807,8 @@ func (m Model) catalogPage(lines []string, cursor, reserve int) string {
 		b.WriteString("↑\n")
 	}
 	for _, line := range lines[start:min(len(lines), start+visible)] {
-		runes := []rune(line)
-		if len(runes) > width {
-			line = string(runes[:width-1]) + "…"
+		if runewidth.StringWidth(line) > width {
+			line = runewidth.Truncate(line, width, "…")
 		}
 		b.WriteString(line + "\n")
 	}

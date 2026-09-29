@@ -14,6 +14,7 @@ import (
 	"mcTUI/internal/i18n"
 	"mcTUI/internal/instances"
 	"mcTUI/internal/launcher"
+	"mcTUI/internal/modpacks"
 	"mcTUI/internal/mojang"
 	"mcTUI/internal/resetconfigs"
 	"mcTUI/internal/worlds"
@@ -52,18 +53,8 @@ func filesCached(runtimeDir, version, modloader string, loaderVersion ...string)
 	return true
 }
 
-func startLaunchDownload(ctx context.Context, launch LaunchConfig) tea.Cmd {
-	if launch.LoaderVersion == "" {
-		return StartDownloadCmd(ctx, launch.RuntimeDir, launch.Version, launch.Modloader, launch.JavaPath)
-	}
-	return func() tea.Msg {
-		prepared, err := launcher.PrepareWithLoaderContext(ctx, launch.RuntimeDir, launch.Version, launch.Modloader, launch.LoaderVersion, nil)
-		var javaBinary string
-		if err == nil {
-			javaBinary, err = launcher.ResolvePreparedJava(launch.RuntimeDir, prepared, launch.JavaPath)
-		}
-		return DownloadDoneMsg{Prepared: prepared, JavaBinary: javaBinary, Err: err}
-	}
+func startLaunchDownload(ctx context.Context, launch LaunchConfig, events chan downloadStageMsg) tea.Cmd {
+	return func() tea.Msg { return prepareLaunch(ctx, launch, events) }
 }
 
 func fabricLoaderCmd(version string, request uint64) tea.Cmd {
@@ -74,7 +65,16 @@ func fabricLoaderCmd(version string, request uint64) tea.Cmd {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if next, cmd, handled := m.updateModpacks(msg); handled {
+		return next, cmd
+	}
+	if next, cmd, handled := m.updatePacks(msg); handled {
+		return next, cmd
+	}
 	if next, cmd, handled := m.updateCatalog(msg); handled {
+		return next, cmd
+	}
+	if next, cmd, handled := m.updateWorldCopy(msg); handled {
 		return next, cmd
 	}
 	var cmd tea.Cmd
@@ -124,6 +124,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case downloadAnimationTickMsg:
 		if m.state == downloadScreen && !m.dlFinished {
+			if m.dlEvents != nil {
+				for {
+					select {
+					case stage := <-m.dlEvents:
+						m.dlStage = stage
+					default:
+						m.dlProgressFrame++
+						return m, downloadAnimationTickCmd()
+					}
+				}
+			}
 			m.dlProgressFrame++
 			return m, downloadAnimationTickCmd()
 		}
@@ -274,9 +285,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Launch only the verified artifacts; never prepare a second time.
 		launch := m.launch
+		targetInstance, dataRoot := m.instance, m.dataRoot
 		m.gameErr, m.gameLog = nil, ""
 		m.state = gameStartingScreen
 		return m, func() tea.Msg {
+			if err := modpacks.Recover(dataRoot, targetInstance); err != nil {
+				return GameStartedMsg{Err: err}
+			}
 			game, err := launcher.StartPrepared(launch.GameDir, launch.RuntimeDir, msg.JavaBinary, launch.Username, launch.Version, launch.MemoryMB, msg.Prepared)
 			return GameStartedMsg{Game: game, Err: err}
 		}
@@ -318,6 +333,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state = menuScreen
 			}
 			return m, nil
+		}
+		if m.state >= modrinthHubScreen && m.state <= packWorkingScreen {
+			return m.updatePacksKey(msg.String())
 		}
 		if m.state >= modrinthSearchScreen && m.state <= modrinthWorkingScreen {
 			return m.updateCatalogKey(msg.String())
@@ -366,7 +384,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "m":
 			if m.state == menuScreen {
-				return m.openMods()
+				m.hubCursor = 0
+				m.state = modrinthHubScreen
+				return m, nil
 			}
 		case "i":
 			if m.state == menuScreen {
@@ -504,8 +524,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					m.state = worldsScreen
 					m.cursorWorlds = 0
-				case 2: // Mods
-					return m.openMods()
+				case 2: // Modrinth
+					m.hubCursor = 0
+					m.state = modrinthHubScreen
 				case 3: // Change Instances
 					m.instanceList, m.instanceErr = instances.List(m.dataRoot)
 					m.instanceCursor = 0
@@ -664,11 +685,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.launch = launch
 				m.state = downloadScreen
 				m.dlProgressFrame = 0
+				m.dlStage = downloadStageMsg{}
+				m.dlEvents = make(chan downloadStageMsg, 1)
 				m.dlErr = nil
 				m.dlFinished = false
 				ctx, cancel := context.WithCancel(context.Background())
 				m.dlContext, m.dlCancel = ctx, cancel
-				return m, tea.Batch(downloadAnimationTickCmd(), startLaunchDownload(ctx, launch))
+				return m, tea.Batch(downloadAnimationTickCmd(), startLaunchDownload(ctx, launch, m.dlEvents))
 			}
 
 		case "y", "Y":
@@ -692,9 +715,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.dlProgressFrame = 0
 				m.dlErr = nil
 				m.dlFinished = false
+				m.dlStage = downloadStageMsg{}
+				m.dlEvents = make(chan downloadStageMsg, 1)
 				ctx, cancel := context.WithCancel(context.Background())
 				m.dlContext, m.dlCancel = ctx, cancel
-				return m, tea.Batch(downloadAnimationTickCmd(), startLaunchDownload(ctx, launch))
+				return m, tea.Batch(downloadAnimationTickCmd(), startLaunchDownload(ctx, launch, m.dlEvents))
 			}
 
 		case "f", "F":
@@ -731,6 +756,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "c", "C":
+			if m.state == worldsScreen && len(m.worlds) > 0 {
+				m.worldCopySource = m.worlds[m.cursorWorlds]
+				list, err := instances.List(m.dataRoot)
+				if err != nil {
+					m.worldCopyErr = err
+					m.state = worldCopyResultScreen
+					return m, nil
+				}
+				m.worldCopyTargets = m.worldCopyTargets[:0]
+				for _, in := range list {
+					if in.ID != m.instance.ID {
+						m.worldCopyTargets = append(m.worldCopyTargets, in)
+					}
+				}
+				m.worldCopyCursor = 0
+				m.worldCopyErr = nil
+				m.state = worldCopyDestinationScreen
+				return m, nil
+			}
 			if m.state == instancesScreen {
 				if m.instanceCursor < 0 || m.instanceCursor >= len(m.instanceList) {
 					m.instanceErr = fmt.Errorf("%s", i18n.T("error.select_instance_copy"))

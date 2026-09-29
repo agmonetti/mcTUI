@@ -18,16 +18,23 @@ import (
 	"mcTUI/internal/launcher"
 )
 
-func TestDownloadProgressIsIndeterminateBarWithoutFileName(t *testing.T) {
-	m := Model{state: downloadScreen}
-	before := m.View()
-	if strings.Contains(before, "DONE") || strings.Contains(before, "library.jar") || !strings.Contains(before, "Preparing game files") {
-		t.Fatalf("download view includes redundant detail or lacks status: %s", before)
-	}
+func TestDownloadShowsVerifiedStageProgress(t *testing.T) {
+	events := make(chan downloadStageMsg, 1)
+	publishDownloadStage(events, "libraries", 2, 5)
+	m := Model{state: downloadScreen, dlEvents: events}
 	updated, tick := m.Update(downloadAnimationTickMsg{})
 	m = updated.(Model)
-	if tick == nil || m.dlProgressFrame != 1 || m.View() == before {
-		t.Fatal("horizontal progress bar did not advance")
+	if tick == nil || m.dlStage.Stage != "libraries" || m.dlStage.Done != 2 || m.dlStage.Total != 5 {
+		t.Fatalf("stage progress not received: %+v", m.dlStage)
+	}
+	if view := m.View(); !strings.Contains(view, "40%") || !strings.Contains(view, "2/5") || !strings.Contains(view, "Downloading and verifying") {
+		t.Fatalf("stage progress not visible: %s", view)
+	}
+	publishDownloadStage(events, "assets", 0, 10)
+	updated, _ = m.Update(downloadAnimationTickMsg{})
+	m = updated.(Model)
+	if view := m.View(); strings.Contains(view, "40%") || !strings.Contains(view, "0%") {
+		t.Fatalf("new stage retained stale percentage: %s", view)
 	}
 }
 

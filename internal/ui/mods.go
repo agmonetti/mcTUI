@@ -127,7 +127,7 @@ func (m Model) updateModsKey(key string) (tea.Model, tea.Cmd) {
 	}
 	switch key {
 	case "esc", "q":
-		m.state = menuScreen
+		m.state = modrinthHubScreen
 	case "up", "k":
 		m.modCursor = max(0, m.modCursor-1)
 	case "down", "j":
@@ -251,8 +251,9 @@ func (m Model) renderMods() string {
 		lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(modText(m.instance.Name)) + "\n")
 	b.WriteString(labelStyle.Render(i18n.T("common.version_label")) + "  " +
 		lipgloss.NewStyle().Foreground(colorGray).Render(modText(m.instance.MinecraftVersion+" / "+m.instance.Loader+" "+m.instance.LoaderVersion)) + "\n")
+	pathWidth := max(20, m.centerWidth()-16)
 	b.WriteString(labelStyle.Render(i18n.T("common.path_label")) + "  " +
-		lipgloss.NewStyle().Foreground(colorDimGray).Render(modText(m.modStore.GameDir)) + "\n\n")
+		lipgloss.NewStyle().Foreground(colorDimGray).Render(formatDisplayPath(modText(m.modStore.GameDir), pathWidth)) + "\n\n")
 
 	switch m.state {
 	case modsRollbackScreen:
@@ -262,7 +263,9 @@ func (m Model) renderMods() string {
 		b.WriteString(i18n.T("mods.rollback_current", modText(entry.New.File), modText(entry.New.VersionID)) + "\n")
 		b.WriteString(i18n.T("mods.rollback_previous", modText(entry.Previous.File), modText(entry.Previous.VersionID)) + "\n")
 		b.WriteString(i18n.T("mods.rollback_date", modText(entry.Date)) + "\n")
-		b.WriteString(i18n.T("mods.rollback_backup", modText(filepath.Join(filepath.Dir(m.modStore.Registry), "backups", "mods_replaced", entry.Backup))) + "\n\n")
+		backup := filepath.Join(filepath.Dir(m.modStore.Registry), "backups", "mods_replaced", entry.Backup)
+		pathWidth := max(20, m.centerWidth()-lipgloss.Width(i18n.T("mods.rollback_backup", ""))-2)
+		b.WriteString(i18n.T("mods.rollback_backup", formatDisplayPath(modText(backup), pathWidth)) + "\n\n")
 		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("mods.rollback_warning")) + "\n\n")
 		b.WriteString(i18n.T("mods.rollback_hint"))
 
@@ -313,7 +316,7 @@ func (m Model) renderMods() string {
 		if len(m.modItems) == 0 {
 			b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("  "+i18n.T("mods.empty")) + "\n\n")
 		}
-		available := m.centerInnerHeight() - 7
+		available := m.centerInnerHeight() - 11
 		if m.modBusy != nil {
 			available -= 2
 		}

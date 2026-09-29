@@ -40,6 +40,8 @@ func (m *Model) loadPickerDir() {
 				m.pickerEntries = append(m.pickerEntries, entry)
 			} else if m.pickerForMods && entry.Type().IsRegular() && strings.HasSuffix(entry.Name(), ".jar") {
 				m.pickerEntries = append(m.pickerEntries, entry)
+			} else if m.pickerForPacks && entry.Type().IsRegular() && strings.EqualFold(filepath.Ext(entry.Name()), ".zip") {
+				m.pickerEntries = append(m.pickerEntries, entry)
 			} else if m.pickerForJava && isJavaEntry(m.pickerPath, entry) {
 				m.pickerEntries = append(m.pickerEntries, entry)
 			}

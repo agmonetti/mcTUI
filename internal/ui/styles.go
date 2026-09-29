@@ -4,6 +4,9 @@ package ui
 
 import (
 	"fmt"
+	"github.com/mattn/go-runewidth"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -72,6 +75,24 @@ var (
 	valueStyle = lipgloss.NewStyle().Foreground(colorAccent2)
 )
 
+func formatDisplayPath(path string, maxWidth int) string {
+	if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(path, home) {
+		path = "~" + strings.TrimPrefix(path, home)
+	}
+	w := runewidth.StringWidth(path)
+	if w <= maxWidth {
+		return path
+	}
+	base := filepath.Base(path)
+	baseWidth := runewidth.StringWidth(base)
+	if baseWidth+6 >= maxWidth {
+		return runewidth.Truncate(path, maxWidth, "…")
+	}
+	headLimit := maxWidth - baseWidth - 4
+	head := runewidth.Truncate(filepath.Dir(path), headLimit, "")
+	return head + "/…/" + base
+}
+
 // ── Logo ──────────────────────────────────────────────────────────────────────
 func getAsciiArt() string {
 	top := lipgloss.NewStyle().
@@ -122,7 +143,7 @@ func renderProfileCard(username, version, modloader string) string {
 
 // ── Featured Banner ───────────────────────────────────────────────────────────
 // Franja horizontal que muestra la configuración activa, estilo CS:GO featured offer.
-func renderFeaturedBanner(version, modloader string, memoryMB int, cached bool, width int) string {
+func renderFeaturedBanner(instanceName, version, modloader string, memoryMB int, cached bool, width int) string {
 	statusStr := lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render(i18n.T("status.files_present_short"))
 	if !cached {
 		statusStr = lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render(i18n.T("status.files_missing"))
@@ -133,7 +154,7 @@ func renderFeaturedBanner(version, modloader string, memoryMB int, cached bool, 
 
 	sep := lipgloss.NewStyle().Foreground(colorDimGray).Render("  │  ")
 
-	content := label(i18n.T("banner.setup")) + "    " +
+	content := label(i18n.T("banner.setup")) + " " + val(modText(instanceName)) + "    " +
 		label(i18n.T("banner.version")+" ") + val(version) +
 		sep +
 		label(i18n.T("banner.loader")+" ") + val(modloader) +
@@ -166,7 +187,7 @@ func renderTopBar(cursorMenu int, hasUpdate bool, state screenState, width int) 
 	tabs := []tabEntry{
 		{i18n.T("topbar.play"), 0},
 		{i18n.T("topbar.worlds"), 1},
-		{i18n.T("topbar.mods"), 2},
+		{i18n.T("topbar.modrinth"), 2},
 		{i18n.T("topbar.instances"), 3},
 		{i18n.T("topbar.configs"), 4},
 		{i18n.T("topbar.quit"), 5},
@@ -178,7 +199,7 @@ func renderTopBar(cursorMenu int, hasUpdate bool, state screenState, width int) 
 		state == instanceLoaderScreen ||
 		(state >= instanceCopyInspectScreen && state <= instanceCopyCleanupConfirmScreen) ||
 		(state >= instanceTrashScreen && state <= instanceRemoveResultScreen)
-	modsActive := state >= modsScreen && state <= modrinthWorkingScreen
+	modsActive := state >= modsScreen && state <= modrinthWorkingScreen || state >= modrinthHubScreen && state <= packWorkingScreen || state == modpackScreen
 	configsActive := state == configScreen || state == javaPickerScreen ||
 		(state >= resetModeScreen && state <= resetResultScreen) ||
 		(!instancesActive && (state == nameScreen || state == versionsScreen))
@@ -186,7 +207,7 @@ func renderTopBar(cursorMenu int, hasUpdate bool, state screenState, width int) 
 		activeIdx = 3
 	} else if modsActive {
 		activeIdx = 2
-	} else if state == worldsScreen {
+	} else if state == worldsScreen || (state >= worldCopyDestinationScreen && state <= worldCopyResultScreen) {
 		activeIdx = 1
 	} else if state == confirmScreen {
 		activeIdx = 0

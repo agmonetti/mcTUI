@@ -405,7 +405,7 @@ echo 'openjdk version "21.0.1"' >&2
 
 func TestPinnedLoaderRejectsVanillaBeforePreparation(t *testing.T) {
 	launch := LaunchConfig{RuntimeDir: t.TempDir(), Version: "1.20.4", Modloader: "Vanilla", LoaderVersion: "0.15.11"}
-	msg, ok := startLaunchDownload(context.Background(), launch)().(DownloadDoneMsg)
+	msg, ok := startLaunchDownload(context.Background(), launch, nil)().(DownloadDoneMsg)
 	if !ok || msg.Err == nil || msg.JavaBinary != "" {
 		t.Fatalf("unsupported loader combination accepted: %+v", msg)
 	}

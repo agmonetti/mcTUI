@@ -16,6 +16,7 @@ import (
 	"mcTUI/internal/launcher"
 	"mcTUI/internal/modrinth"
 	"mcTUI/internal/mods"
+	"mcTUI/internal/packs"
 	"mcTUI/internal/resetconfigs"
 	"mcTUI/internal/updater"
 	"mcTUI/internal/worlds"
@@ -68,12 +69,26 @@ const (
 	modrinthUpdatesScreen
 	modrinthWorkingScreen
 	configScreen
+	modrinthHubScreen
+	packListScreen
+	packPickerScreen
+	packConfirmScreen
+	packSearchScreen
+	packDetailScreen
+	packReviewScreen
+	packWorkingScreen
+	modpackScreen
 )
 
-// menuOptionsCount must match len(menuOptions) in View(). Centralized
-// here so Update()'s cursor bounds check doesn't drift from the menu's
-// actual length if options are added/removed.
-// menuOptionsCount must match len(menuOptions) in View() for the main menu.
+// World-copy states are kept outside the instance-copy range.
+const (
+	worldCopyDestinationScreen screenState = 1000 + iota
+	worldCopyConfirmScreen
+	worldCopyRunningScreen
+	worldCopyResultScreen
+)
+
+// menuOptionsCount must match len(menuOptions) in View().
 const menuOptionsCount = 6
 
 // configOptionsCount must match len(configOptions) in View() for the config submenu.
@@ -126,6 +141,10 @@ type InstanceCopyCleanupDoneMsg struct {
 type InstanceRemovalDoneMsg struct {
 	Err error
 }
+type WorldCopyDoneMsg struct {
+	Folder string
+	Err    error
+}
 
 // Model is the root Bubble Tea model for mcTUI.
 type LaunchConfig struct {
@@ -143,12 +162,19 @@ type Model struct {
 	cursorVersions int
 	cursorWorlds   int
 
-	username               string
-	versionSelect          string
-	memoryMB               int
-	modloader              string
-	versions               []string
-	worlds                 []worlds.Info
+	username             string
+	versionSelect        string
+	memoryMB             int
+	modloader            string
+	versions             []string
+	worlds               []worlds.Info
+	worldCopySource      worlds.Info
+	worldCopyTargets     []instances.Instance
+	worldCopyCursor      int
+	worldCopyDestination instances.Instance
+	worldCopyFolder      string
+	worldCopyErr         error
+
 	dataRoot               string
 	instanceList           []instances.Instance
 	instance               instances.Instance
@@ -179,6 +205,7 @@ type Model struct {
 	removeErr              error
 	pickerForJava          bool
 	pickerForMods          bool
+	pickerForPacks         bool
 	modStore               mods.Store
 	modItems               []mods.Mod
 	modCursor              int
@@ -210,11 +237,34 @@ type Model struct {
 	catalogDownloaded      int64
 	catalogTotal           int64
 	catalogModifiedConfirm bool
+	hubCursor              int
+	packKind               packs.Kind
+	packStore              packs.Store
+	packItems              []packs.Pack
+	packCursor             int
+	packTarget             string
+	packErr                error
+	packRequest            uint64
+	packEngine             string
+	packQuery              string
+	packResults            modrinth.SearchResponse
+	packSearchCursor       int
+	packOffset             int
+	packSortIndex          int
+	packProject            modrinth.Project
+	packVersion            modrinth.Version
+	packBusy               bool
+	packContext            context.Context
+	packCancel             context.CancelFunc
+	packReturn             screenState
+	mp                     modpackState
 	launch                 LaunchConfig
 	latestRelease          updater.Release // zero value = no update available
 
 	// Download progress (usado en downloadScreen)
 	dlProgressFrame int
+	dlStage         downloadStageMsg
+	dlEvents        chan downloadStageMsg
 	dlErr           error
 	dlFinished      bool
 	dlContext       context.Context

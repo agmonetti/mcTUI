@@ -2,6 +2,7 @@ package ui
 
 import (
 	"archive/zip"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +12,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"mcTUI/internal/i18n"
 	"mcTUI/internal/instances"
+	"mcTUI/internal/modrinth"
+	"mcTUI/internal/mods"
 	"mcTUI/internal/operationlock"
+	"mcTUI/internal/packs"
 )
 
 func TestModsUIOfflineLifecycle(t *testing.T) {
@@ -23,8 +27,13 @@ func TestModsUIOfflineLifecycle(t *testing.T) {
 	m := Model{state: menuScreen, dataRoot: root, instance: in, width: 90, height: 24}
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
 	m = updated.(Model)
+	if cmd != nil || m.state != modrinthHubScreen {
+		t.Fatal("Modrinth hub did not open")
+	}
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
 	if cmd == nil || m.state != modsWorkingScreen {
-		t.Fatal("mods did not open")
+		t.Fatal("local mods did not open from Modrinth")
 	}
 	updated, _ = m.Update(cmd())
 	m = updated.(Model)
@@ -204,11 +213,70 @@ func TestModsViewWidthAndFooterConsistency(t *testing.T) {
 		t.Errorf("mods view missing local actions:\n%s", modsView)
 	}
 
-	// 5. Global footer controls must show mods navigation, not generic [Enter] Select [q] Quit
-	if strings.Contains(modsView, "[Enter] Elegir  [q] Salir") {
-		t.Errorf("mods view still showing generic default footer:\n%s", modsView)
+}
+
+func TestContentViewsKeepFrameAndOneSetOfControls(t *testing.T) {
+	if err := i18n.Init("en"); err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(modsView, "[Espacio] Activar") || !strings.Contains(modsView, "[s] Buscar") {
-		t.Errorf("mods view global footer missing mods controls:\n%s", modsView)
+	m := Model{
+		state: modsScreen, width: 120, height: 32,
+		instance: instances.Instance{Name: "Test", MinecraftVersion: "1.21.1", Loader: "Fabric"},
+		modStore: mods.Store{GameDir: "/tmp/instance/minecraft"},
+	}
+	for i := range 24 {
+		m.catalogResults.Hits = append(m.catalogResults.Hits, modrinth.SearchResult{Title: fmt.Sprintf("Mod-%02d", i), Author: "Author"})
+	}
+	m.catalogResults.Total = 24
+	m.catalogCursor = 23
+	m.packResults = m.catalogResults
+	m.packSearchCursor = 23
+	m.mp.step = "home"
+	var bottomRow int
+	views := []struct {
+		state screenState
+		kind  packs.Kind
+	}{
+		{modsScreen, packs.Resource},
+		{modrinthSearchScreen, packs.Resource},
+		{packListScreen, packs.Resource},
+		{packSearchScreen, packs.Resource},
+		{packListScreen, packs.Shader},
+		{packSearchScreen, packs.Shader},
+		{modpackScreen, packs.Resource},
+	}
+	for i, selected := range views {
+		state := selected.state
+		m.packKind = selected.kind
+		m.state = state
+		view := m.View()
+		if (state == modrinthSearchScreen || state == packSearchScreen) &&
+			(!strings.Contains(view, "► Mod-23") || !strings.Contains(view, "[Esc] Back")) {
+			t.Fatalf("search clipped the selected result or its controls:\n%s", view)
+		}
+		if width, height := lipgloss.Size(view); width > m.width || height > m.height {
+			t.Fatalf("state %d exceeds terminal: %dx%d", state, width, height)
+		}
+		row := -1
+		for n, line := range strings.Split(view, "\n") {
+			if strings.LastIndex(line, "┘") > 60 {
+				row = n
+			}
+		}
+		if row < 0 {
+			t.Fatalf("state %d lost content-panel border:\n%s", state, view)
+		}
+		if i == 0 {
+			bottomRow = row
+		} else if row != bottomRow {
+			t.Fatalf("state %d moved content-panel bottom from row %d to %d", state, bottomRow, row)
+		}
+		wantHintCount := 0
+		if state == modrinthSearchScreen || state == packSearchScreen {
+			wantHintCount = 1
+		}
+		if count := strings.Count(view, strings.TrimSpace(m.controlsHint())); count != wantHintCount {
+			t.Fatalf("state %d shows %d copies of its navigation hint, want %d:\n%s", state, count, wantHintCount, view)
+		}
 	}
 }

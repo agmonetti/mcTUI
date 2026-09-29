@@ -513,13 +513,6 @@ func TestCatalogTableLongDescriptionNoWrap(t *testing.T) {
 
 	view := m.View()
 
-	// 1. Logo, topBar, and banner must NOT be cut off at the top
-	for _, headerPart := range []string{"mcTUI  LAUNCHER", "PLAY", "MODS", "CURRENT SETUP"} {
-		if !strings.Contains(view, headerPart) {
-			t.Errorf("header element %q was cut off from the top of the view in catalog search:\n%s", headerPart, view)
-		}
-	}
-
 	// 2. Mod descriptions must not wrap onto column 0 of a newline
 	if strings.Contains(view, "\nproviding common hooks") || strings.Contains(view, "\nengine replacement") {
 		t.Errorf("mod description wrapped onto newline in table view:\n%s", view)

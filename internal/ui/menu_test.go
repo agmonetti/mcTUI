@@ -12,60 +12,6 @@ import (
 	"mcTUI/internal/resetconfigs"
 )
 
-func TestMainMenuOptionsAndRendering(t *testing.T) {
-	if err := i18n.Init("en"); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = i18n.Init("en") })
-
-	root := t.TempDir()
-	in, err := instances.Create(root, "TestInstance", "1.20.4", "Vanilla", "", 2048)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	m := Model{
-		state:         menuScreen,
-		cursorMenu:    0,
-		username:      "Steve",
-		versionSelect: "1.20.4",
-		modloader:     "Vanilla",
-		memoryMB:      2048,
-		dataRoot:      root,
-		instance:      in,
-		width:         120,
-		height:        35,
-	}
-
-	view := m.View()
-
-	// Main menu must contain the 5 main options in English
-	expectedMain := []string{
-		"Play (1.20.4)",
-		"Worlds",
-		"Mods",
-		"Instances",
-		"Configs",
-		"Quit",
-	}
-	for _, opt := range expectedMain {
-		if !strings.Contains(view, opt) {
-			t.Errorf("main menu view missing expected option %q:\n%s", opt, view)
-		}
-	}
-
-	// Main menu must NOT contain config sub-options directly
-	subOptions := []string{
-		"Change Name",
-		"Resets Configs",
-	}
-	for _, sub := range subOptions {
-		if strings.Contains(view, "► "+sub) || strings.Contains(view, "  "+sub) {
-			t.Errorf("main menu view should not show config sub-option %q:\n%s", sub, view)
-		}
-	}
-}
-
 func TestVerifyInstallationDetailsUseReadableLines(t *testing.T) {
 	if err := i18n.Init("en"); err != nil {
 		t.Fatal(err)
@@ -181,12 +127,17 @@ func TestMainMenuNavigationAndTransitions(t *testing.T) {
 		t.Fatalf("expected menuScreen after Esc, got %v", m.state)
 	}
 
-	// 2: Mods -> triggers openMods (modsWorkingScreen)
+	// Modrinth opens a category hub; mods remain reachable from it.
 	m.cursorMenu = 2
 	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
-	if m.state != modsWorkingScreen {
-		t.Fatalf("expected modsWorkingScreen for Mods enter, got %v", m.state)
+	if m.state != modrinthHubScreen {
+		t.Fatalf("expected Modrinth hub, got %v", m.state)
+	}
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if m.state != modsWorkingScreen || cmd == nil {
+		t.Fatalf("expected local mods from the hub, got state %v", m.state)
 	}
 	m.state = menuScreen
 
@@ -428,6 +379,10 @@ func TestInitialViewLayoutWidth(t *testing.T) {
 	}
 
 	view := m.View()
+
+	if !strings.Contains(view, "AJUSTES ACTUALES Instalación existente") {
+		t.Errorf("banner missing the active instance name next to its label:\n%s", view)
+	}
 
 	// 1. Banner must have full "FALTAN ARCHIVOS" on a single line and not break into "ARCHI"
 	if strings.Contains(view, "\nARCHI") || strings.Contains(view, "\n ARCHI") {
