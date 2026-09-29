@@ -1,7 +1,7 @@
 # Fase 5 — Plan de implementación: instancias y gestor de mods integrado en la TUI
 
-> Estado: 5A en curso; el núcleo 5A–5D y la ampliación 5E siguen pendientes.
-> Base de código revisada: `c7e7af9` — `Integrate reset configs backup restore flow`.
+> Estado: 5A, 5B y 5C cerradas para Linux x86_64; el usuario confirma pruebas manuales y locales de 5C y corrección de los fallos encontrados. 5D está implementada en el árbol de trabajo y el usuario ya instaló modpacks sin fallas; falta registrar por separado la validación de actualización, exportación y recuperación. 5E permanece pendiente.
+> Base de código revisada: `119b8ff` — `Accept alternate Modrinth CDN host` (incluye los commits de catálogo y ajustes de TUI anteriores).
 > Antecedente: [RESET_CONFIGS.md](RESET_CONFIGS.md), sección «Fase 5: gestor de mods».
 > Objetivo solicitado: integración completa en mcTUI, tomando Prism Launcher como referencia funcional.
 > Este documento conserva la investigación, la propuesta técnica, las tareas y las decisiones abiertas. Una propuesta aquí no equivale a una funcionalidad implementada ni a una decisión de producto aprobada.
@@ -248,7 +248,7 @@ Instancias → Instancia seleccionada
 
 ## 8. Roadmap ejecutable
 
-Las casillas reflejan el cierre completo de cada tarea; los avances parciales se detallan en §10. Completar un hito requiere código, comprobaciones y evidencia registrada, no solo pantallas navegables.
+Las casillas de 5A–5D reflejan el cierre de implementación y comprobaciones automatizadas: `[x]` completo a ese nivel y `[ ]` pendiente. La validación manual y multiplataforma se registra por separado en §9–§10 y puede mantener abierto un hito aunque sus tareas de código estén completas. Completar un hito requiere código, comprobaciones y evidencia registrada, no solo pantallas navegables.
 
 ### 5A — Instancias, runtime y migración
 
@@ -288,18 +288,20 @@ Depende de: 5A.
 
 Depende de: 5A, 5B y descargas seguras.
 
-- [ ] **C01** Cliente API con User-Agent, límites, errores, cancelación y caché permitida.
-- [ ] **C02** Búsqueda paginada filtrada por instancia y detalles del proyecto.
-- [ ] **C03** Elegir archivo/version compatible; no confiar en `latest_version` del buscador.
-- [ ] **C04** Grafo de dependencias: IDs/versiones exactas, required/optional/incompatible/embedded, ciclos y conflictos.
-- [ ] **C05** Si una dependencia no puede resolverse con certeza, detener y explicar; no instalar un conjunto parcialmente válido en silencio.
-- [ ] **C06** Presentar plan completo y selección explícita de opcionales antes de instalar.
-- [ ] **C07** Descarga verificada y aplicación del plan; persistir procedencia y hashes.
-- [ ] **C08** Buscar actualizaciones compatibles, fijar versiones y elegir canal release/beta/alpha mediante política visible.
-- [ ] **C09** Resolver dependencias para el conjunto actualizado, no actualizar cada archivo a «lo último» independientemente.
-- [ ] **C10** Detectar archivos locales modificados; confirmación diferenciada antes de reemplazar.
-- [ ] **C11** Retener información de recuperación del conjunto anterior y mostrar fallos parciales.
-- [ ] **C12** No autoeliminar dependencias compartidas ni instalar nuevamente dependencias embedded.
+- [x] **C01** Cliente API con User-Agent, límites, errores, cancelación y política de caché permitida (`internal/modrinth`; límites/redirecciones y cancelación cubiertos por tests).
+- [x] **C02** Búsqueda paginada filtrada por instancia y detalles del proyecto (debounce, ordenación, cancelación/descartado de respuestas obsoletas y smoke test contra la API real; ver especificación 5C).
+- [x] **C03** Elegir archivo/version compatible; no confiar en `latest_version` del buscador (consulta y filtro explícitos por Minecraft, loader y canal; selección de archivo primario).
+- [x] **C04** Grafo de dependencias: IDs/versiones exactas, required/optional/incompatible/embedded, ciclos y conflictos (resolver y pruebas de grafo/ramas opcionales).
+- [x] **C05** Si una dependencia no puede resolverse con certeza, detener y explicar; no instalar un conjunto parcialmente válido en silencio (error de resolución visible; no se inicia staging/publicación).
+- [x] **C06** Presentar plan completo y selección explícita de opcionales antes de instalar (dependencias, reemplazos, conflictos y total efectivo; descendientes requeridos quedan identificados).
+- [x] **C07** Descarga verificada y aplicación del plan; persistir procedencia y hashes (SHA-512, staging, límites, lock, cancelación y pruebas de no-publicación ante fallo).
+- [x] **C08** Buscar actualizaciones compatibles, fijar versiones y elegir canal release/beta/alpha mediante política visible (consulta batch, política por instancia y fallback al canal compatible).
+- [x] **C09** Resolver dependencias para el conjunto actualizado, no actualizar cada archivo a «lo último» independientemente (resolución conjunta y reconciliación de dependencias compartidas probadas).
+- [x] **C10** Detectar archivos locales modificados; confirmación diferenciada antes de reemplazar (revalidación bajo lock, consentimiento y pruebas de cambios durante la descarga).
+- [x] **C11** Retener información de recuperación del conjunto anterior y mostrar fallos parciales (historial, rollback, journal y recuperación probada tras salida del proceso a mitad del lote en Linux).
+- [x] **C12** No autoeliminar dependencias compartidas ni instalar nuevamente dependencias embedded (propiedad `required_by` reconciliada y embedded excluidas de la descarga; tests correspondientes).
+
+**Estado 5C (confirmación del usuario, 2026-09-27):** C01–C12 están implementadas y cubiertas por pruebas automatizadas. El usuario da 5C por cerrada tras varias pruebas manuales y locales, con los fallos detectados corregidos. La descripción anterior, que indicaba pendiente una instalación y actualización reales, queda superada por esta confirmación; no se conservan detalles de versiones, archivos o resultados individuales de esas pruebas en este registro. La ejecución real en Windows/macOS sigue pendiente según §9 y no se infiere del cierre en Linux.
 
 **Salida:** instalar un mod con dependencias y actualizarlo deja una selección reproducible. Incompatibilidad, 429, desconexión o hash inválido no se anuncian como éxito ni disparan Play.
 
@@ -314,11 +316,15 @@ Depende de: 5A–5C.
 - [ ] **D05** Aplicar archivos verificados, overrides y client-overrides en orden; excluir server-only.
 - [ ] **D06** Loader no soportado: explicar y rechazar activación, nunca sustituirlo por Fabric/Vanilla.
 - [ ] **D07** Guardar identidad/version de pack y manifiesto de archivos base.
-- [ ] **D08** Actualización mediante comparación base anterior / local / nueva versión; listar agregados, retirados, reemplazos y conflictos.
-- [ ] **D09** Preservar modificaciones locales o pedir decisión concreta; no pisar `config/` u `options.txt` implícitamente.
-- [ ] **D10** Exportar `.mrpack` con referencias permitidas y overrides seleccionados; excluir credenciales, logs y mundos por defecto.
-- [ ] **D11** Reportar archivos no exportables por falta de fuente/permisos, sin omitirlos silenciosamente ni redistribuirlos sin autorización.
-- [ ] **D12** Recuperación ante fallo/interrupción y validación de importación del pack exportado.
+- [x] **D08** Actualización mediante comparación base anterior / local / nueva versión; la TUI enumera agregados, retirados, reemplazos y conflictos (`PlanUpdate`, prueba de tres estados y revisión de todas las rutas). Desde la TUI la nueva versión se aporta como `.mrpack` local; actualización directa desde un release API aún no está conectada.
+- [x] **D09** Preservar modificaciones locales o pedir decisión concreta; `Update` exige el plan revisado y revalida hashes antes de sobrescribir. Pruebas de conflicto, rechazo de decisión obsoleta y mantenimiento de extras locales; `config/` no se pisa implícitamente.
+- [x] **D10** Exportar `.mrpack` con referencias permitidas y overrides seleccionados; excluir credenciales, logs y mundos por defecto (`Export`, pruebas de rutas privadas y round-trip de ZIP).
+- [x] **D11** Reportar archivos no exportables por falta de fuente/permisos, sin omitirlos silenciosamente; los opcionales no instalados o las descargas sin fuente autorizada bloquean la exportación con error por ruta.
+- [x] **D12** Recuperación ante fallo/interrupción y validación de importación del pack exportado (journal + rollback probado en directorios temporales; exportación e importación de un pack solo de overrides). Falta validar manualmente un pack con descargas reales y la semántica de archivos bloqueados en Windows.
+
+**Estado 5D (confirmación del usuario, 2026-09-27):** el árbol de trabajo contiene importación, actualización, exportación y recuperación de modpacks, con pruebas automatizadas. El usuario confirma que probó e instaló modpacks sin fallas en Arch Linux. Esta confirmación cubre instalación real; no documenta todavía un recorrido manual de actualización, exportación/reimportación ni recuperación ante interrupción. D08–D12 están marcadas por implementación y comprobaciones automatizadas con el alcance específico anotado; no declaran por sí solas el cierre de 5D. Auditar D01–D07 individualmente antes de marcarlas, sin repetir la instalación ya confirmada solo para llamarla «pack real».
+
+**Auditoría local 5D (2026-09-27, Arch Linux):** `Store.Update` ahora exige el `UpdatePlan` revisado y compara rutas, hashes y conflictos bajo lock antes de aplicar decisiones; rechaza bytes locales cambiados entre revisión y confirmación. La TUI muestra todas las rutas del plan, no solo los conflictos. `Export` bloquea opcionales no instalados cuando faltan los datos para reexportarlos, en vez de omitirlos silenciosamente; una prueba exporta e importa de nuevo un pack solo de overrides en directorios temporales. La recuperación valida el journal y los backups antes de restaurar; se puede ejecutar explícitamente desde **Modrinth → Modpacks → Recuperar** sin tener que iniciar Play. Las regresiones usan fixtures/`t.TempDir`, no las instancias reales del usuario. Pasaron `go test -count=1 ./...`, `go test -race -count=1 ./internal/modpacks ./internal/ui`, `go vet ./...` y `git diff --check`. Humo TUI con `HOME`/`XDG_DATA_HOME` temporales: se abrió el menú Modpacks y se observó la acción de recuperación. Esto verifica código y navegación en Linux, **no** aporta una prueba manual de actualización/exportación/recuperación de un pack descargado ni valida Windows.
 
 **Salida:** importar, actualizar y exportar un pack soportado es operable desde la TUI; permisos o conflictos no resolubles se presentan como bloqueos explícitos. No se afirma compatibilidad con todo ZIP ni importación de Prism/MultiMC.
 
@@ -394,12 +400,16 @@ La validación en Windows y macOS queda diferida hasta disponer de entornos fís
 
 ### Plataformas
 
-- [ ] Windows real: prioridad principal; espacios, Unicode, archivos bloqueados, rutas, permisos normales y antivirus.
-- [x] Linux real: permisos, enlaces y lanzamiento de instancia aislada (protocolo 5A validado y cerrado en §9).
+- [ ] Windows real: pendiente de ejecución en equipo Windows por el usuario; verificar espacios y Unicode en rutas, permisos habituales, archivos abiertos y bloqueo por antivirus. La intención de probarlo durante la semana del 2026-09-27 no es evidencia de resultados.
+- [x] Linux real (Arch Linux): el usuario confirma que probó los avances de 5A, 5B, 5C y 5D en su equipo. El protocolo 5A y el cierre de 5C están registrados arriba; para 5D consta instalación real de modpacks sin fallas, no un resultado manual por separado de actualización/exportación/recuperación.
 - [ ] macOS real: ubicación heredada conservada, Java y natives apropiados, lanzamiento.
 - [ ] Prueba Vanilla y Fabric con una instalación conocida en cada plataforma declarada soportada.
 - [ ] `go test ./...`, `go test -race ./...`, `go vet ./...`, formato y `git diff --check`.
 - [ ] Compilación para cada OS/arquitectura anunciados. Compilar cruzado no sustituye pruebas de ejecución.
+
+**Matriz para la próxima validación Windows (sin ejecutar aún):** usar una raíz de datos de prueba, no la instalación habitual; anotar build, versión de Windows, arquitectura, tipo de cuenta y ubicación de `%LOCALAPPDATA%`/`%APPDATA%`. Comprobar creación y aislamiento de instancias, instalación local/Modrinth y un `.mrpack` soportado; actualizar con `config/` modificado y verificar la decisión por archivo; exportar y reimportar en otra instancia; repetir con rutas que contengan espacios y Unicode, un destino ya existente, un archivo del juego abierto y una segunda TUI intentando mutar la misma instancia. Registrar error/ruta/estado de archivos y si queda una recuperación pendiente; no forzar una caída del proceso sobre datos reales. Compilación cruzada y tests ejecutados en Linux no validan ACL, renombrados, archivos abiertos ni antivirus en Windows.
+
+**Riesgo Windows concreto de 5D:** actualización y recuperación sincronizan directorios con `os.Open(dir).Sync()` y publican mediante renombrados/enlaces; el comportamiento frente a `FlushFileBuffers` sobre directorios, archivos en uso, ACL y antivirus debe comprobarse en Windows real. No se desactivó la sincronización para hacer pasar una compilación cruzada. Si falla, registrar operación, ruta, error y presencia de `.mctui-pack-update.json` sin borrar backups ni journal.
 
 ## 10. Decisiones pendientes antes de cada hito
 
@@ -644,4 +654,4 @@ Fuentes primarias consultadas en la investigación que originó este plan. Reval
 - **S15:** NeoForge, referencia para investigación adicional de instalación: https://github.com/neoforged/NeoForge y https://github.com/neoforged/InstallerTools
 - **Referencia de implementación, no especificación de mcTUI:** https://github.com/PrismLauncher/PrismLauncher
 
-No se verificó una implementación de fase 5, aprobación de CurseForge ni login oficial. La investigación distingue documentación externa, hallazgos del código base y propuestas. No incluye estimaciones de calendario: fijarlas después de resolver decisiones bloqueantes y ejecutar el primer corte vertical de 5A.
+Nota histórica de la investigación inicial: entonces no se había verificado implementación de fase 5 ni aprobación de CurseForge o login oficial. El estado de implementación posterior se registra en §8–§10; CurseForge y autenticación oficial siguen en 5E. Las fuentes externas describen formatos y servicios, no prueban por sí solas el comportamiento de mcTUI.
