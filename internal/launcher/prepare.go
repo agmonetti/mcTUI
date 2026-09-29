@@ -43,11 +43,24 @@ func PrepareContext(ctx context.Context, runtimeDir, version, modloader string, 
 // PrepareWithLoaderContext optionally pins the Fabric Loader version. An empty
 // loaderVersion keeps the legacy behavior of selecting the current default.
 func PrepareWithLoaderContext(ctx context.Context, runtimeDir, version, modloader, loaderVersion string, progress func(string)) (Prepared, error) {
+	return prepareWithProgress(ctx, runtimeDir, version, modloader, loaderVersion, progress, nil)
+}
+
+// PrepareWithStageProgress reports completed, verified files in each stage.
+// A zero total means the stage's work cannot be counted yet.
+func PrepareWithStageProgress(ctx context.Context, runtimeDir, version, modloader, loaderVersion string, report func(string, int, int)) (Prepared, error) {
+	return prepareWithProgress(ctx, runtimeDir, version, modloader, loaderVersion, nil, report)
+}
+
+func prepareWithProgress(ctx context.Context, runtimeDir, version, modloader, loaderVersion string, progress func(string), report func(string, int, int)) (Prepared, error) {
 	if err := ctx.Err(); err != nil {
 		return Prepared{}, err
 	}
 	if !filepath.IsAbs(runtimeDir) || !filepath.IsLocal(version) || version != filepath.Base(version) || strings.ContainsAny(version, "/\\") || version == "." || version == ".." || (modloader != "Vanilla" && modloader != "Fabric") || (loaderVersion != "" && modloader != "Fabric") {
 		return Prepared{}, fmt.Errorf("invalid runtime, version or loader")
+	}
+	if report != nil {
+		report("metadata", 0, 0)
 	}
 	data, ok := mojang.CachedVersionData(runtimeDir, version)
 	if !ok {
@@ -62,8 +75,18 @@ func PrepareWithLoaderContext(ctx context.Context, runtimeDir, version, modloade
 	}
 
 	var wg sync.WaitGroup
-	checked := mojang.Download(ctx, &wg)
 	var mu sync.Mutex
+	stage, completed, total := "client", 0, 1
+	setStage := func(name string, count int) {
+		mu.Lock()
+		stage, completed, total = name, 0, count
+		if report != nil {
+			report(stage, completed, total)
+		}
+		mu.Unlock()
+	}
+	setStage("client", 1)
+	checked := mojang.Download(ctx, &wg)
 	var firstErr error
 	download := func(url, dest, hash string) error {
 		err := checked(url, dest, hash)
@@ -71,8 +94,14 @@ func PrepareWithLoaderContext(ctx context.Context, runtimeDir, version, modloade
 		if err != nil && firstErr == nil {
 			firstErr = err
 		}
+		if err == nil {
+			completed++
+		}
 		if progress != nil {
 			progress(filepath.Base(dest))
+		}
+		if report != nil {
+			report(stage, completed, total)
 		}
 		mu.Unlock()
 		return err
@@ -89,6 +118,17 @@ func PrepareWithLoaderContext(ctx context.Context, runtimeDir, version, modloade
 	if err := download(data.Downloads.Client.URL, clientPath, data.Downloads.Client.SHA1); err != nil {
 		return Prepared{}, &PrepareError{Stage: "client", Err: err}
 	}
+	libraryCount := 0
+	for _, lib := range data.Libraries {
+		if !mojang.ShouldIncludeLibrary(lib.Name, lib.Rules) {
+			continue
+		}
+		artifact := lib.Downloads.Artifact
+		if artifact.URL != "" || artifact.Path != "" || len(lib.Natives) == 0 {
+			libraryCount++
+		}
+	}
+	setStage("libraries", libraryCount)
 
 	var classpath []string
 	librariesPath := filepath.Join(runtimeDir, "libraries")
@@ -126,6 +166,7 @@ func PrepareWithLoaderContext(ctx context.Context, runtimeDir, version, modloade
 	if err := check(); err != nil {
 		return Prepared{}, &PrepareError{Stage: "library", Err: err}
 	}
+	setStage("Fabric", 0)
 
 	mainClass := "net.minecraft.client.main.Main"
 	if modloader == "Fabric" {
@@ -137,13 +178,23 @@ func PrepareWithLoaderContext(ctx context.Context, runtimeDir, version, modloade
 		classpath = append(classpath, profile.ClasspathEntries...)
 	}
 
-	assetIndexID, err := validateAssets(runtimeDir, data, &wg, download)
+	setStage("assets", 0)
+	assetIndexID, err := validateAssets(runtimeDir, data, &wg, download, func(count int) {
+		mu.Lock()
+		completed = 0
+		total = count
+		if report != nil {
+			report(stage, completed, total)
+		}
+		mu.Unlock()
+	})
 	if downloadErr := check(); downloadErr != nil {
 		return Prepared{}, &PrepareError{Stage: "assets", Err: downloadErr}
 	}
 	if err != nil {
 		return Prepared{}, &PrepareError{Stage: "assets", Err: err}
 	}
+	setStage("natives", 0)
 	nativesDir, err := mojang.DownloadAndExtractNatives(ctx, data, runtimeDir, version, &wg, download)
 	if err != nil {
 		return Prepared{}, &PrepareError{Stage: "natives", Err: err}

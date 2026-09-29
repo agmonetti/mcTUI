@@ -1,6 +1,7 @@
 package launcher
 
 import (
+	"context"
 	"crypto/sha1"
 	"fmt"
 	"net/http"
@@ -50,6 +51,34 @@ func TestPrepareSharedRuntimeWorksOfflineAndRejectsCorruptCache(t *testing.T) {
 	prepared, err := Prepare(root, version, "Vanilla", func(string) { checked.Add(1) })
 	if err != nil || checked.Load() != 3 || !strings.Contains(prepared.classpath, "lib.jar") {
 		t.Fatalf("initial preparation failed: %+v, %v, files=%d", prepared, err, checked.Load())
+	}
+	var stages []struct {
+		stage       string
+		done, total int
+	}
+	_, err = PrepareWithStageProgress(context.Background(), root, version, "Vanilla", "", func(stage string, done, total int) {
+		stages = append(stages, struct {
+			stage       string
+			done, total int
+		}{stage, done, total})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientDone, libraryDone, assetsKnown := false, false, false
+	for _, s := range stages {
+		if s.stage == "client" && s.done == 1 && s.total == 1 {
+			clientDone = true
+		}
+		if s.stage == "libraries" && s.done == 1 && s.total == 1 {
+			libraryDone = true
+		}
+		if s.stage == "assets" && s.done == 0 && s.total == 0 {
+			assetsKnown = true
+		}
+	}
+	if !clientDone || !libraryDone || !assetsKnown {
+		t.Fatalf("incorrect verified-file progress: %+v", stages)
 	}
 	// A syntactically valid but altered index must be repaired, not trusted.
 	indexPath := filepath.Join(index, "test.json")
@@ -104,7 +133,7 @@ func TestInvalidAssetIndexNeverQueuesDownloads(t *testing.T) {
 			t.Fatal(err)
 		}
 		called := false
-		if err := downloadAssetObjects(root, index, &sync.WaitGroup{}, func(string, string, string) { called = true }); err == nil || called {
+		if err := downloadAssetObjects(root, index, &sync.WaitGroup{}, func(string, string, string) { called = true }, nil); err == nil || called {
 			t.Fatalf("invalid index accepted or downloads queued: %q", contents)
 		}
 	}

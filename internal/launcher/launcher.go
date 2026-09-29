@@ -41,7 +41,7 @@ func ResolvePreparedJava(runtimeDir string, prepared Prepared, overridePath stri
 
 // validateAssets verifies the index against Mojang's published hash, including
 // cached copies, before trusting its list of asset objects.
-func validateAssets(mcDir string, data mojang.VersionData, wg *sync.WaitGroup, download func(url, destination, expectedSHA1 string) error) (string, error) {
+func validateAssets(mcDir string, data mojang.VersionData, wg *sync.WaitGroup, download func(url, destination, expectedSHA1 string) error, onAssets func(int)) (string, error) {
 	hash, err := hex.DecodeString(data.AssetIndex.SHA1)
 	if err != nil || len(hash) != 20 {
 		return "", fmt.Errorf("missing or invalid asset index SHA-1")
@@ -51,7 +51,7 @@ func validateAssets(mcDir string, data mojang.VersionData, wg *sync.WaitGroup, d
 	if err := download(data.AssetIndex.URL, indexPath, data.AssetIndex.SHA1); err != nil {
 		return "", fmt.Errorf("asset index: %w", err)
 	}
-	if err := downloadAssetObjects(mcDir, indexPath, wg, func(url, dest, hash string) { _ = download(url, dest, hash) }); err != nil {
+	if err := downloadAssetObjects(mcDir, indexPath, wg, func(url, dest, hash string) { _ = download(url, dest, hash) }, onAssets); err != nil {
 		return "", fmt.Errorf("invalid asset index: %w", err)
 	}
 	return data.AssetIndex.ID, nil
@@ -59,7 +59,7 @@ func validateAssets(mcDir string, data mojang.VersionData, wg *sync.WaitGroup, d
 
 // downloadAssetObjects reads an asset index JSON and kicks off downloads
 // for every object listed, capped at 50 concurrent downloads.
-func downloadAssetObjects(mcDir, indexPath string, wg *sync.WaitGroup, download func(url, destination, expectedSHA1 string)) error {
+func downloadAssetObjects(mcDir, indexPath string, wg *sync.WaitGroup, download func(url, destination, expectedSHA1 string), onAssets func(int)) error {
 	indexBytes, err := os.ReadFile(indexPath)
 	if err != nil {
 		return err
@@ -82,6 +82,9 @@ func downloadAssetObjects(mcDir, indexPath string, wg *sync.WaitGroup, download 
 		if _, err := hex.DecodeString(obj.Hash); err != nil {
 			return fmt.Errorf("invalid asset hash %q: %w", obj.Hash, err)
 		}
+	}
+	if onAssets != nil {
+		onAssets(len(assetIndexData.Objects))
 	}
 
 	const maxConcurrentAssets = 50
