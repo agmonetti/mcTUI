@@ -1,6 +1,8 @@
 package modrinth
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"crypto/sha512"
 	"crypto/tls"
@@ -13,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -366,6 +369,145 @@ func TestSearchSortingIndex(t *testing.T) {
 	if capturedIndex != "relevance" {
 		t.Fatalf("expected fallback to relevance, got %q", capturedIndex)
 	}
+}
+
+func TestSearchProjectsFacetsAndProjectType(t *testing.T) {
+	expected := [][2]string{{"resourcepack", "minecraft"}, {"shader", "iris"}, {"shader", "optifine"}}
+	var requested atomic.Int32
+	c := mock(t, func(w http.ResponseWriter, r *http.Request) {
+		number := int(requested.Add(1))
+		if number > len(expected) {
+			t.Errorf("unexpected search request %d", number)
+			return
+		}
+		if r.URL.Path != "/v2/search" {
+			t.Errorf("unexpected endpoint %q", r.URL.Path)
+		}
+		q := r.URL.Query()
+		if q.Get("query") != "texture" || q.Get("offset") != "21" || q.Get("index") != "downloads" {
+			t.Errorf("unexpected search parameters: %v", q)
+		}
+		var facets [][]string
+		if err := json.Unmarshal([]byte(q.Get("facets")), &facets); err != nil {
+			t.Errorf("invalid facets: %v", err)
+		}
+		if len(facets) != 3 || len(facets[0]) != 1 || len(facets[1]) != 1 || len(facets[2]) != 1 {
+			t.Errorf("wrong facet groups: %v", facets)
+		} else if facets[0][0] != "project_type:"+expected[number-1][0] ||
+			facets[1][0] != "categories:"+expected[number-1][1] ||
+			facets[2][0] != "versions:1.21.1" {
+			t.Errorf("wrong facets: %v", facets)
+		}
+		fmt.Fprint(w, `{"hits":[{"project_id":"p","project_type":"shader","title":"A shader"}],"total_hits":1}`)
+	})
+	for _, tc := range expected {
+		t.Run(tc[0]+"-"+tc[1], func(t *testing.T) {
+			result, err := c.SearchProjects(context.Background(), "texture", tc[0], tc[1], "1.21.1", 21, "downloads")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(result.Hits) != 1 || result.Hits[0].ProjectType != "shader" {
+				t.Fatalf("project type lost: %+v", result.Hits)
+			}
+		})
+	}
+	if count := requested.Load(); count != 3 {
+		t.Fatalf("expected three requests, got %d", count)
+	}
+	for _, tc := range []struct {
+		projectType, category, minecraft string
+		offset                           int
+	}{
+		{"mod", "fabric", "1.21.1", 0},
+		{"shader", "minecraft", "1.21.1", 0},
+		{"resourcepack", "iris", "1.21.1", 0},
+		{"shader", "iris", "", 0},
+		{"shader", "iris", "1.21.1", -1},
+	} {
+		if _, err := c.SearchProjects(context.Background(), "", tc.projectType, tc.category, tc.minecraft, tc.offset); err == nil {
+			t.Fatalf("accepted invalid filters: %+v", tc)
+		}
+	}
+	if count := requested.Load(); count != 3 {
+		t.Fatalf("invalid filters sent network requests: %d", count)
+	}
+}
+
+func TestStagePackVerifiesZIPAndRemovesFailures(t *testing.T) {
+	var payload bytes.Buffer
+	archive := zip.NewWriter(&payload)
+	entry, err := archive.Create("pack.mcmeta")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = entry.Write([]byte(`{"pack":{"pack_format":34}}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err = archive.Close(); err != nil {
+		t.Fatal(err)
+	}
+	data := payload.Bytes()
+	digest := sha512.Sum512(data)
+	invalidZIP := []byte("not a ZIP")
+	c := mock(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/redirect" {
+			http.Redirect(w, r, "https://evil.example/file.zip", http.StatusFound)
+			return
+		}
+		if r.URL.Path == "/large" {
+			w.Header().Set("Content-Length", fmt.Sprint(maxJAR+1))
+			return
+		}
+		if r.URL.Path == "/invalid" {
+			w.Write(invalidZIP)
+			return
+		}
+		w.Write(data)
+	})
+	dir := t.TempDir()
+	file := File{
+		URL: "https://cdn.modrinth.net/pack.zip", Filename: "pack.zip", Size: int64(len(data)),
+		Hashes: Hashes{SHA512: hex.EncodeToString(digest[:])},
+	}
+	name, err := c.StagePack(context.Background(), file, dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Dir(name) != dir || !strings.HasPrefix(filepath.Base(name), ".tmp-") || filepath.Ext(name) != ".zip" {
+		t.Fatalf("unsafe staging name: %q", name)
+	}
+	got, err := os.ReadFile(name)
+	if err != nil || !bytes.Equal(got, data) {
+		t.Fatalf("incorrect staged ZIP: %v", err)
+	}
+	if err = os.Remove(name); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, filename, url, hash string
+		size                      int64
+	}{
+		{"wrong hash", "pack.zip", file.URL, strings.Repeat("0", 128), file.Size},
+		{"invalid ZIP", "pack.zip", "https://cdn.modrinth.net/invalid", hashString(invalidZIP), 0},
+		{"unsafe filename", "../pack.zip", file.URL, file.Hashes.SHA512, file.Size},
+		{"redirect", "pack.zip", "https://cdn.modrinth.net/redirect", file.Hashes.SHA512, file.Size},
+		{"oversized response", "pack.zip", "https://cdn.modrinth.net/large", file.Hashes.SHA512, file.Size},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bad := File{URL: tc.url, Filename: tc.filename, Size: tc.size, Hashes: Hashes{SHA512: tc.hash}}
+			if path, err := c.StagePack(context.Background(), bad, dir, nil); err == nil {
+				t.Fatalf("accepted bad pack at %q", path)
+			}
+			if entries, err := os.ReadDir(dir); err != nil || len(entries) != 0 {
+				t.Fatalf("staging left files: %v, %v", entries, err)
+			}
+		})
+	}
+}
+
+func hashString(data []byte) string {
+	digest := sha512.Sum512(data)
+	return hex.EncodeToString(digest[:])
 }
 
 func mustJSON(t *testing.T, v any) string {

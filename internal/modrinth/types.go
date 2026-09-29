@@ -4,6 +4,7 @@ import "time"
 
 type Project struct {
 	ID          string `json:"id"`
+	ProjectType string `json:"project_type"`
 	Slug        string `json:"slug"`
 	Title       string `json:"title"`
 	Description string `json:"description"`
@@ -43,6 +44,7 @@ type Version struct {
 }
 type SearchResult struct {
 	ProjectID   string `json:"project_id"`
+	ProjectType string `json:"project_type"`
 	Slug        string `json:"slug"`
 	Title       string `json:"title"`
 	Description string `json:"description"`

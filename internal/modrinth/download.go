@@ -1,6 +1,7 @@
 package modrinth
 
 import (
+	"archive/zip"
 	"context"
 	"crypto"
 	"crypto/sha512"
@@ -18,13 +19,26 @@ import (
 type Progress func(downloaded, total int64)
 
 // Stage downloads to the destination directory but leaves publication to the caller holding the instance lock.
-func (c *Client) Stage(ctx context.Context, file File, dir string, progress Progress) (name string, err error) {
+func (c *Client) Stage(ctx context.Context, file File, dir string, progress Progress) (string, error) {
+	return c.stage(ctx, file, dir, progress, "JAR", ".tmp-*.jar", false)
+}
+
+// StagePack downloads a Modrinth ZIP into a private staging file, verifies its
+// hashes and ZIP structure, and leaves publication to the caller.
+func (c *Client) StagePack(ctx context.Context, file File, dir string, progress Progress) (string, error) {
+	if file.Filename == "" || strings.ContainsAny(file.Filename, `/\`) || !strings.EqualFold(filepath.Ext(file.Filename), ".zip") {
+		return "", fmt.Errorf("invalid pack ZIP filename")
+	}
+	return c.stage(ctx, file, dir, progress, "ZIP", ".tmp-*.zip", true)
+}
+
+func (c *Client) stage(ctx context.Context, file File, dir string, progress Progress, kind, pattern string, verifyZIP bool) (name string, err error) {
 	expected, e := hex.DecodeString(file.Hashes.SHA512)
 	if e != nil || len(expected) != sha512.Size || strings.ToLower(file.Hashes.SHA512) != file.Hashes.SHA512 {
 		return "", fmt.Errorf("invalid SHA-512")
 	}
 	if file.Size > maxJAR || file.Size < 0 {
-		return "", fmt.Errorf("JAR size limit exceeded")
+		return "", fmt.Errorf("%s size limit exceeded", kind)
 	}
 	resp, e := c.request(ctx, "GET", file.URL, nil, true, 5*time.Minute)
 	if e != nil {
@@ -32,12 +46,12 @@ func (c *Client) Stage(ctx context.Context, file File, dir string, progress Prog
 	}
 	defer resp.Body.Close()
 	if resp.ContentLength > maxJAR || strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/html") {
-		return "", fmt.Errorf("unsafe JAR response")
+		return "", fmt.Errorf("unsafe %s response", kind)
 	}
 	if e = os.MkdirAll(dir, 0700); e != nil {
 		return "", e
 	}
-	tmp, e := os.CreateTemp(dir, ".tmp-*.jar")
+	tmp, e := os.CreateTemp(dir, pattern)
 	if e != nil {
 		return "", e
 	}
@@ -46,7 +60,7 @@ func (c *Client) Stage(ctx context.Context, file File, dir string, progress Prog
 			os.Remove(tmp.Name())
 		}
 	}()
-	sha := sha512.New() // SHA-1 is only checked as supplementary Modrinth metadata; SHA-512 gates publication.
+	sha := sha512.New() // SHA-1 is supplementary Modrinth metadata; SHA-512 gates publication.
 	shaOne := crypto.SHA1.New()
 	var hashes hash.Hash = sha
 	reader := io.TeeReader(io.LimitReader(resp.Body, maxJAR+1), io.MultiWriter(hashes, shaOne))
@@ -77,19 +91,19 @@ func (c *Client) Stage(ctx context.Context, file File, dir string, progress Prog
 		}
 	}
 	if err == nil && n > maxJAR {
-		err = fmt.Errorf("JAR size limit exceeded")
+		err = fmt.Errorf("%s size limit exceeded", kind)
 	}
 	if err == nil && resp.ContentLength >= 0 && n != resp.ContentLength {
-		err = fmt.Errorf("truncated JAR response")
+		err = fmt.Errorf("truncated %s response", kind)
 	}
 	if err == nil && file.Size > 0 && n != file.Size {
-		err = fmt.Errorf("JAR size mismatch")
+		err = fmt.Errorf("%s size mismatch", kind)
 	}
 	if err == nil && !strings.EqualFold(hex.EncodeToString(sha.Sum(nil)), file.Hashes.SHA512) {
-		err = fmt.Errorf("JAR SHA-512 mismatch")
+		err = fmt.Errorf("%s SHA-512 mismatch", kind)
 	}
 	if err == nil && file.Hashes.SHA1 != "" && !strings.EqualFold(hex.EncodeToString(shaOne.Sum(nil)), file.Hashes.SHA1) {
-		err = fmt.Errorf("JAR SHA-1 mismatch")
+		err = fmt.Errorf("%s SHA-1 mismatch", kind)
 	}
 	if err == nil {
 		err = tmp.Sync()
@@ -97,6 +111,16 @@ func (c *Client) Stage(ctx context.Context, file File, dir string, progress Prog
 	err = errors.Join(err, tmp.Close())
 	if err != nil {
 		return "", err
+	}
+	if verifyZIP {
+		var archive *zip.ReadCloser
+		archive, err = zip.OpenReader(tmp.Name())
+		if err != nil {
+			return "", fmt.Errorf("invalid pack ZIP: %w", err)
+		}
+		if err = archive.Close(); err != nil {
+			return "", err
+		}
 	}
 	return filepath.Clean(tmp.Name()), nil
 }
