@@ -1,6 +1,10 @@
 <h1 align="center">mcTUI</h1>
 
 <p align="center">
+  <img src="assets/main.png" alt="mcTUI terminal interface" width="850">
+</p>
+
+<p align="center">
   A terminal launcher for Minecraft: Java Edition.<br>
   <strong>Instances | Modrinth | Modpacks | Worlds</strong><br>
   Written in Go for Linux, macOS, and Windows.
@@ -11,11 +15,6 @@
   <a href="https://github.com/agmonetti/mcTUI/releases/latest">Latest release</a>
 </p>
 
----
-
-<p align="center">
-  <img src="assets/main.png" alt="mcTUI terminal interface" width="850">
-</p>
 
 ---
 
