@@ -5,9 +5,8 @@
 </p>
 
 <p align="center">
-  A terminal launcher for Minecraft: Java Edition.<br>
+  A terminal launcher for Minecraft: Java Edition - Written in Go for Linux, macOS, and Windows.<br>
   <strong>Instances | Modrinth | Modpacks | Worlds</strong><br>
-  Written in Go for Linux, macOS, and Windows.
 </p>
 
 <p align="center">
