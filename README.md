@@ -19,7 +19,7 @@
 
 ## Requirements
 
-- A legitimately purchased copy of Minecraft: Java Edition. mcTUI does not provide a game license or Microsoft authentication.
+- A legitimately purchased copy of Minecraft: Java Edition. mcTUI does not provide a game license or Microsoft authentication. If you do not have purchased Minecraft, it is not like this TUI will automatically download the version you want to play..
 - A compatible Java installation available on your system. The required version depends on the Minecraft version you select.
 - An existing official `.minecraft` installation if you want to manage your legacy game data. Managed instances use separate directories.
 
