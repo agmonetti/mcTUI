@@ -4,6 +4,10 @@
 
 An extremely lightweight, fast, and pure terminal (TUI) Minecraft (Java Edition) launcher. Written in Go, designed for minimalist environments and users who prefer the console.
 
+> ⚠️ **MANDATORY PREREQUISITE / REQUISITO OBLIGATORIO:**  
+> **mcTUI ONLY works if you have purchased and downloaded Minecraft: Java Edition on your system.**  
+> mcTUI is strictly a terminal frontend and local management utility that operates on top of an existing, official `.minecraft` installation. It **does not** provide, distribute, or pirate the game, nor does it bypass Mojang or Microsoft DRM/authentication. **Without an official, legitimately purchased copy of Minecraft already downloaded and installed on your computer, mcTUI will NOT function.**
+
 ---
 
 ## Quick Install (Linux/macOS)
@@ -116,7 +120,7 @@ an indeterminate bar. Press `Esc` to cancel preparation.
 * **Cross-Platform:** Native path resolution and execution for Linux, macOS, and Windows.
 * **Secure LAN Multiplayer:** Generates dynamic v4 UUIDs in each session to avoid "duplicate name" conflicts on local servers.
 * **XDG Persistence:** Saves your configuration (username, modloader state, and last played version) following Linux and Windows OS standards.
-* **Legitimacy First:** Verifies existing official Minecraft installations for proprietary binaries (`client.jar`) before taking action, acting as a local utility rather than a direct distributor.
+* **Legitimacy First:** Operates exclusively on officially purchased and downloaded Minecraft installations. Verifies existing official installations for proprietary binaries (`client.jar`) and assets before taking action, acting strictly as a local utility rather than a direct distributor.
 * **Smart Java Detection:** Automatically detects the Java version required
   by each Minecraft version and locates a compatible JRE on your system
   (PATH, common install directories, or IDE-managed JDKs), even if it's not
@@ -126,11 +130,11 @@ an indeterminate bar. Press `Esc` to cancel preparation.
 
 ## Requirements
 
+* **Official Minecraft Installation (Mandatory):** An official, legitimately purchased copy of Minecraft: Java Edition downloaded on your system (`~/.minecraft` on Linux/macOS, `%APPDATA%\.minecraft` on Windows) via the official Mojang launcher. mcTUI relies on pre-existing game assets, libraries, and binaries from your official installation and **does not function without a valid, purchased, and downloaded Minecraft installation**.
 * **Operating System:** Linux (Tested on Arch Linux), macOS, or Windows.
 * **Java Runtime Environment:**
-* `jre17-openjdk` (For Minecraft 1.17 to 1.20.4)
-* `jre21-openjdk` (For Minecraft 1.20.5+)
-
+  * `jre17-openjdk` (For Minecraft 1.17 to 1.20.4)
+  * `jre21-openjdk` (For Minecraft 1.20.5+)
 
 
 ---
@@ -139,7 +143,7 @@ an indeterminate bar. Press `Esc` to cancel preparation.
 
 For Windows users who do not wish to compile from source, pre-built binaries are provided.
 
-1. Download the latest `mctui-windows-amd64.exe` from the [Releases](https://www.google.com/search?q=https://github.com/agmonetti/mcTUI/releases) page.
+1. Download the latest `mctui-windows-amd64.exe` from the [Releases](https://github.com/agmonetti/mcTUI/releases) page.
 2. Ensure you have the correct Java version installed (e.g., Eclipse Temurin). **Crucial:** You must check the option to add Java to your system's `PATH` variable during installation.
 3. Open a **PowerShell** window in the directory where you downloaded the executable.
 4. Run the launcher using the following command:
@@ -211,12 +215,14 @@ mctui
 > **Note:** Use `↑/↓` arrows to navigate, `Enter` to select/toggle, and `Esc/q` to quit or go back.
 > **Note:** Usernames must be 1-16 characters, using only letters, numbers, and underscores — this matches Minecraft's own requirements.
 
-## Disclaimer
+## Disclaimer & Legitimacy Policy
+
+**Strict Requirement:** mcTUI **ONLY** works if you have purchased and downloaded an official copy of Minecraft: Java Edition on your machine.
 
 This project is strictly an educational tool demonstrating concurrency in Go, REST API consumption, TUI design, and OS subprocess management.
 
-**mcTUI is designed to operate as a local utility over existing, officially acquired Minecraft installations.** It does not act as a primary distributor for proprietary Mojang binaries (such as `client.jar`).
+**mcTUI is designed to operate solely as a local utility over existing, officially acquired, and downloaded Minecraft installations.** It does not act as a distributor for proprietary Mojang binaries (such as `client.jar`) and does not facilitate any unauthorized access.
 
-The networking capabilities implemented rely entirely on the official, documented Minecraft protocol for Local Area Networks (LAN) and development environments. It connects exclusively to local servers explicitly configured with `online-mode=false`. **This project does not circumvent DRM, nor does it encourage or facilitate software piracy.** To play on standard, authenticated public servers, you must own a legitimate copy of the game via [minecraft.net](https://www.minecraft.net/).
+The networking capabilities implemented rely entirely on the official, documented Minecraft protocol for Local Area Networks (LAN) and development environments. It connects exclusively to local servers explicitly configured with `online-mode=false`. **This project does not circumvent DRM, nor does it encourage or facilitate software piracy.** To play Minecraft, you must own a legitimate copy of the game purchased via [minecraft.net](https://www.minecraft.net/).
 
-*Not affiliated with Mojang AB or Microsoft.*
+*Not affiliated with, endorsed by, or associated with Mojang AB, Microsoft, or any of their affiliates.*

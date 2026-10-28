@@ -4,6 +4,8 @@
 > **Fecha:** 2026-09-26  
 > **Idiomas iniciales:** Inglés (`en`, idioma base/fallback) y Español (`es`).  
 > **Enfoque técnico:** Estándar Go (`go:embed` + JSON), cero dependencias externas, fallback determinista y persistencia en configuración global.
+> **Requisito mandatorio:** mcTUI solo funciona si el usuario cuenta con una copia de Minecraft: Java Edition comprada y descargada oficialmente en su equipo (`~/.minecraft` o `%APPDATA%\.minecraft`). No brinda soporte a versiones no autorizadas.
+
 
 ---
 

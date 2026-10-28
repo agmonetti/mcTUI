@@ -5,6 +5,8 @@
 > Antecedente: [RESET_CONFIGS.md](RESET_CONFIGS.md), sección «Fase 5: gestor de mods».
 > Objetivo solicitado: integración completa en mcTUI, tomando Prism Launcher como referencia funcional.
 > Este documento conserva la investigación, la propuesta técnica, las tareas y las decisiones abiertas. Una propuesta aquí no equivale a una funcionalidad implementada ni a una decisión de producto aprobada.
+> **Requisito mandatorio:** mcTUI solo funciona si el usuario posee Minecraft: Java Edition comprado y descargado oficialmente en su sistema. mcTUI no distribuye el juego de forma independiente ni evade licencias.
+
 
 ## 1. Objetivo y definición de alcance
 

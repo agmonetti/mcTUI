@@ -8,6 +8,8 @@ El objetivo es ofrecer una limpieza segura desde la TUI, sin necesidad de abrir 
 
 La operación debe ser conservadora: no debe borrar mundos guardados, versiones descargadas, librerías, assets ni shaders.
 
+> **Requisito obligatorio:** mcTUI y la funcionalidad `Resets Configs` operan exclusivamente sobre una instalación legítima de Minecraft: Java Edition comprada y descargada previamente en el equipo a través del launcher oficial. No funcionan ni tienen soporte para copias no autorizadas o carpetas sin una instalación oficial preexistente.
+
 ---
 
 ## Problema que resuelve
