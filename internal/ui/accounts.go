@@ -181,7 +181,9 @@ func (m Model) renderDeviceCodeContent() string {
 
 	b.WriteString(lipgloss.NewStyle().Foreground(colorWhite).Render(i18n.T("msa.step1")) + "\n")
 	urlLink := lipgloss.NewStyle().Foreground(colorAccent2).Underline(true).Render(m.deviceCodeResp.VerificationURI)
-	b.WriteString("  " + urlLink + "\n\n")
+	b.WriteString("  " + urlLink + "\n")
+	tip := lipgloss.NewStyle().Foreground(colorGray).Render("  " + i18n.T("msa.tip_incognito"))
+	b.WriteString(tip + "\n\n")
 
 	b.WriteString(lipgloss.NewStyle().Foreground(colorWhite).Render(i18n.T("msa.step2")) + "\n\n")
 

@@ -13,6 +13,7 @@
   "accounts.empty": "No accounts configured.",
   "msa.title": "SIGN IN WITH MICROSOFT",
   "msa.step1": "1. Open in your browser:",
+  "msa.tip_incognito": "Tip: If you have multiple accounts, open link in private/incognito window.",
   "msa.step2": "2. Enter the authorization code:",
   "msa.waiting": "Waiting for Microsoft confirmation... (expires in %02d:%02d)",
   "msa.copy": "[C] Copy code",

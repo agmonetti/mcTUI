@@ -13,6 +13,7 @@
   "accounts.empty": "No hay cuentas configuradas.",
   "msa.title": "INICIAR SESIÓN CON MICROSOFT",
   "msa.step1": "1. Abra en su navegador:",
+  "msa.tip_incognito": "Consejo: Si usas varias cuentas, abre el enlace en ventana privada/incógnito.",
   "msa.step2": "2. Ingrese el código de autorización:",
   "msa.waiting": "Esperando confirmación en Microsoft... (expira en %02d:%02d)",
   "msa.copy": "[C] Copiar código",
