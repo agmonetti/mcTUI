@@ -92,7 +92,7 @@ const (
 )
 
 // menuOptionsCount must match len(menuOptions) in View().
-const menuOptionsCount = 6
+const menuOptionsCount = 7
 
 // configOptionsCount must match len(configOptions) in View() for the config submenu.
 const configOptionsCount = 7
@@ -170,6 +170,7 @@ type Model struct {
 
 	authStorage          *auth.Storage
 	accountsCursor       int
+	accountsFromConfig   bool
 	deviceCodeResp       *auth.DeviceCodeResponse
 	deviceCodeCancel     context.CancelFunc
 	deviceCodeErr        error

@@ -462,6 +462,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "a", "A":
 			if m.state == menuScreen {
 				m.state = accountsScreen
+				m.accountsFromConfig = false
 				if m.authStorage != nil {
 					for i, acc := range m.authStorage.Accounts {
 						if acc.ID == m.authStorage.ActiveAccountID {
@@ -613,7 +614,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				switch m.cursorMenu {
 				case 0: // Play
 					m.state = confirmScreen
-				case 1: // Worlds
+				case 1: // Accounts
+					m.state = accountsScreen
+					m.accountsFromConfig = false
+					if m.authStorage != nil {
+						for i, acc := range m.authStorage.Accounts {
+							if acc.ID == m.authStorage.ActiveAccountID {
+								m.accountsCursor = i
+								break
+							}
+						}
+					}
+				case 2: // Worlds
 					gameDir, err := instances.GameDir(m.dataRoot, m.instance)
 					if err != nil {
 						m.instanceErr = err
@@ -622,10 +634,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					m.state = worldsScreen
 					m.cursorWorlds = 0
-				case 2: // Modrinth
+				case 3: // Modrinth
 					m.hubCursor = 0
 					m.state = modrinthHubScreen
-				case 3: // Change Instances
+				case 4: // Change Instances
 					m.instanceList, m.instanceErr = instances.List(m.dataRoot)
 					m.instanceCursor = 0
 					for i, in := range m.instanceList {
@@ -635,16 +647,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 					m.state = instancesScreen
-				case 4: // Configs
+				case 5: // Configs
 					m.cursorConfig = 0
 					m.state = configScreen
-				case 5: // Quit
+				case 6: // Quit
 					return m, tea.Quit
 				}
 			} else if m.state == configScreen {
 				switch m.cursorConfig {
 				case 0: // Accounts
 					m.state = accountsScreen
+					m.accountsFromConfig = true
 					if m.authStorage != nil {
 						for i, acc := range m.authStorage.Accounts {
 							if acc.ID == m.authStorage.ActiveAccountID {
@@ -1049,7 +1062,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if m.state == nameScreen {
 				m.state = accountsScreen
 			} else if m.state == accountsScreen {
-				m.state = configScreen
+				if m.accountsFromConfig {
+					m.state = configScreen
+				} else {
+					m.state = menuScreen
+					m.cursorMenu = 1
+				}
 			} else if m.state == deviceCodeScreen {
 				if m.deviceCodeCancel != nil {
 					m.deviceCodeCancel()

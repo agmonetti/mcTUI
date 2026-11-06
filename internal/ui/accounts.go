@@ -185,13 +185,16 @@ func (m Model) renderDeviceCodeContent() string {
 
 	b.WriteString(lipgloss.NewStyle().Foreground(colorWhite).Render(i18n.T("msa.step2")) + "\n\n")
 
+	userCode := m.deviceCodeResp.UserCode
+	inner := fmt.Sprintf("   %s   ", userCode)
+	bar := strings.Repeat("─", len(inner))
+	top := "┌" + bar + "┐"
+	mid := "│" + inner + "│"
+	bot := "└" + bar + "┘"
 	codeBox := lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
-		BorderForeground(colorAccent).
-		Foreground(colorAccent2).
+		Foreground(colorAccent).
 		Bold(true).
-		Padding(0, 2).
-		Render("  " + m.deviceCodeResp.UserCode + "  ")
+		Render(top + "\n" + mid + "\n" + bot)
 
 	b.WriteString("  " + codeBox + "\n\n")
 

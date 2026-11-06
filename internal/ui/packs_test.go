@@ -78,7 +78,7 @@ func TestPacksNavigationInstanceIsolation(t *testing.T) {
 	if err := (packs.Store{GameDir: firstDir}).Add(packs.Resource, archive); err != nil {
 		t.Fatal(err)
 	}
-	m := Model{state: menuScreen, cursorMenu: 2, dataRoot: root, instance: first, width: 120, height: 35}
+	m := Model{state: menuScreen, cursorMenu: 3, dataRoot: root, instance: first, width: 120, height: 35}
 	var cmd tea.Cmd
 	var next tea.Model
 	next, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})

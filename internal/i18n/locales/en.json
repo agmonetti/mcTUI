@@ -95,6 +95,7 @@
   "menu.verify_hint": "Check files before Play; missing or corrupt\nfiles may be downloaded from Mojang/Fabric.",
   "menu.yes_hint": "[y/Enter] YES",
   "topbar.play": "PLAY",
+  "topbar.accounts": "ACCOUNTS",
   "topbar.version": "VERSION",
   "topbar.instances": "INSTANCES",
   "topbar.mods": "MODS",

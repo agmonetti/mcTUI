@@ -86,6 +86,7 @@ func (m Model) View() string {
 	// ── Main menu ─────────────────────────────────────────────────────────────
 	menuOptions := []string{
 		i18n.T("menu.play", m.versionSelect),
+		i18n.T("menu.accounts_simple"),
 		i18n.T("menu.worlds"),
 		i18n.T("menu.modrinth"),
 		i18n.T("menu.change_instances"),
@@ -178,6 +179,8 @@ func (m Model) View() string {
 	case isConfigScreen:
 		m.renderActiveSession(&contentStr)
 	case m.state == menuScreen && m.cursorMenu == 1:
+		contentStr.WriteString(m.renderAccountsContent())
+	case m.state == menuScreen && m.cursorMenu == 2:
 		m.renderWorldsHint(&contentStr)
 	case m.state == menuScreen:
 		m.renderActiveSession(&contentStr)
@@ -686,9 +689,9 @@ func (m Model) controlsHint() string {
 		return i18n.T("accounts.help")
 	case deviceCodeScreen:
 		if m.deviceCodeErr != nil {
-			return "[Esc] " + i18n.T("msa.cancel")
+			return i18n.T("msa.cancel")
 		}
-		return "[C] " + i18n.T("msa.copy") + "   [B] " + i18n.T("msa.open_browser") + "   [Esc] " + i18n.T("msa.cancel")
+		return i18n.T("msa.copy") + "   " + i18n.T("msa.open_browser") + "   " + i18n.T("msa.cancel")
 	case nameScreen:
 		return i18n.T("footer.save")
 	case configScreen, versionsScreen:

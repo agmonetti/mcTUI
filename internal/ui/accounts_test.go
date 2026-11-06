@@ -82,11 +82,11 @@ func TestAccountsScreenNavigationAndSwitch(t *testing.T) {
 		t.Fatalf("expected state accountsScreen after Esc, got %v", m.state)
 	}
 
-	// Press 'esc' to return to configScreen
+	// Press 'esc' to return to menuScreen
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	m = updated.(Model)
-	if m.state != configScreen {
-		t.Fatalf("expected state configScreen after Esc, got %v", m.state)
+	if m.state != menuScreen || m.cursorMenu != 1 {
+		t.Fatalf("expected state menuScreen with cursorMenu 1 after Esc, got state=%v cursorMenu=%d", m.state, m.cursorMenu)
 	}
 }
 

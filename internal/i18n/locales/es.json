@@ -95,6 +95,7 @@
   "menu.verify_hint": "Revisa los archivos antes de jugar; los que falten o estén dañados\nse descargarán de Mojang/Fabric.",
   "menu.yes_hint": "[y/Enter] SÍ",
   "topbar.play": "JUGAR",
+  "topbar.accounts": "CUENTAS",
   "topbar.version": "VERSIÓN",
   "topbar.instances": "INSTANCIAS",
   "topbar.mods": "MODS",

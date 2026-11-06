@@ -76,8 +76,8 @@ func TestMainMenuNavigationAndTransitions(t *testing.T) {
 		t.Fatalf("expected cursorMenu 0, got %d", m.cursorMenu)
 	}
 
-	// Down arrow moves cursor down to menuOptionsCount-1 (5)
-	for expected := 1; expected <= 5; expected++ {
+	// Down arrow moves cursor down to menuOptionsCount-1 (6)
+	for expected := 1; expected <= 6; expected++ {
 		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 		m = updated.(Model)
 		if m.cursorMenu != expected {
@@ -85,20 +85,20 @@ func TestMainMenuNavigationAndTransitions(t *testing.T) {
 		}
 	}
 
-	// Down when at cursorMenu 5 should stay at 5
+	// Down when at cursorMenu 6 should stay at 6
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m = updated.(Model)
-	if m.cursorMenu != 5 {
-		t.Fatalf("expected cursorMenu to stay at 5, got %d", m.cursorMenu)
+	if m.cursorMenu != 6 {
+		t.Fatalf("expected cursorMenu to stay at 6, got %d", m.cursorMenu)
 	}
 
-	// Enter on Quit (cursor 5) quits
+	// Enter on Quit (cursor 6) quits
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd == nil {
 		t.Fatal("expected quit cmd when pressing Enter on Quit option")
 	}
 
-	// Test transitions for options 0, 1, 2, 3:
+	// Test transitions for options:
 	// 0: Play -> confirmScreen
 	m.cursorMenu = 0
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -114,8 +114,21 @@ func TestMainMenuNavigationAndTransitions(t *testing.T) {
 		t.Fatalf("expected menuScreen after Esc, got %v", m.state)
 	}
 
-	// 1: Worlds -> worldsScreen
+	// 1: Accounts -> accountsScreen
 	m.cursorMenu = 1
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if m.state != accountsScreen {
+		t.Fatalf("expected accountsScreen for Accounts, got %v", m.state)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = updated.(Model)
+	if m.state != menuScreen {
+		t.Fatalf("expected menuScreen after Esc, got %v", m.state)
+	}
+
+	// 2: Worlds -> worldsScreen
+	m.cursorMenu = 2
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
 	if m.state != worldsScreen {
@@ -127,8 +140,8 @@ func TestMainMenuNavigationAndTransitions(t *testing.T) {
 		t.Fatalf("expected menuScreen after Esc, got %v", m.state)
 	}
 
-	// Modrinth opens a category hub; mods remain reachable from it.
-	m.cursorMenu = 2
+	// 3: Modrinth opens a category hub; mods remain reachable from it.
+	m.cursorMenu = 3
 	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
 	if m.state != modrinthHubScreen {
@@ -141,8 +154,8 @@ func TestMainMenuNavigationAndTransitions(t *testing.T) {
 	}
 	m.state = menuScreen
 
-	// 3: Change Instances -> instancesScreen
-	m.cursorMenu = 3
+	// 4: Change Instances -> instancesScreen
+	m.cursorMenu = 4
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
 	if m.state != instancesScreen {
@@ -154,8 +167,8 @@ func TestMainMenuNavigationAndTransitions(t *testing.T) {
 		t.Fatalf("expected menuScreen after Esc, got %v", m.state)
 	}
 
-	// 4: Configs -> configScreen
-	m.cursorMenu = 4
+	// 5: Configs -> configScreen
+	m.cursorMenu = 5
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
 	if m.state != configScreen || m.cursorConfig != 0 {
@@ -177,7 +190,7 @@ func TestConfigSubmenuOptionsAndNavigation(t *testing.T) {
 
 	m := Model{
 		state:         configScreen,
-		cursorMenu:    4,
+		cursorMenu:    5,
 		cursorConfig:  0,
 		username:      "Steve",
 		versionSelect: "1.20.4",
@@ -252,8 +265,8 @@ func TestConfigSubmenuOptionsAndNavigation(t *testing.T) {
 	// Esc returns to menuScreen
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	m = updated.(Model)
-	if m.state != menuScreen || m.cursorMenu != 4 {
-		t.Fatalf("expected menuScreen with cursorMenu 4 after Esc, got state=%v cursorMenu=%d", m.state, m.cursorMenu)
+	if m.state != menuScreen || m.cursorMenu != 5 {
+		t.Fatalf("expected menuScreen with cursorMenu 5 after Esc, got state=%v cursorMenu=%d", m.state, m.cursorMenu)
 	}
 
 	// 'q' on configScreen also returns to menuScreen
@@ -279,7 +292,7 @@ func TestConfigSubmenuActions(t *testing.T) {
 
 	m := Model{
 		state:         configScreen,
-		cursorMenu:    4,
+		cursorMenu:    5,
 		cursorConfig:  0,
 		username:      "Player",
 		versionSelect: "1.20.4",
