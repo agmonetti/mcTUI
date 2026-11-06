@@ -16,7 +16,7 @@ import (
 var (
 	storageMu sync.RWMutex
 	// DefaultClientID can be overridden by MCTUI_MSA_CLIENT_ID environment variable
-	DefaultClientID = "c36a9fb6-4f2a-41ff-90bd-ae7cc92031eb"
+	DefaultClientID = "2bcbac53-dc06-4046-b77a-5bcdc9e12db0"
 )
 
 // GetClientID returns the Azure Client ID used for Microsoft OAuth.
