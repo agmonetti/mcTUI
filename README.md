@@ -19,13 +19,14 @@
 
 ## Requirements
 
-- A legitimately purchased copy of Minecraft: Java Edition. mcTUI does not provide a game license or Microsoft authentication. If you do not have purchased Minecraft, it is not like this TUI will automatically download the version you want to play..
+- A Minecraft: Java Edition account (Microsoft OAuth) for official online servers, or an offline profile for local/LAN play.
 - A compatible Java installation available on your system. The required version depends on the Minecraft version you select.
 - An existing official `.minecraft` installation if you want to manage your legacy game data. Managed instances use separate directories.
 
 ## Features
 
 - Terminal interface with keyboard navigation, powered by [Bubble Tea](https://github.com/charmbracelet/bubbletea).
+- Microsoft Account OAuth authentication (Device Code flow) and flexible multi-account offline profile switcher.
 - Separate instances with their own Minecraft version, Fabric loader, Java runtime, and memory allocation.
 - Modrinth search and installation for mods, resource packs, and shaders, including dependency resolution.
 - Import, update, and export of Modrinth `.mrpack` modpacks.
@@ -56,4 +57,4 @@ For configuration, paths, features, and development instructions, see the [offic
 
 ## Disclaimer
 
-mcTUI is an independent project and is not affiliated with Mojang or Microsoft. It does not provide a Minecraft license or Microsoft authentication. It can download game files from official sources to prepare a local instance, but does not grant access to online-mode servers. Its offline username mode is intended for local or explicitly configured LAN servers. You must own Minecraft: Java Edition to use it legitimately.
+mcTUI is an independent project and is not affiliated with Mojang or Microsoft. Playing on official online-mode servers requires authenticating with a valid Microsoft account that owns Minecraft: Java Edition. Offline mode is supported for local, singleplayer, and LAN play.
