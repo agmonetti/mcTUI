@@ -198,7 +198,7 @@ func TestConfigSubmenuOptionsAndNavigation(t *testing.T) {
 
 	// Config screen must contain all 7 config options
 	expectedConfigs := []string{
-		"Change Name",
+		"Accounts",
 		"Minecraft: 1.20.4",
 		"Modloader: Vanilla",
 		"Memory: 2048 MB",
@@ -291,12 +291,12 @@ func TestConfigSubmenuActions(t *testing.T) {
 		height:        35,
 	}
 
-	// 0: Change Name -> nameScreen, Esc returns to configScreen
+	// 0: Accounts -> accountsScreen, Esc returns to configScreen
 	m.cursorConfig = 0
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
-	if m.state != nameScreen {
-		t.Fatalf("expected nameScreen, got %v", m.state)
+	if m.state != accountsScreen {
+		t.Fatalf("expected accountsScreen, got %v", m.state)
 	}
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	m = updated.(Model)

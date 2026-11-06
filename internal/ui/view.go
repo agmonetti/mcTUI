@@ -56,10 +56,10 @@ func (m Model) View() string {
 	cached := filesCached(m.runtimeDir(), m.versionSelect, m.modloader, m.instance.LoaderVersion)
 
 	// ── Panel izquierdo: Profile Card + menú ────────────────────────────────
-	profileCard := renderProfileCard(m.username, m.versionSelect, m.modloader)
+	profileCard := renderProfileCard(m.username, m.versionSelect, m.modloader, m.currentAccountType())
 
 	menuStr := strings.Builder{}
-	isConfigScreen := m.state == configScreen
+	isConfigScreen := m.state == configScreen || m.state == accountsScreen || m.state == deviceCodeScreen
 	menuHeader := i18n.T("menu.options")
 	if isConfigScreen {
 		menuHeader = i18n.T("menu.configs")
@@ -95,8 +95,14 @@ func (m Model) View() string {
 
 	showConfigs := isConfigScreen || resetActive
 	if showConfigs {
+		accountLabel := m.username
+		if m.currentAccountType() == "microsoft" {
+			accountLabel += " [MSA]"
+		} else {
+			accountLabel += " [Offline]"
+		}
 		configOptions := []string{
-			i18n.T("menu.change_name"),
+			i18n.T("menu.accounts", accountLabel),
 			versionLabel,
 			i18n.T("menu.modloader", lipgloss.NewStyle().Foreground(colorAccent2).Render(loaderLabel)),
 			i18n.T("menu.memory", m.memoryMB),
@@ -149,6 +155,10 @@ func (m Model) View() string {
 	// ── Panel central: detalle ───────────────────────────────────────────────
 	contentStr := strings.Builder{}
 	switch {
+	case m.state == accountsScreen:
+		contentStr.WriteString(m.renderAccountsContent())
+	case m.state == deviceCodeScreen:
+		contentStr.WriteString(m.renderDeviceCodeContent())
 	case m.state == resetPickerScreen:
 		contentStr.WriteString(m.pickerPanelContent())
 	case resetActive:
@@ -678,6 +688,10 @@ func (m Model) controlsHint() string {
 		return " " + i18n.T("footer.controls")
 	}
 	switch m.state {
+	case accountsScreen:
+		return i18n.T("accounts.help")
+	case deviceCodeScreen:
+		return "[C] Copiar   [B] Navegador   [Esc] Cancelar"
 	case nameScreen:
 		return i18n.T("footer.save")
 	case configScreen, versionsScreen:

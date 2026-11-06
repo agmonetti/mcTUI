@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"mcTUI/internal/auth"
 	"mcTUI/internal/config"
 	"mcTUI/internal/fabric"
 	"mcTUI/internal/i18n"
@@ -18,6 +19,7 @@ import (
 	"mcTUI/internal/mojang"
 	"mcTUI/internal/resetconfigs"
 	"mcTUI/internal/worlds"
+	"time"
 )
 
 // validUsername reports whether name is a valid Minecraft username: 1-16
@@ -267,6 +269,57 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+	case deviceCodeInitMsg:
+		if msg.err != nil {
+			m.deviceCodeErr = msg.err
+			return m, nil
+		}
+		m.deviceCodeResp = msg.resp
+		m.deviceCodeCancel = msg.cancel
+		m.deviceCodeExpiresIn = msg.resp.ExpiresIn
+		m.deviceCodeTick = 0
+		m.deviceCodeCopied = false
+		m.deviceCodeErr = nil
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(msg.resp.ExpiresIn)*time.Second)
+		m.deviceCodeCancel = cancel
+		return m, tea.Batch(
+			pollDeviceCodeCmd(ctx, msg.resp.DeviceCode, msg.resp.Interval),
+			deviceCodeTickCmd(),
+		)
+
+	case deviceCodeTickMsg:
+		if m.state == deviceCodeScreen && m.deviceCodeExpiresIn > 0 {
+			m.deviceCodeExpiresIn--
+			m.deviceCodeTick++
+			return m, deviceCodeTickCmd()
+		}
+		return m, nil
+
+	case deviceCodeAuthResultMsg:
+		if msg.err != nil {
+			m.deviceCodeErr = msg.err
+			return m, nil
+		}
+		if msg.account != nil {
+			if m.authStorage == nil {
+				m.authStorage, _ = auth.LoadStorage()
+			}
+			if m.authStorage == nil {
+				m.authStorage = &auth.Storage{}
+			}
+			m.authStorage.AddAccount(*msg.account, true)
+			_ = auth.SaveStorage(m.authStorage)
+			m.username = msg.account.Username
+			m.save()
+			m.state = accountsScreen
+			m.deviceCodeResp = nil
+			if m.deviceCodeCancel != nil {
+				m.deviceCodeCancel()
+				m.deviceCodeCancel = nil
+			}
+		}
+		return m, nil
+
 	case DownloadDoneMsg:
 		if m.state != downloadScreen {
 			return m, nil
@@ -292,7 +345,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if err := modpacks.Recover(dataRoot, targetInstance); err != nil {
 				return GameStartedMsg{Err: err}
 			}
-			game, err := launcher.StartPrepared(launch.GameDir, launch.RuntimeDir, msg.JavaBinary, launch.Username, launch.Version, launch.MemoryMB, msg.Prepared)
+			game, err := launcher.StartPreparedWithAuth(launch.GameDir, launch.RuntimeDir, msg.JavaBinary, launch.Version, launch.MemoryMB, launcher.AuthSession{
+				Username:    launch.Username,
+				UUID:        launch.UUID,
+				AccessToken: launch.AccessToken,
+				UserType:    launch.UserType,
+			}, msg.Prepared)
 			return GameStartedMsg{Game: game, Err: err}
 		}
 
@@ -401,9 +459,47 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state = instancesScreen
 			}
 
+		case "a", "A":
+			if m.state == menuScreen {
+				m.state = accountsScreen
+				if m.authStorage != nil {
+					for i, acc := range m.authStorage.Accounts {
+						if acc.ID == m.authStorage.ActiveAccountID {
+							m.accountsCursor = i
+							break
+						}
+					}
+				}
+				return m, nil
+			} else if m.state == accountsScreen {
+				m.state = deviceCodeScreen
+				m.deviceCodeResp = nil
+				m.deviceCodeErr = nil
+				m.deviceCodeCopied = false
+				return m, startDeviceCodeCmd()
+			}
+
+		case "o", "O":
+			if m.state == accountsScreen {
+				m.state = nameScreen
+				m.input.CharLimit = 16
+				m.input.Placeholder = i18n.T("input.username_placeholder")
+				m.input.SetValue(m.username)
+				m.input.Focus()
+				return m, nil
+			}
+
+		case "b", "B":
+			if m.state == deviceCodeScreen && m.deviceCodeResp != nil {
+				_ = openBrowser(m.deviceCodeResp.VerificationURI)
+				return m, nil
+			}
+
 		case "up", "k":
 			if m.state == instanceCopySelectScreen && m.copyCursor > 0 {
 				m.copyCursor--
+			} else if m.state == accountsScreen && m.accountsCursor > 0 {
+				m.accountsCursor--
 			} else if m.state == instancesScreen && m.instanceCursor > 0 {
 				m.instanceCursor--
 			} else if m.state == menuScreen && m.cursorMenu > 0 {
@@ -419,6 +515,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "down", "j":
 			if m.state == instanceCopySelectScreen && m.copyCursor+1 < len(m.copyItems) {
 				m.copyCursor++
+			} else if m.state == accountsScreen && m.authStorage != nil && m.accountsCursor < len(m.authStorage.Accounts)-1 {
+				m.accountsCursor++
 			} else if m.state == instancesScreen && m.instanceCursor+1 < len(m.instanceList) {
 				m.instanceCursor++
 			} else if m.state == menuScreen && m.cursorMenu < menuOptionsCount-1 {
@@ -545,11 +643,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			} else if m.state == configScreen {
 				switch m.cursorConfig {
-				case 0: // Change Name
-					m.state = nameScreen
-					m.input.CharLimit = 16
-					m.input.Placeholder = i18n.T("input.username_placeholder")
-					m.input.SetValue(m.username)
+				case 0: // Accounts
+					m.state = accountsScreen
+					if m.authStorage != nil {
+						for i, acc := range m.authStorage.Accounts {
+							if acc.ID == m.authStorage.ActiveAccountID {
+								m.accountsCursor = i
+								break
+							}
+						}
+					}
 				case 1: // Change Version
 					if m.isManaged() {
 						m.instanceErr = fmt.Errorf("%s", i18n.T("error.version_fixed"))
@@ -638,11 +741,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					cfg.Language = i18n.CurrentLanguage()
 					config.Save(cfg)
 				}
+			} else if m.state == accountsScreen {
+				if m.authStorage != nil && m.accountsCursor >= 0 && m.accountsCursor < len(m.authStorage.Accounts) {
+					selAcc := m.authStorage.Accounts[m.accountsCursor]
+					_ = m.authStorage.SetActive(selAcc.ID)
+					_ = auth.SaveStorage(m.authStorage)
+					m.username = selAcc.Username
+					m.save()
+				}
 			} else if m.state == nameScreen {
 				if validUsername(m.input.Value()) {
 					m.username = m.input.Value()
 					m.save()
-					m.state = configScreen
+					if m.authStorage != nil {
+						offID := auth.OfflineUUID(m.username)
+						m.authStorage.AddAccount(auth.Account{
+							ID:        offID,
+							Username:  m.username,
+							Type:      auth.AccountTypeOffline,
+							CreatedAt: time.Now(),
+						}, true)
+						_ = auth.SaveStorage(m.authStorage)
+					}
+					m.state = accountsScreen
 				}
 				// else: stay on nameScreen, showing the validation hint
 			} else if m.state == versionsScreen {
@@ -756,6 +877,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "c", "C":
+			if m.state == deviceCodeScreen && m.deviceCodeResp != nil {
+				if err := copyToClipboard(m.deviceCodeResp.UserCode); err == nil {
+					m.deviceCodeCopied = true
+				}
+				return m, nil
+			}
 			if m.state == worldsScreen && len(m.worlds) > 0 {
 				m.worldCopySource = m.worlds[m.cursorWorlds]
 				list, err := instances.List(m.dataRoot)
@@ -852,7 +979,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "d", "D":
-			if m.state == instancesScreen && m.instanceCursor >= 0 && m.instanceCursor < len(m.instanceList) {
+			if m.state == accountsScreen {
+				if m.authStorage != nil && len(m.authStorage.Accounts) > 1 && m.accountsCursor < len(m.authStorage.Accounts) {
+					idToRemove := m.authStorage.Accounts[m.accountsCursor].ID
+					m.authStorage.RemoveAccount(idToRemove)
+					if m.accountsCursor >= len(m.authStorage.Accounts) {
+						m.accountsCursor = len(m.authStorage.Accounts) - 1
+					}
+					if act := m.authStorage.GetActive(); act != nil {
+						m.username = act.Username
+						m.save()
+					}
+					_ = auth.SaveStorage(m.authStorage)
+				}
+				return m, nil
+			} else if m.state == instancesScreen && m.instanceCursor >= 0 && m.instanceCursor < len(m.instanceList) {
 				in := m.instanceList[m.instanceCursor]
 				if in.ID == instances.LegacyID {
 					m.instanceErr = fmt.Errorf("%s", i18n.T("error.legacy_remove"))
@@ -906,7 +1047,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.state = configScreen
 				}
 			} else if m.state == nameScreen {
+				m.state = accountsScreen
+			} else if m.state == accountsScreen {
 				m.state = configScreen
+			} else if m.state == deviceCodeScreen {
+				if m.deviceCodeCancel != nil {
+					m.deviceCodeCancel()
+					m.deviceCodeCancel = nil
+				}
+				m.deviceCodeResp = nil
+				m.state = accountsScreen
 			} else if m.state == worldsScreen || m.state == confirmScreen || m.state == configScreen {
 				m.state = menuScreen
 			}

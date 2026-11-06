@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"mcTUI/internal/auth"
 	"mcTUI/internal/config"
 	"mcTUI/internal/i18n"
 	"mcTUI/internal/instances"
@@ -78,6 +79,8 @@ const (
 	packReviewScreen
 	packWorkingScreen
 	modpackScreen
+	accountsScreen
+	deviceCodeScreen
 )
 
 // World-copy states are kept outside the instance-copy range.
@@ -153,6 +156,9 @@ type LaunchConfig struct {
 	LoaderVersion                string
 	MemoryMB                     int
 	JavaPath                     string
+	UUID                         string
+	AccessToken                  string
+	UserType                     string
 }
 
 type Model struct {
@@ -161,6 +167,15 @@ type Model struct {
 	cursorConfig   int
 	cursorVersions int
 	cursorWorlds   int
+
+	authStorage          *auth.Storage
+	accountsCursor       int
+	deviceCodeResp       *auth.DeviceCodeResponse
+	deviceCodeCancel     context.CancelFunc
+	deviceCodeErr        error
+	deviceCodeCopied     bool
+	deviceCodeExpiresIn  int
+	deviceCodeTick       int
 
 	username             string
 	versionSelect        string
@@ -329,11 +344,31 @@ func New(versions []string, cfg config.Data, latest updater.Release) Model {
 		input:         ti,
 	}
 	m.loadInstanceSelection()
+	m.loadAccounts()
 	return m
 }
 
 func (m Model) Init() tea.Cmd {
 	return textinput.Blink
+}
+
+func (m *Model) loadAccounts() {
+	storage, err := auth.LoadStorage()
+	if err == nil && storage != nil {
+		m.authStorage = storage
+		if act := storage.GetActive(); act != nil {
+			m.username = act.Username
+		}
+	}
+}
+
+func (m Model) currentAccountType() string {
+	if m.authStorage != nil {
+		if act := m.authStorage.GetActive(); act != nil {
+			return string(act.Type)
+		}
+	}
+	return "offline"
 }
 
 func (m *Model) loadInstanceSelection() {
@@ -409,7 +444,39 @@ func (m Model) launchConfig() (LaunchConfig, error) {
 	if m.isManaged() && (m.versionSelect != m.instance.MinecraftVersion || m.modloader != m.instance.Loader || m.instance.Loader == "Fabric" && m.instance.LoaderVersion == "") {
 		return LaunchConfig{}, fmt.Errorf("%s", i18n.T("error.managed_versions_mismatch"))
 	}
-	return LaunchConfig{GameDir: gameDir, RuntimeDir: runtimeDir, Username: m.username, Version: m.versionSelect, Modloader: m.modloader, LoaderVersion: m.instance.LoaderVersion, MemoryMB: m.memoryMB, JavaPath: m.instance.JavaPath}, nil
+
+	var accUUID, token, userType string
+	if m.authStorage != nil {
+		if act := m.authStorage.GetActive(); act != nil {
+			accUUID = act.ID
+			token = act.AccessToken
+			if act.Type == auth.AccountTypeMicrosoft {
+				userType = "msa"
+			} else {
+				userType = "legacy"
+			}
+		}
+	}
+	if userType == "" {
+		userType = "legacy"
+	}
+	if accUUID == "" {
+		accUUID = auth.OfflineUUID(m.username)
+	}
+
+	return LaunchConfig{
+		GameDir:       gameDir,
+		RuntimeDir:    runtimeDir,
+		Username:      m.username,
+		Version:       m.versionSelect,
+		Modloader:     m.modloader,
+		LoaderVersion: m.instance.LoaderVersion,
+		MemoryMB:      m.memoryMB,
+		JavaPath:      m.instance.JavaPath,
+		UUID:          accUUID,
+		AccessToken:   token,
+		UserType:      userType,
+	}, nil
 }
 
 func (m Model) centerWidth() int {

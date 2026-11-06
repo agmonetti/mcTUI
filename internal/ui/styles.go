@@ -113,11 +113,15 @@ func getAsciiArt() string {
 
 // ── Profile Card ──────────────────────────────────────────────────────────────
 // Mini card estilo CS:GO: badge de rango + username + version activa.
-func renderProfileCard(username, version, modloader string) string {
+func renderProfileCard(username, version, modloader, accountType string) string {
+	rankBadge := "[OPERATOR]"
+	if accountType == "microsoft" {
+		rankBadge = "[OPERATOR · MSA]"
+	}
 	rank := lipgloss.NewStyle().
 		Foreground(colorAccent).
 		Bold(true).
-		Render("[OPERATOR]")
+		Render(rankBadge)
 
 	user := lipgloss.NewStyle().
 		Foreground(colorWhite).
@@ -202,7 +206,8 @@ func renderTopBar(cursorMenu int, hasUpdate bool, state screenState, width int) 
 	modsActive := state >= modsScreen && state <= modrinthWorkingScreen || state >= modrinthHubScreen && state <= packWorkingScreen || state == modpackScreen
 	configsActive := state == configScreen || state == javaPickerScreen ||
 		(state >= resetModeScreen && state <= resetResultScreen) ||
-		(!instancesActive && (state == nameScreen || state == versionsScreen))
+		(!instancesActive && (state == nameScreen || state == versionsScreen)) ||
+		state == accountsScreen || state == deviceCodeScreen
 	if instancesActive {
 		activeIdx = 3
 	} else if modsActive {
