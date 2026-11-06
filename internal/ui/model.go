@@ -481,7 +481,7 @@ func (m Model) launchConfig() (LaunchConfig, error) {
 
 func (m Model) centerWidth() int {
 	if m.width > 0 {
-		return min(80, max(46, m.width-34))
+		return min(80, max(46, m.width-41))
 	}
 	return 76
 }

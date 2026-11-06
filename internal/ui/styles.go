@@ -111,6 +111,8 @@ func getAsciiArt() string {
 	return top + "\n" + sub + "\n" + line
 }
 
+const leftColumnWidth = 35
+
 // ── Profile Card ──────────────────────────────────────────────────────────────
 // Mini card estilo CS:GO: badge de rango + username + version activa.
 func renderProfileCard(username, version, modloader, accountType string) string {
@@ -134,13 +136,13 @@ func renderProfileCard(username, version, modloader, accountType string) string 
 	}
 	ver := lipgloss.NewStyle().Foreground(colorGray).Render(verStr)
 
-	divLine := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 24))
+	divLine := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 31))
 
 	card := rank + "\n" + user + "\n" + ver + "\n" + divLine
 	return lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(colorAccent).
-		Width(28).
+		Width(leftColumnWidth).
 		Padding(0, 1).
 		Render(card)
 }

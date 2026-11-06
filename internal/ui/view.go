@@ -47,7 +47,7 @@ func (m Model) View() string {
 	hasUpdate := m.latestRelease.TagName != ""
 
 	centerWidth := m.centerWidth()
-	panelsWidth := 30 + centerWidth + 2
+	panelsWidth := (leftColumnWidth + 2) + centerWidth + 2
 
 	// ── Topbar de tabs ───────────────────────────────────────────────────────
 	topBar := renderTopBar(m.cursorMenu, hasUpdate, m.state, panelsWidth)
@@ -66,7 +66,7 @@ func (m Model) View() string {
 	}
 	header := lipgloss.NewStyle().
 		Foreground(colorBlue).Bold(true).Render(menuHeader)
-	divLine := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 24))
+	divLine := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 31))
 	menuStr.WriteString(header + "\n" + divLine + "\n")
 
 	javaLabel := i18n.T("menu.java_automatic")
@@ -115,11 +115,11 @@ func (m Model) View() string {
 				line := lipgloss.NewStyle().
 					Foreground(colorAccent).Bold(true).
 					Render(fmt.Sprintf("► %s", option))
-				menuStr.WriteString(lipgloss.NewStyle().MaxWidth(27).Render(line) + "\n")
+				menuStr.WriteString(lipgloss.NewStyle().MaxWidth(33).Render(line) + "\n")
 			} else {
 				line := lipgloss.NewStyle().Foreground(colorGray).
 					Render(fmt.Sprintf("  %s", option))
-				menuStr.WriteString(lipgloss.NewStyle().MaxWidth(27).Render(line) + "\n")
+				menuStr.WriteString(lipgloss.NewStyle().MaxWidth(33).Render(line) + "\n")
 			}
 		}
 	} else {
@@ -129,11 +129,11 @@ func (m Model) View() string {
 				line := lipgloss.NewStyle().
 					Foreground(colorAccent).Bold(true).
 					Render(fmt.Sprintf("► %s", option))
-				menuStr.WriteString(lipgloss.NewStyle().MaxWidth(27).Render(line) + "\n")
+				menuStr.WriteString(lipgloss.NewStyle().MaxWidth(33).Render(line) + "\n")
 			} else {
 				line := lipgloss.NewStyle().Foreground(colorGray).
 					Render(fmt.Sprintf("  %s", option))
-				menuStr.WriteString(lipgloss.NewStyle().MaxWidth(27).Render(line) + "\n")
+				menuStr.WriteString(lipgloss.NewStyle().MaxWidth(33).Render(line) + "\n")
 			}
 		}
 	}
@@ -143,7 +143,7 @@ func (m Model) View() string {
 		leftBorderColor = colorAccent
 	}
 	leftPanel := lipgloss.NewStyle().
-		Width(28).Height(14).
+		Width(leftColumnWidth).Height(14).
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(leftBorderColor).
 		Padding(0, 1).
@@ -841,6 +841,13 @@ func (m Model) renderActiveSession(c *strings.Builder) {
 		javaColor = colorRed
 	}
 
+	authLabel := i18n.T("menu.offline_auth")
+	authColor := colorGray
+	if m.currentAccountType() == "microsoft" {
+		authLabel = i18n.T("menu.online_auth")
+		authColor = colorGreen
+	}
+
 	rows := []struct {
 		label, val string
 		vc         lipgloss.Color
@@ -849,7 +856,7 @@ func (m Model) renderActiveSession(c *strings.Builder) {
 		{i18n.T("menu.user_label"), m.username, colorWhite},
 
 		{i18n.T("common.version_label"), verString, colorWhite},
-		{i18n.T("menu.auth_label"), i18n.T("menu.offline_auth"), colorGray},
+		{i18n.T("menu.auth_label"), authLabel, authColor},
 		{i18n.T("menu.os_label"), osName, colorWhite},
 		{i18n.T("menu.java_label"), javaLine, javaColor},
 	}

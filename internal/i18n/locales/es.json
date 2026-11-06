@@ -57,6 +57,7 @@
   "menu.user_label": "USUARIO   ",
   "menu.auth_label": "ACCESO    ",
   "menu.offline_auth": "Sin conexión (modo LAN)",
+  "menu.online_auth": "Microsoft (En línea)",
   "menu.os_label": "SO        ",
   "menu.java_label": "JAVA      ",
   "menu.java_too_old": "El Java elegido es anterior a Java %d+",
