@@ -115,9 +115,27 @@ type Game struct {
 	LogPath string
 }
 
+// AuthSession holds the identity credentials for launching the game.
+type AuthSession struct {
+	Username    string
+	UUID        string
+	AccessToken string
+	UserType    string
+}
+
 // StartPrepared launches artifacts already verified by PrepareContext. It does
 // not prepare again, and refuses to start when this game directory is busy.
 func StartPrepared(gameDir, runtimeDir, javaBinary, username, targetVersion string, memoryMB int, prepared Prepared) (*Game, error) {
+	return StartPreparedWithAuth(gameDir, runtimeDir, javaBinary, targetVersion, memoryMB, AuthSession{
+		Username:    username,
+		UUID:        uuid.New().String(),
+		AccessToken: "0",
+		UserType:    "legacy",
+	}, prepared)
+}
+
+// StartPreparedWithAuth launches artifacts with specific authentication credentials (MSA or Offline).
+func StartPreparedWithAuth(gameDir, runtimeDir, javaBinary, targetVersion string, memoryMB int, auth AuthSession, prepared Prepared) (*Game, error) {
 	if !filepath.IsAbs(gameDir) || !filepath.IsAbs(runtimeDir) || javaBinary == "" || memoryMB <= 0 || prepared.mainClass == "" || prepared.classpath == "" || prepared.assetIndexID == "" {
 		return nil, fmt.Errorf("incomplete launch configuration")
 	}
@@ -138,6 +156,24 @@ func StartPrepared(gameDir, runtimeDir, javaBinary, username, targetVersion stri
 		_ = release()
 		return nil, err
 	}
+
+	u := auth.Username
+	if u == "" {
+		u = "Player"
+	}
+	uID := auth.UUID
+	if uID == "" {
+		uID = uuid.New().String()
+	}
+	token := auth.AccessToken
+	if token == "" {
+		token = "0"
+	}
+	userType := auth.UserType
+	if userType == "" {
+		userType = "legacy"
+	}
+
 	args := []string{fmt.Sprintf("-Xmx%dM", memoryMB)}
 	if runtime.GOOS == "darwin" {
 		args = append(args, "-XstartOnFirstThread")
@@ -147,14 +183,14 @@ func StartPrepared(gameDir, runtimeDir, javaBinary, username, targetVersion stri
 	}
 	args = append(args,
 		"-cp", prepared.classpath, prepared.mainClass,
-		"--username", username,
+		"--username", u,
 		"--version", targetVersion,
 		"--gameDir", gameDir,
 		"--assetsDir", filepath.Join(runtimeDir, "assets"),
 		"--assetIndex", prepared.assetIndexID,
-		"--uuid", uuid.New().String(),
-		"--accessToken", "0",
-		"--userType", "legacy",
+		"--uuid", uID,
+		"--accessToken", token,
+		"--userType", userType,
 		"--versionType", "release",
 	)
 	cmd := exec.Command(javaBinary, args...) // nosemgrep: go.lang.security.audit.dangerous-exec-command.dangerous-exec-command

@@ -230,3 +230,48 @@ func TestRunGameUsesSeparateGameAndRuntimeDirs(t *testing.T) {
 		t.Fatalf("working directory = %q, error = %v; want %q", pwd, err, game)
 	}
 }
+
+func TestStartPreparedWithAuth(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell wrapper test is Unix-only")
+	}
+	game, runtimeDir := t.TempDir(), t.TempDir()
+	java := filepath.Join(t.TempDir(), "java")
+	argsFile := filepath.Join(game, "args.txt")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > '" + argsFile + "'\n"
+	if err := os.WriteFile(java, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	auth := AuthSession{
+		Username:    "CustomMSAUser",
+		UUID:        "custom-uuid-1234",
+		AccessToken: "custom-token-xyz",
+		UserType:    "msa",
+	}
+
+	started, err := StartPreparedWithAuth(game, runtimeDir, java, "1.20.4", 1024, auth, Prepared{classpath: "cp", mainClass: "main.Class", assetIndexID: "assets"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code, err := started.Wait(); err != nil || code != 0 {
+		t.Fatalf("Java exited %d: %v", code, err)
+	}
+	args, err := os.ReadFile(argsFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	argStr := string(args)
+	if !strings.Contains(argStr, "--username\nCustomMSAUser\n") {
+		t.Fatalf("missing username: %s", argStr)
+	}
+	if !strings.Contains(argStr, "--uuid\ncustom-uuid-1234\n") {
+		t.Fatalf("missing uuid: %s", argStr)
+	}
+	if !strings.Contains(argStr, "--accessToken\ncustom-token-xyz\n") {
+		t.Fatalf("missing accessToken: %s", argStr)
+	}
+	if !strings.Contains(argStr, "--userType\nmsa\n") {
+		t.Fatalf("missing userType: %s", argStr)
+	}
+}
