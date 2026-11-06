@@ -95,7 +95,7 @@ func PollDeviceToken(ctx context.Context, clientID, deviceCode string, interval 
 			}
 
 			data := url.Values{}
-			data.Set("grant_type", "urn:ietf:params:oauth:grant_type:device_code")
+			data.Set("grant_type", "urn:ietf:params:oauth:grant-type:device_code")
 			data.Set("client_id", clientID)
 			data.Set("device_code", deviceCode)
 

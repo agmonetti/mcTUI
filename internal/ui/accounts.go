@@ -169,7 +169,6 @@ func (m Model) renderDeviceCodeContent() string {
 	if m.deviceCodeErr != nil {
 		errStyle := lipgloss.NewStyle().Foreground(colorRed).Bold(true)
 		b.WriteString(errStyle.Render(fmt.Sprintf(i18n.T("msa.error"), m.deviceCodeErr.Error())) + "\n\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("[Esc] "+i18n.T("msa.cancel")) + "\n")
 		return b.String()
 	}
 
@@ -177,7 +176,6 @@ func (m Model) renderDeviceCodeContent() string {
 		spinner := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 		spinChar := spinner[m.deviceCodeTick%len(spinner)]
 		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Render(spinChar + " Obteniendo código de autorización...") + "\n\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("[Esc] "+i18n.T("msa.cancel")) + "\n")
 		return b.String()
 	}
 
@@ -188,14 +186,14 @@ func (m Model) renderDeviceCodeContent() string {
 	b.WriteString(lipgloss.NewStyle().Foreground(colorWhite).Render(i18n.T("msa.step2")) + "\n\n")
 
 	codeBox := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
+		Border(lipgloss.NormalBorder()).
 		BorderForeground(colorAccent).
 		Foreground(colorAccent2).
 		Bold(true).
-		Padding(0, 3).
-		Render(m.deviceCodeResp.UserCode)
+		Padding(0, 2).
+		Render("  " + m.deviceCodeResp.UserCode + "  ")
 
-	b.WriteString("     " + codeBox + "\n\n")
+	b.WriteString("  " + codeBox + "\n\n")
 
 	if m.deviceCodeCopied {
 		b.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("  ✓ "+i18n.T("msa.copied")) + "\n\n")
@@ -209,11 +207,6 @@ func (m Model) renderDeviceCodeContent() string {
 	secs := m.deviceCodeExpiresIn % 60
 	waitStr := fmt.Sprintf(i18n.T("msa.waiting"), mins, secs)
 	b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("  "+spinChar+" "+waitStr) + "\n\n")
-
-	actions := lipgloss.NewStyle().Foreground(colorAccent).Render(i18n.T("msa.copy")) + "   " +
-		lipgloss.NewStyle().Foreground(colorWhite).Render(i18n.T("msa.open_browser")) + "   " +
-		lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("msa.cancel"))
-	b.WriteString("  " + actions + "\n")
 
 	return b.String()
 }

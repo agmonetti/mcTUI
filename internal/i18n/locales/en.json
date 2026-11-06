@@ -2,6 +2,7 @@
   "menu.options": "OPTIONS",
   "menu.play": "Play (%s)",
   "menu.accounts": "Accounts (%s)",
+  "menu.accounts_simple": "Accounts",
   "accounts.title": "ACCOUNT MANAGEMENT",
   "accounts.active": "Active",
   "accounts.add_msa": "+ Sign in with Microsoft (Recommended)",

@@ -2,6 +2,7 @@
   "menu.options": "OPCIONES",
   "menu.play": "Jugar (%s)",
   "menu.accounts": "Cuentas (%s)",
+  "menu.accounts_simple": "Cuentas",
   "accounts.title": "GESTIÓN DE CUENTAS",
   "accounts.active": "Activa",
   "accounts.add_msa": "+ Iniciar sesión con Microsoft (Recomendado)",

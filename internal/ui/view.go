@@ -95,14 +95,8 @@ func (m Model) View() string {
 
 	showConfigs := isConfigScreen || resetActive
 	if showConfigs {
-		accountLabel := m.username
-		if m.currentAccountType() == "microsoft" {
-			accountLabel += " [MSA]"
-		} else {
-			accountLabel += " [Offline]"
-		}
 		configOptions := []string{
-			i18n.T("menu.accounts", accountLabel),
+			i18n.T("menu.accounts_simple"),
 			versionLabel,
 			i18n.T("menu.modloader", lipgloss.NewStyle().Foreground(colorAccent2).Render(loaderLabel)),
 			i18n.T("menu.memory", m.memoryMB),
@@ -691,7 +685,10 @@ func (m Model) controlsHint() string {
 	case accountsScreen:
 		return i18n.T("accounts.help")
 	case deviceCodeScreen:
-		return "[C] Copiar   [B] Navegador   [Esc] Cancelar"
+		if m.deviceCodeErr != nil {
+			return "[Esc] " + i18n.T("msa.cancel")
+		}
+		return "[C] " + i18n.T("msa.copy") + "   [B] " + i18n.T("msa.open_browser") + "   [Esc] " + i18n.T("msa.cancel")
 	case nameScreen:
 		return i18n.T("footer.save")
 	case configScreen, versionsScreen:
