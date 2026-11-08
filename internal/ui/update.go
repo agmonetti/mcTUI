@@ -18,6 +18,7 @@ import (
 	"mcTUI/internal/modpacks"
 	"mcTUI/internal/mojang"
 	"mcTUI/internal/resetconfigs"
+	"mcTUI/internal/theme"
 	"mcTUI/internal/worlds"
 	"time"
 )
@@ -770,6 +771,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					cfg := config.Load()
 					cfg.Language = i18n.CurrentLanguage()
 					config.Save(cfg)
+				case 7: // Theme
+					allThemes := theme.List("")
+					currID := CurrentTheme().ID
+					nextIdx := 0
+					for idx, th := range allThemes {
+						if strings.EqualFold(th.ID, currID) {
+							nextIdx = (idx + 1) % len(allThemes)
+							break
+						}
+					}
+					nextTheme := allThemes[nextIdx]
+					ApplyTheme(nextTheme)
+					cfg := config.Load()
+					cfg.Theme = nextTheme.ID
+					_ = config.Save(cfg)
 				}
 			} else if m.state == accountsScreen {
 				if m.authStorage != nil && m.accountsCursor >= 0 && m.accountsCursor < len(m.authStorage.Accounts) {

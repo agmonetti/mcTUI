@@ -21,6 +21,7 @@ type Data struct {
 	Modloader  string `json:"modloader"`
 	MemoryMB   int    `json:"memory_mb"`
 	Language   string `json:"language"`
+	Theme      string `json:"theme,omitempty"`
 	ModChannel string `json:"mod_channel,omitempty"`
 }
 
@@ -33,6 +34,7 @@ func defaults() Data {
 		Modloader:  "Vanilla",
 		MemoryMB:   2048,
 		Language:   i18n.DetectSystemLanguage(),
+		Theme:      "mctui",
 		ModChannel: "release",
 	}
 }
@@ -145,6 +147,9 @@ func Load() Data {
 	}
 	if cfg.Language == "" {
 		cfg.Language = def.Language
+	}
+	if cfg.Theme == "" {
+		cfg.Theme = def.Theme
 	}
 	if cfg.ModChannel != "beta" && cfg.ModChannel != "alpha" {
 		cfg.ModChannel = def.ModChannel

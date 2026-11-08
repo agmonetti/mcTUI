@@ -19,6 +19,7 @@ import (
 	"mcTUI/internal/mods"
 	"mcTUI/internal/packs"
 	"mcTUI/internal/resetconfigs"
+	"mcTUI/internal/theme"
 	"mcTUI/internal/updater"
 	"mcTUI/internal/worlds"
 )
@@ -96,7 +97,7 @@ const (
 const menuOptionsCount = 7
 
 // configOptionsCount must match len(configOptions) in View() for the config submenu.
-const configOptionsCount = 7
+const configOptionsCount = 8
 
 // DownloadDoneMsg señala que la descarga finalizó completamente.
 type DownloadDoneMsg struct {
@@ -326,6 +327,9 @@ type Model struct {
 // New builds the initial model from the loaded config, available versions,
 // and latest release info from GitHub.
 func New(versions []string, cfg config.Data, latest updater.Release) Model {
+	activeTheme := theme.Get(cfg.Theme, "")
+	ApplyTheme(activeTheme)
+
 	ti := textinput.New()
 	ti.Placeholder = i18n.T("input.username_placeholder")
 	ti.Focus()

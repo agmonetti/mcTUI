@@ -10,6 +10,7 @@ import (
 	"mcTUI/internal/i18n"
 	"mcTUI/internal/instances"
 	"mcTUI/internal/resetconfigs"
+	"mcTUI/internal/theme"
 )
 
 func TestVerifyInstallationDetailsUseReadableLines(t *testing.T) {
@@ -209,7 +210,7 @@ func TestConfigSubmenuOptionsAndNavigation(t *testing.T) {
 		t.Errorf("configScreen should show CONFIGS header:\n%s", view)
 	}
 
-	// Config screen must contain all 7 config options
+	// Config screen must contain all 8 config options
 	expectedConfigs := []string{
 		"Accounts",
 		"Minecraft: 1.20.4",
@@ -218,6 +219,7 @@ func TestConfigSubmenuOptionsAndNavigation(t *testing.T) {
 		"Resets Configs",
 		"Java: Automatic",
 		"Language: English",
+		"Theme: mcTUI (Default)",
 	}
 	for _, opt := range expectedConfigs {
 		if !strings.Contains(view, opt) {
@@ -232,8 +234,8 @@ func TestConfigSubmenuOptionsAndNavigation(t *testing.T) {
 		t.Fatalf("expected cursorConfig 0, got %d", m.cursorConfig)
 	}
 
-	// Down navigates through all 7 options (indices 0..6)
-	for expected := 1; expected <= 6; expected++ {
+	// Down navigates through all 8 options (indices 0..7)
+	for expected := 1; expected <= 7; expected++ {
 		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 		m = updated.(Model)
 		if m.cursorConfig != expected {
@@ -241,11 +243,11 @@ func TestConfigSubmenuOptionsAndNavigation(t *testing.T) {
 		}
 	}
 
-	// Down at 6 stays at 6
+	// Down at 7 stays at 7
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m = updated.(Model)
-	if m.cursorConfig != 6 {
-		t.Fatalf("expected cursorConfig to stay at 6, got %d", m.cursorConfig)
+	if m.cursorConfig != 7 {
+		t.Fatalf("expected cursorConfig to stay at 7, got %d", m.cursorConfig)
 	}
 
 	// Memory panel rendered when cursorConfig == 3
@@ -364,6 +366,20 @@ func TestConfigSubmenuActions(t *testing.T) {
 	cfg := config.Load()
 	cfg.Language = origLang
 	config.Save(cfg)
+
+	// 7: Theme -> cycles theme
+	m.cursorConfig = 7
+	origTheme := CurrentTheme().ID
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if m.state != configScreen || CurrentTheme().ID == origTheme {
+		t.Fatalf("expected theme changed from %q, got %q", origTheme, CurrentTheme().ID)
+	}
+	// Restore theme to mctui
+	cfg = config.Load()
+	cfg.Theme = "mctui"
+	config.Save(cfg)
+	ApplyTheme(theme.Default())
 }
 
 func TestInitialViewLayoutWidth(t *testing.T) {

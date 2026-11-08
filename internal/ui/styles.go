@@ -12,31 +12,34 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"mcTUI/internal/i18n"
+	"mcTUI/internal/theme"
 )
 
-// ── Paleta CS:GO estilo antiguo ──────────────────────────────────────────────
+// Current active theme and palette colors
 var (
+	currentTheme = theme.Default()
+
 	// Fondo y estructura
-	colorBorder   = lipgloss.Color("#30363d")
-	colorBorderHi = lipgloss.Color("#4a90a4") // azul acero highlight
+	colorBorder   = lipgloss.Color(currentTheme.Border)
+	colorBorderHi = lipgloss.Color(currentTheme.BorderHi)
 
 	// Texto
-	colorWhite   = lipgloss.Color("#e6edf3")
-	colorGray    = lipgloss.Color("#8b949e")
-	colorDimGray = lipgloss.Color("#3d4450")
+	colorWhite   = lipgloss.Color(currentTheme.White)
+	colorGray    = lipgloss.Color(currentTheme.Gray)
+	colorDimGray = lipgloss.Color(currentTheme.DimGray)
 
-	// Acento naranja/dorado CS:GO
-	colorAccent  = lipgloss.Color("#c8a951") // dorado CS:GO
-	colorAccent2 = lipgloss.Color("#e8b84b") // dorado más brillante
+	// Acentos
+	colorAccent  = lipgloss.Color(currentTheme.Accent)
+	colorAccent2 = lipgloss.Color(currentTheme.Accent2)
 
 	// Status
-	colorGreen = lipgloss.Color("#3fb950")
-	colorRed   = lipgloss.Color("#f85149")
-	colorBlue  = lipgloss.Color("#4a90a4") // azul acero
+	colorGreen = lipgloss.Color(currentTheme.Green)
+	colorRed   = lipgloss.Color(currentTheme.Red)
+	colorBlue  = lipgloss.Color(currentTheme.Blue)
 
 	// Tab
-	colorTabActive = lipgloss.Color("#c8a951")
-	colorTabInact  = lipgloss.Color("#8b949e")
+	colorTabActive = lipgloss.Color(currentTheme.TabActive)
+	colorTabInact  = lipgloss.Color(currentTheme.TabInact)
 
 	// ── Panels ──────────────────────────────────────────────────────────────
 	panelMenu = lipgloss.NewStyle().
@@ -74,6 +77,65 @@ var (
 	labelStyle = lipgloss.NewStyle().Foreground(colorGray)
 	valueStyle = lipgloss.NewStyle().Foreground(colorAccent2)
 )
+
+// CurrentTheme returns the active theme.
+func CurrentTheme() theme.Theme {
+	return currentTheme
+}
+
+// ApplyTheme updates all palette colors and derived Lipgloss styles
+// to match the provided theme.
+func ApplyTheme(t theme.Theme) {
+	t.Normalize()
+	currentTheme = t
+
+	colorBorder = lipgloss.Color(t.Border)
+	colorBorderHi = lipgloss.Color(t.BorderHi)
+	colorWhite = lipgloss.Color(t.White)
+	colorGray = lipgloss.Color(t.Gray)
+	colorDimGray = lipgloss.Color(t.DimGray)
+	colorAccent = lipgloss.Color(t.Accent)
+	colorAccent2 = lipgloss.Color(t.Accent2)
+	colorGreen = lipgloss.Color(t.Green)
+	colorRed = lipgloss.Color(t.Red)
+	colorBlue = lipgloss.Color(t.Blue)
+	colorTabActive = lipgloss.Color(t.TabActive)
+	colorTabInact = lipgloss.Color(t.TabInact)
+
+	panelMenu = lipgloss.NewStyle().
+		Width(28).
+		Height(16).
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(colorBorder).
+		Padding(0, 1)
+
+	panelContent = lipgloss.NewStyle().
+		Width(50).
+		Height(16).
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(colorBorder).
+		Padding(0, 1)
+
+	panelFooter = lipgloss.NewStyle().
+		Height(3).
+		Padding(1, 0)
+
+	itemStyle = lipgloss.NewStyle().Foreground(colorWhite)
+	cursorStyle = lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
+
+	tabActive = lipgloss.NewStyle().
+		Foreground(colorTabActive).
+		Bold(true).
+		Underline(true).
+		Padding(0, 2)
+
+	tabInactive = lipgloss.NewStyle().
+		Foreground(colorTabInact).
+		Padding(0, 2)
+
+	labelStyle = lipgloss.NewStyle().Foreground(colorGray)
+	valueStyle = lipgloss.NewStyle().Foreground(colorAccent2)
+}
 
 func formatDisplayPath(path string, maxWidth int) string {
 	if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(path, home) {

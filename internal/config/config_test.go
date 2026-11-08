@@ -44,6 +44,17 @@ func TestLanguageDefaultsAndPersistence(t *testing.T) {
 	if got := Load().Language; got != "es" {
 		t.Fatalf("persisted language: %q", got)
 	}
+	if got := Load().Theme; got != "mctui" {
+		t.Fatalf("default theme: %q", got)
+	}
+	cfg = Load()
+	cfg.Theme = "dracula"
+	if err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if got := Load().Theme; got != "dracula" {
+		t.Fatalf("persisted theme: %q", got)
+	}
 }
 
 func TestDataDirChecked(t *testing.T) {

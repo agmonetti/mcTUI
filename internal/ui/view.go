@@ -12,6 +12,7 @@ import (
 	"mcTUI/internal/instances"
 	"mcTUI/internal/mojang"
 	"mcTUI/internal/resetconfigs"
+	"mcTUI/internal/theme"
 	"mcTUI/internal/worlds"
 )
 
@@ -107,6 +108,7 @@ func (m Model) View() string {
 			i18n.T("menu.reset"),
 			i18n.T("menu.java", javaLabel),
 			i18n.T("menu.language", i18n.T("menu.language_name")),
+			i18n.T("menu.theme", CurrentTheme().Name),
 		}
 		for i, option := range configOptions {
 			if m.cursorConfig == i && !instancesActive && !modsActive && !packsActive {
@@ -179,6 +181,8 @@ func (m Model) View() string {
 		}
 	case isConfigScreen && m.cursorConfig == 3:
 		m.renderMemoryPanel(&contentStr)
+	case isConfigScreen && m.cursorConfig == 7:
+		m.renderThemePanel(&contentStr)
 	case isConfigScreen:
 		m.renderActiveSession(&contentStr)
 	case m.state == menuScreen && m.cursorMenu == 1:
@@ -797,6 +801,35 @@ func (m Model) renderWorldsHint(c *strings.Builder) {
 
 	c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(text) + "\n\n")
 	c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("menu.worlds_hint")))
+}
+
+func (m Model) renderThemePanel(c *strings.Builder) {
+	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("menu.theme_panel_title"))
+	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+	c.WriteString(title + "\n" + div + "\n\n")
+
+	curr := CurrentTheme()
+	c.WriteString(labelStyle.Render("THEME") + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(curr.Name) + "\n")
+	if curr.Description != "" {
+		c.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(curr.Description) + "\n\n")
+	} else {
+		c.WriteString("\n")
+	}
+
+	swatch := func(label, hex string) string {
+		return lipgloss.NewStyle().Foreground(lipgloss.Color(hex)).Render("■ ") +
+			lipgloss.NewStyle().Foreground(colorGray).Render(label) + " " +
+			lipgloss.NewStyle().Foreground(colorDimGray).Render(hex)
+	}
+
+	c.WriteString(swatch("Accent", curr.Accent) + "   " + swatch("Accent2", curr.Accent2) + "\n")
+	c.WriteString(swatch("Border", curr.Border) + "   " + swatch("BorderHi", curr.BorderHi) + "\n")
+	c.WriteString(swatch("Text", curr.White) + "     " + swatch("Muted", curr.Gray) + "\n")
+	c.WriteString(swatch("Green", curr.Green) + "    " + swatch("Red", curr.Red) + "   " + swatch("Blue", curr.Blue) + "\n\n")
+
+	c.WriteString(div + "\n")
+	c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("menu.theme_hint")) + "\n")
+	c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(formatDisplayPath(theme.ThemesDir(), 44)))
 }
 
 func (m Model) renderActiveSession(c *strings.Builder) {
