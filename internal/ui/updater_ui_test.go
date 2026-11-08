@@ -64,7 +64,7 @@ func TestUpdateUIFlow(t *testing.T) {
 		t.Errorf("expected done stage after finish, got %s", m.updateStage)
 	}
 	doneView := m.View()
-	if !strings.Contains(doneView, "SHA-256") || !strings.Contains(doneView, "successfully updated") {
+	if !strings.Contains(doneView, "SHA-256") || !strings.Contains(doneView, "v2.1.0") || !strings.Contains(doneView, "mcTUI") {
 		t.Errorf("expected success message in done view:\n%s", doneView)
 	}
 
