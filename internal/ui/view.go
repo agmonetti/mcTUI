@@ -856,7 +856,8 @@ func (m Model) renderThemePanel(c *strings.Builder) {
 
 func (m Model) renderUpdatePanel(c *strings.Builder) {
 	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("update.title"))
-	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+	noteWidth := max(20, m.centerWidth()-6)
+	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", noteWidth))
 	c.WriteString(title + "\n" + div + "\n\n")
 
 	c.WriteString(labelStyle.Render(i18n.T("update.current_version", m.appVersion)) + "\n\n")
@@ -880,7 +881,7 @@ func (m Model) renderUpdatePanel(c *strings.Builder) {
 		if m.latestRelease.Body != "" {
 			c.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Bold(true).
 				Render("  " + i18n.T("update.release_notes") + "\n"))
-			lines := strings.Split(strings.TrimSpace(m.latestRelease.Body), "\n")
+			lines := formatReleaseNotes(m.latestRelease.Body, noteWidth-4)
 			for i, line := range lines {
 				if i >= 6 {
 					c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("    ...\n"))
@@ -938,6 +939,45 @@ func (m Model) renderUpdatePanel(c *strings.Builder) {
 		c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).
 			Render("  [Esc] "+i18n.T("msa.cancel")) + "\n")
 	}
+}
+
+// formatReleaseNotes converts the common Markdown in GitHub release notes to
+// compact plain text and wraps every line to fit the updater panel.
+func formatReleaseNotes(body string, width int) []string {
+	width = max(1, width)
+	var result []string
+	for _, raw := range strings.Split(body, "\n") {
+		line := strings.TrimSpace(raw)
+		line = strings.TrimLeft(line, "# ")
+		line = strings.TrimLeft(line, "-*+ ")
+		line = strings.ReplaceAll(line, "**", "")
+		line = strings.ReplaceAll(line, "__", "")
+		line = strings.ReplaceAll(line, "`", "")
+		if line == "" {
+			continue
+		}
+
+		var wrapped strings.Builder
+		lineWidth := 0
+		for _, word := range strings.Fields(line) {
+			wordWidth := runewidth.StringWidth(word)
+			if lineWidth > 0 && lineWidth+1+wordWidth > width {
+				result = append(result, wrapped.String())
+				wrapped.Reset()
+				lineWidth = 0
+			}
+			if lineWidth > 0 {
+				wrapped.WriteByte(' ')
+				lineWidth++
+			}
+			wrapped.WriteString(word)
+			lineWidth += wordWidth
+		}
+		if wrapped.Len() > 0 {
+			result = append(result, wrapped.String())
+		}
+	}
+	return result
 }
 
 func (m Model) renderRoadmapContent(c *strings.Builder) {
