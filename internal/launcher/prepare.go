@@ -86,9 +86,10 @@ func prepareWithProgress(ctx context.Context, runtimeDir, version, modloader, lo
 		mu.Unlock()
 	}
 	setStage("client", 1)
-	checked := mojang.Download(ctx, &wg)
+	checked := mojang.Download(ctx, nil)
 	var firstErr error
 	download := func(url, dest, hash string) error {
+		defer wg.Done()
 		err := checked(url, dest, hash)
 		mu.Lock()
 		if err != nil && firstErr == nil {

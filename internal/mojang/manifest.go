@@ -242,7 +242,9 @@ func Download(ctx context.Context, wg *sync.WaitGroup) func(url, destination, ex
 
 func download(ctx context.Context, wg *sync.WaitGroup, maxBytes int64) func(url, destination, expectedSHA1 string) error {
 	return func(url, destination, expectedSHA1 string) error {
-		defer wg.Done()
+		if wg != nil {
+			defer wg.Done()
+		}
 		if err := ctx.Err(); err != nil {
 			return err
 		}
