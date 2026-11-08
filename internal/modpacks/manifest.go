@@ -27,17 +27,17 @@ type BaseFile struct {
 }
 
 type Manifest struct {
-	SchemaVersion     int                 `json:"schema_version"`
-	Name              string              `json:"name"`
-	Summary           string              `json:"summary,omitempty"`
-	Source            Source              `json:"source"`
-	IndexVersionID    string              `json:"index_version_id"`
-	IndexSHA512       string              `json:"index_sha512"`
-	MinecraftVersion  string              `json:"minecraft_version"`
-	Loader            string              `json:"loader"`
-	LoaderVersion     string              `json:"loader_version,omitempty"`
-	Optional          map[string]bool     `json:"optional,omitempty"`
-	Files             map[string]BaseFile `json:"files"`
+	SchemaVersion    int                 `json:"schema_version"`
+	Name             string              `json:"name"`
+	Summary          string              `json:"summary,omitempty"`
+	Source           Source              `json:"source"`
+	IndexVersionID   string              `json:"index_version_id"`
+	IndexSHA512      string              `json:"index_sha512"`
+	MinecraftVersion string              `json:"minecraft_version"`
+	Loader           string              `json:"loader"`
+	LoaderVersion    string              `json:"loader_version,omitempty"`
+	Optional         map[string]bool     `json:"optional,omitempty"`
+	Files            map[string]BaseFile `json:"files"`
 }
 
 func validHash(hash string, bytes int) bool {

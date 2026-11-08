@@ -168,15 +168,15 @@ type Model struct {
 	cursorVersions int
 	cursorWorlds   int
 
-	authStorage          *auth.Storage
-	accountsCursor       int
-	accountsFromConfig   bool
-	deviceCodeResp       *auth.DeviceCodeResponse
-	deviceCodeCancel     context.CancelFunc
-	deviceCodeErr        error
-	deviceCodeCopied     bool
-	deviceCodeExpiresIn  int
-	deviceCodeTick       int
+	authStorage         *auth.Storage
+	accountsCursor      int
+	accountsFromConfig  bool
+	deviceCodeResp      *auth.DeviceCodeResponse
+	deviceCodeCancel    context.CancelFunc
+	deviceCodeErr       error
+	deviceCodeCopied    bool
+	deviceCodeExpiresIn int
+	deviceCodeTick      int
 
 	username             string
 	versionSelect        string

@@ -14,8 +14,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"sort"
 	"reflect"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -51,12 +51,16 @@ func (s Store) Export(ctx context.Context, in instances.Instance, output string,
 		return err
 	}
 	gameDir, metadataDir, err := s.installDestination(in)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	if output == gameDir || strings.HasPrefix(output, gameDir+string(filepath.Separator)) ||
 		output == metadataDir || strings.HasPrefix(output, metadataDir+string(filepath.Separator)) {
 		return fmt.Errorf("export destination must be outside the instance")
 	}
-	if err := checkPackMetadataDir(metadataDir, false); err != nil { return err }
+	if err := checkPackMetadataDir(metadataDir, false); err != nil {
+		return err
+	}
 	unlock, err := operationlock.Acquire(gameDir)
 	if err != nil {
 		return err
@@ -452,10 +456,10 @@ func (r *exportContextReader) Read(p []byte) (int, error) {
 // Writes through only after rejecting non-text and common credential markers.
 // A tiny suffix detects markers spanning two streaming write boundaries.
 type exportTextGuard struct {
-	out     io.Writer
-	tail    [32]byte
-	tailLen int
-	partial [4]byte
+	out        io.Writer
+	tail       [32]byte
+	tailLen    int
+	partial    [4]byte
 	partialLen int
 }
 
@@ -546,4 +550,3 @@ func exportContainsFold(data, needle []byte) bool {
 	}
 	return false
 }
-

@@ -354,7 +354,7 @@ func validDownloadURL(raw string) error {
 }
 
 type pathEntry struct {
-	path, layer string
+	path, layer   string
 	dir, explicit bool
 }
 

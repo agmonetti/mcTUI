@@ -162,8 +162,8 @@ func TestFetchRejectsBadResponsesAndCleansUp(t *testing.T) {
 	}))
 	defer server.Close()
 	for _, tc := range []struct {
-		name, path string
-		hashes     Hashes
+		name, path  string
+		hashes      Hashes
 		size, limit int64
 	}{
 		{"status", "/status", Hashes{}, 0, 128},

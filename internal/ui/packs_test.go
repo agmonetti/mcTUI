@@ -270,7 +270,7 @@ func TestModrinthResourcePackDownloadWithSupportedFormatsObject(t *testing.T) {
 
 func TestPackPickerImportsUnpackedFolder(t *testing.T) {
 	for _, tc := range []struct {
-		kind packs.Kind
+		kind              packs.Kind
 		name, entry, body string
 	}{
 		{packs.Shader, "my-shaders", "shaders/main.vsh", "void main() {}"},
@@ -293,7 +293,7 @@ func TestPackPickerImportsUnpackedFolder(t *testing.T) {
 			}
 			m := Model{
 				state: packPickerScreen, packKind: tc.kind,
-				packStore: packs.Store{GameDir: gameDir},
+				packStore:      packs.Store{GameDir: gameDir},
 				pickerForPacks: true, pickerPath: sourceRoot,
 			}
 			m.loadPickerDir()

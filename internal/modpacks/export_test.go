@@ -31,14 +31,14 @@ func exportFixture(t *testing.T) (Store, instances.Instance, string, string) {
 	}
 	mod := []byte("downloaded Modrinth file")
 	for path, data := range map[string][]byte{
-		"mods/example.jar":              mod,
-		"config/example.toml":          []byte("theme = 'green'\n"),
-		"resourcepacks/sample/pack.mcmeta": []byte(`{"pack":{"pack_format":15,"description":"Sample"}}`),
+		"mods/example.jar":                                      mod,
+		"config/example.toml":                                   []byte("theme = 'green'\n"),
+		"resourcepacks/sample/pack.mcmeta":                      []byte(`{"pack":{"pack_format":15,"description":"Sample"}}`),
 		"resourcepacks/sample/assets/minecraft/lang/en_us.json": []byte(`{"item.minecraft.diamond":"Diamond"}`),
-		"shaderpacks/sample/shaders/main.fsh": []byte("void main() {}\n"),
-		"options.txt":                 []byte("guiScale:2\n"),
-		"saves/world/level.dat":         []byte("PRIVATE WORLD"),
-		"config/credentials.json":      []byte(`{"access_token":"PRIVATE"}`),
+		"shaderpacks/sample/shaders/main.fsh":                   []byte("void main() {}\n"),
+		"options.txt":                                           []byte("guiScale:2\n"),
+		"saves/world/level.dat":                                 []byte("PRIVATE WORLD"),
+		"config/credentials.json":                               []byte(`{"access_token":"PRIVATE"}`),
 	} {
 		file := filepath.Join(gameDir, filepath.FromSlash(path))
 		if err := os.MkdirAll(filepath.Dir(file), 0700); err != nil {
@@ -191,23 +191,39 @@ func TestExportOverrideOnlyActualImportRoundTrip(t *testing.T) {
 
 func TestExportRejectsUnexportableSourcesWithoutPublishing(t *testing.T) {
 	cases := []struct {
-		name string
+		name   string
 		change func(*testing.T, Store, instances.Instance, string)
-		want string
+		want   string
 	}{
 		{"modified downloaded bytes", func(t *testing.T, s Store, in instances.Instance, game string) {
 			t.Helper()
-			if err := os.WriteFile(filepath.Join(game, "mods", "example.jar"), []byte("changed by player"), 0600); err != nil { t.Fatal(err) }
+			if err := os.WriteFile(filepath.Join(game, "mods", "example.jar"), []byte("changed by player"), 0600); err != nil {
+				t.Fatal(err)
+			}
 		}, "mods/example.jar"},
 		{"missing verified URL", func(t *testing.T, s Store, in instances.Instance, game string) {
-			m, err := loadManifest(filepath.Join(s.Root, "instances", in.ID)); if err != nil { t.Fatal(err) }
-			base := m.Files["mods/example.jar"]; base.URLs = nil; m.Files["mods/example.jar"] = base
-			if err := saveManifest(filepath.Join(s.Root, "instances", in.ID), m); err != nil { t.Fatal(err) }
+			m, err := loadManifest(filepath.Join(s.Root, "instances", in.ID))
+			if err != nil {
+				t.Fatal(err)
+			}
+			base := m.Files["mods/example.jar"]
+			base.URLs = nil
+			m.Files["mods/example.jar"] = base
+			if err := saveManifest(filepath.Join(s.Root, "instances", in.ID), m); err != nil {
+				t.Fatal(err)
+			}
 		}, "mods/example.jar"},
 		{"nonpublication CDN", func(t *testing.T, s Store, in instances.Instance, game string) {
-			m, err := loadManifest(filepath.Join(s.Root, "instances", in.ID)); if err != nil { t.Fatal(err) }
-			base := m.Files["mods/example.jar"]; base.URLs = []string{"https://cdn.modrinth.net/data/ABCD/version.jar"}; m.Files["mods/example.jar"] = base
-			if err := saveManifest(filepath.Join(s.Root, "instances", in.ID), m); err != nil { t.Fatal(err) }
+			m, err := loadManifest(filepath.Join(s.Root, "instances", in.ID))
+			if err != nil {
+				t.Fatal(err)
+			}
+			base := m.Files["mods/example.jar"]
+			base.URLs = []string{"https://cdn.modrinth.net/data/ABCD/version.jar"}
+			m.Files["mods/example.jar"] = base
+			if err := saveManifest(filepath.Join(s.Root, "instances", in.ID), m); err != nil {
+				t.Fatal(err)
+			}
 		}, "mods/example.jar"},
 		{"github mirror lacks publication permission", func(t *testing.T, s Store, in instances.Instance, game string) {
 			m, err := loadManifest(filepath.Join(s.Root, "instances", in.ID))
@@ -222,9 +238,14 @@ func TestExportRejectsUnexportableSourcesWithoutPublishing(t *testing.T) {
 			}
 		}, "mods/example.jar"},
 		{"sensitive borrowed download", func(t *testing.T, s Store, in instances.Instance, game string) {
-			m, err := loadManifest(filepath.Join(s.Root, "instances", in.ID)); if err != nil { t.Fatal(err) }
+			m, err := loadManifest(filepath.Join(s.Root, "instances", in.ID))
+			if err != nil {
+				t.Fatal(err)
+			}
 			m.Files["saves/world/level.dat"] = m.Files["mods/example.jar"]
-			if err := saveManifest(filepath.Join(s.Root, "instances", in.ID), m); err != nil { t.Fatal(err) }
+			if err := saveManifest(filepath.Join(s.Root, "instances", in.ID), m); err != nil {
+				t.Fatal(err)
+			}
 		}, "saves/world/level.dat"},
 	}
 	for _, tc := range cases {
@@ -272,13 +293,35 @@ func TestExportKeepsProvenCDNOnlyAmongInstallMirrors(t *testing.T) {
 }
 
 func TestExportRejectsUnsafeOverrideAndNeverReplacesDestination(t *testing.T) {
-	cases := []struct{ name, path string; prepare func(*testing.T, string) }{
+	cases := []struct {
+		name, path string
+		prepare    func(*testing.T, string)
+	}{
 		{"world", "saves/world/level.dat", nil},
 		{"secret path", "config/credentials.json", nil},
 		{"borrowed JAR", "mods/example.jar", nil},
-		{"binary zip", "resourcepacks/sample.zip", func(t *testing.T, game string) { t.Helper(); if err := os.WriteFile(filepath.Join(game, "resourcepacks", "sample.zip"), []byte("binary"), 0600); err != nil { t.Fatal(err) } }},
-		{"secret content", "config/example.toml", func(t *testing.T, game string) { t.Helper(); if err := os.WriteFile(filepath.Join(game, "config", "example.toml"), []byte("access_token = 'private'"), 0600); err != nil { t.Fatal(err) } }},
-		{"symlink", "config/example.toml", func(t *testing.T, game string) { t.Helper(); path := filepath.Join(game, "config", "example.toml"); if err := os.Remove(path); err != nil { t.Fatal(err) }; if err := os.Symlink(filepath.Join(game, "saves", "world", "level.dat"), path); err != nil { t.Fatal(err) } }},
+		{"binary zip", "resourcepacks/sample.zip", func(t *testing.T, game string) {
+			t.Helper()
+			if err := os.WriteFile(filepath.Join(game, "resourcepacks", "sample.zip"), []byte("binary"), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"secret content", "config/example.toml", func(t *testing.T, game string) {
+			t.Helper()
+			if err := os.WriteFile(filepath.Join(game, "config", "example.toml"), []byte("access_token = 'private'"), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"symlink", "config/example.toml", func(t *testing.T, game string) {
+			t.Helper()
+			path := filepath.Join(game, "config", "example.toml")
+			if err := os.Remove(path); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(filepath.Join(game, "saves", "world", "level.dat"), path); err != nil {
+				t.Fatal(err)
+			}
+		}},
 		{"symlink parent", "config/example.toml", func(t *testing.T, game string) {
 			t.Helper()
 			parent := filepath.Join(game, "config")
@@ -293,7 +336,9 @@ func TestExportRejectsUnsafeOverrideAndNeverReplacesDestination(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			s, in, gameDir, output := exportFixture(t)
-			if tc.prepare != nil { tc.prepare(t, gameDir) }
+			if tc.prepare != nil {
+				tc.prepare(t, gameDir)
+			}
 			if err := s.Export(context.Background(), in, output, []string{tc.path}); err == nil {
 				t.Fatalf("unsafe override accepted: %s", tc.path)
 			}
@@ -303,8 +348,14 @@ func TestExportRejectsUnsafeOverrideAndNeverReplacesDestination(t *testing.T) {
 		})
 	}
 	s, in, _, output := exportFixture(t)
-	if err := os.WriteFile(output, []byte("leave existing file intact"), 0600); err != nil { t.Fatal(err) }
-	if err := s.Export(context.Background(), in, output, nil); err == nil { t.Fatal("existing destination overwritten") }
+	if err := os.WriteFile(output, []byte("leave existing file intact"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Export(context.Background(), in, output, nil); err == nil {
+		t.Fatal("existing destination overwritten")
+	}
 	data, err := os.ReadFile(output)
-	if err != nil || string(data) != "leave existing file intact" { t.Fatalf("destination changed: %q, %v", data, err) }
+	if err != nil || string(data) != "leave existing file intact" {
+		t.Fatalf("destination changed: %q, %v", data, err)
+	}
 }

@@ -464,9 +464,9 @@ func (m Model) renderPacks() string {
 			lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(modText(m.instance.Name)) + "\n\n")
 		for i, label := range []string{i18n.T("menu.mods"), i18n.T("packs.resource"), i18n.T("packs.shader"), "Modpacks"} {
 			if m.hubCursor == i {
-				b.WriteString(cursorStyle.Render("► " + label) + "\n")
+				b.WriteString(cursorStyle.Render("► "+label) + "\n")
 			} else {
-				b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("  " + label) + "\n")
+				b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("  "+label) + "\n")
 			}
 		}
 		return b.String()
@@ -532,7 +532,6 @@ func (m Model) renderPacks() string {
 			}
 		}
 		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("packs.picker_hint")))
-
 
 	default: // packListScreen
 		if m.packErr != nil {

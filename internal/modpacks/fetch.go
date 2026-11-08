@@ -24,11 +24,11 @@ const fetchUserAgent = "agmonetti/mcTUI/1.0.0 (https://github.com/agmonetti/mcTU
 const maxFetchRedirects = 5
 
 var fetchHosts = map[string]bool{
-	"cdn.modrinth.net": true,
-	"cdn.modrinth.com": true,
-	"github.com": true,
+	"cdn.modrinth.net":          true,
+	"cdn.modrinth.com":          true,
+	"github.com":                true,
 	"raw.githubusercontent.com": true,
-	"gitlab.com": true,
+	"gitlab.com":                true,
 }
 
 // AllowedURL checks an initial modpack download URL. Redirects are checked

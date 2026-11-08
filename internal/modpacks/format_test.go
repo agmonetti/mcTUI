@@ -58,7 +58,7 @@ func testIndex(t *testing.T) Index {
 	return Index{
 		FormatVersion: 1, Game: "minecraft", VersionID: "1.0", Name: "Pack",
 		Dependencies: map[string]string{"minecraft": "1.21.1", "fabric-loader": "0.16.14"},
-		Files: []File{{Path: "mods/A.jar", Hashes: Hashes{SHA1: strings.Repeat("a", 40), SHA512: strings.Repeat("b", 128)}, Downloads: []string{"https://cdn.modrinth.com/data/A"}, FileSize: 0}},
+		Files:        []File{{Path: "mods/A.jar", Hashes: Hashes{SHA1: strings.Repeat("a", 40), SHA512: strings.Repeat("b", 128)}, Downloads: []string{"https://cdn.modrinth.com/data/A"}, FileSize: 0}},
 	}
 }
 
@@ -134,7 +134,7 @@ func TestValidPathRejectsTraversalAndWindowsAliases(t *testing.T) {
 func TestInspectRejectsUnsafeZIP(t *testing.T) {
 	idx := indexJSON(t, testIndex(t))
 	cases := []struct {
-		name string
+		name  string
 		entry zipEntry
 	}{
 		{"traversal", zipEntry{name: "overrides/../escape"}},
