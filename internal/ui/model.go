@@ -85,6 +85,7 @@ const (
 	deviceCodeScreen
 	welcomeScreen
 	roadmapScreen
+	updateScreen
 )
 
 // World-copy states are kept outside the instance-copy range.
@@ -99,7 +100,7 @@ const (
 const menuOptionsCount = 8
 
 // configOptionsCount must match len(configOptions) in View() for the config submenu.
-const configOptionsCount = 8
+const configOptionsCount = 9
 
 // DownloadDoneMsg señala que la descarga finalizó completamente.
 type DownloadDoneMsg struct {
@@ -111,6 +112,15 @@ type DownloadDoneMsg struct {
 type GameStartedMsg struct {
 	Game *launcher.Game
 	Err  error
+}
+
+type UpdateProgressMsg struct {
+	Stage   string
+	Percent float64
+}
+
+type UpdateFinishedMsg struct {
+	Err error
 }
 
 type GameExitedMsg struct {
@@ -280,6 +290,11 @@ type Model struct {
 	mp                     modpackState
 	launch                 LaunchConfig
 	latestRelease          updater.Release // zero value = no update available
+	appVersion             string
+	updateProgress         float64
+	updateStage            string // "idle", "checksums", "downloading", "verifying", "installing", "done", "error"
+	updateErr              error
+	updateEvents           chan UpdateProgressMsg
 
 	// Download progress (usado en downloadScreen)
 	dlProgressFrame int
@@ -333,9 +348,14 @@ type Model struct {
 
 // New builds the initial model from the loaded config, available versions,
 // and latest release info from GitHub.
-func New(versions []string, cfg config.Data, latest updater.Release) Model {
+func New(versions []string, cfg config.Data, latest updater.Release, appVersion ...string) Model {
 	activeTheme := theme.Get(cfg.Theme, "")
 	ApplyTheme(activeTheme)
+
+	currentVer := "dev"
+	if len(appVersion) > 0 && appVersion[0] != "" {
+		currentVer = appVersion[0]
+	}
 
 	ti := textinput.New()
 	ti.Placeholder = i18n.T("input.username_placeholder")
@@ -354,6 +374,8 @@ func New(versions []string, cfg config.Data, latest updater.Release) Model {
 		memoryMB:      cfg.MemoryMB,
 		versions:      versions,
 		latestRelease: latest,
+		appVersion:    currentVer,
+		updateStage:   "idle",
 		input:         ti,
 		roadmapData:   roadmap.Embedded(),
 	}

@@ -14,6 +14,7 @@ import (
 	"mcTUI/internal/mojang"
 	"mcTUI/internal/resetconfigs"
 	"mcTUI/internal/theme"
+	"mcTUI/internal/updater"
 	"mcTUI/internal/worlds"
 )
 
@@ -102,6 +103,16 @@ func (m Model) View() string {
 
 	showConfigs := isConfigScreen || resetActive
 	if showConfigs {
+		appVer := m.appVersion
+		if appVer == "" {
+			appVer = "dev"
+		}
+		var updateOpt string
+		if m.latestRelease.TagName != "" {
+			updateOpt = i18n.T("menu.update_available", m.latestRelease.TagName)
+		} else {
+			updateOpt = i18n.T("menu.update_up_to_date", appVer)
+		}
 		configOptions := []string{
 			i18n.T("menu.accounts_simple"),
 			versionLabel,
@@ -111,6 +122,7 @@ func (m Model) View() string {
 			i18n.T("menu.java", javaLabel),
 			i18n.T("menu.language", i18n.T("menu.language_name")),
 			i18n.T("menu.theme", CurrentTheme().Name),
+			updateOpt,
 		}
 		for i, option := range configOptions {
 			if m.cursorConfig == i && !instancesActive && !modsActive && !packsActive {
@@ -185,8 +197,12 @@ func (m Model) View() string {
 		m.renderMemoryPanel(&contentStr)
 	case isConfigScreen && m.cursorConfig == 7:
 		m.renderThemePanel(&contentStr)
+	case isConfigScreen && m.cursorConfig == 8:
+		m.renderUpdatePanel(&contentStr)
 	case isConfigScreen:
 		m.renderActiveSession(&contentStr)
+	case m.state == updateScreen:
+		m.renderUpdatePanel(&contentStr)
 	case m.state == menuScreen && m.cursorMenu == 1:
 		contentStr.WriteString(m.renderAccountsContent())
 	case m.state == menuScreen && m.cursorMenu == 2:
@@ -210,7 +226,7 @@ func (m Model) View() string {
 	centerStyle := panelContent.Copy().Width(centerWidth)
 	if resetActive || instancesActive || modsActive || packsActive {
 		if m.width > 0 {
-			panelHeight := max(16, min(40, m.height-17))
+			panelHeight := 20
 			if modsActive || packsActive {
 				panelHeight = max(20, panelHeight)
 				// Height is only a minimum in Lip Gloss: long catalog pages
@@ -836,6 +852,92 @@ func (m Model) renderThemePanel(c *strings.Builder) {
 	c.WriteString(div + "\n")
 	c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("menu.theme_hint")) + "\n")
 	c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(formatDisplayPath(theme.ThemesDir(), 44)))
+}
+
+func (m Model) renderUpdatePanel(c *strings.Builder) {
+	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("update.title"))
+	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
+	c.WriteString(title + "\n" + div + "\n\n")
+
+	c.WriteString(labelStyle.Render(i18n.T("update.current_version", m.appVersion)) + "\n\n")
+
+	latestTag := m.latestRelease.TagName
+	if latestTag == "" {
+		upToDateText := i18n.T("menu.update_up_to_date", m.appVersion)
+		c.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Render("  ✔ "+upToDateText) + "\n\n")
+		return
+	}
+
+	c.WriteString(lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).
+		Render(fmt.Sprintf("  ⬆ %s\n", i18n.T("update.latest_version", latestTag))))
+
+	targetAsset := updater.TargetAssetName(runtime.GOOS, runtime.GOARCH)
+	c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).
+		Render(fmt.Sprintf("  • %s\n\n", i18n.T("update.platform", targetAsset, runtime.GOARCH))))
+
+	switch m.updateStage {
+	case "idle":
+		if m.latestRelease.Body != "" {
+			c.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Bold(true).
+				Render("  " + i18n.T("update.release_notes") + "\n"))
+			lines := strings.Split(strings.TrimSpace(m.latestRelease.Body), "\n")
+			for i, line := range lines {
+				if i >= 6 {
+					c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("    ...\n"))
+					break
+				}
+				c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(fmt.Sprintf("    %s\n", line)))
+			}
+			c.WriteString("\n")
+		}
+		c.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Bold(true).
+			Render("  "+i18n.T("update.status_idle")) + "\n")
+		c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).
+			Render("  "+i18n.T("update.prompt_install")) + "\n")
+
+	case "checksums":
+		c.WriteString(lipgloss.NewStyle().Foreground(colorAccent2).
+			Render("  ⏳ "+i18n.T("update.status_checksums")) + "\n")
+
+	case "downloading":
+		pct := int(m.updateProgress * 100)
+		barWidth := 24
+		filled := int(float64(barWidth) * m.updateProgress)
+		if filled > barWidth {
+			filled = barWidth
+		}
+		bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
+		c.WriteString(lipgloss.NewStyle().Foreground(colorAccent).
+			Render(fmt.Sprintf("  [%s] %3d%%\n", bar, pct)))
+		c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).
+			Render(fmt.Sprintf("  %s\n", i18n.T("update.status_downloading", pct))))
+
+	case "verifying":
+		c.WriteString(lipgloss.NewStyle().Foreground(colorAccent2).
+			Render("  🔒 "+i18n.T("update.status_verifying")) + "\n")
+
+	case "installing":
+		c.WriteString(lipgloss.NewStyle().Foreground(colorAccent2).
+			Render("  📦 "+i18n.T("update.status_installing")) + "\n")
+
+	case "done":
+		c.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Bold(true).
+			Render("  ✔ "+i18n.T("update.status_success", latestTag)) + "\n\n")
+		c.WriteString(lipgloss.NewStyle().Foreground(colorGreen).
+			Render("  ✔ SHA-256 Verified OK") + "\n\n")
+		c.WriteString(lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).
+			Render("  "+i18n.T("update.prompt_restart")) + "\n")
+
+	case "error":
+		errMsg := "Unknown error"
+		if m.updateErr != nil {
+			errMsg = m.updateErr.Error()
+		}
+		c.WriteString(lipgloss.NewStyle().Foreground(colorRed).Bold(true).
+			Render(fmt.Sprintf("  ✖ %s\n\n", i18n.T("update.error_prefix", errMsg))))
+		c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).
+			Render("  [Esc] "+i18n.T("msa.cancel")) + "\n")
+	}
 }
 
 func (m Model) renderRoadmapContent(c *strings.Builder) {

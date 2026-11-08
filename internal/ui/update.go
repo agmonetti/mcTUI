@@ -20,6 +20,7 @@ import (
 	"mcTUI/internal/resetconfigs"
 	"mcTUI/internal/roadmap"
 	"mcTUI/internal/theme"
+	"mcTUI/internal/updater"
 	"mcTUI/internal/worlds"
 	"time"
 )
@@ -361,6 +362,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return GameStartedMsg{Game: game, Err: err}
 		}
 
+	case UpdateProgressMsg:
+		if m.state == updateScreen {
+			m.updateStage = msg.Stage
+			m.updateProgress = msg.Percent
+		}
+		if m.updateEvents != nil {
+			return m, waitForUpdateProgress(m.updateEvents)
+		}
+		return m, nil
+
+	case UpdateFinishedMsg:
+		if m.state == updateScreen {
+			if msg.Err != nil {
+				m.updateStage = "error"
+				m.updateErr = msg.Err
+			} else {
+				m.updateStage = "done"
+				m.updateProgress = 1.0
+			}
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		if m.state == gameStartingScreen {
 			return m, nil // wait for Java; never detach or kill it implicitly
@@ -509,6 +532,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cfg := config.Load()
 				cfg.Language = lang
 				_ = config.Save(cfg)
+				return m, nil
+			}
+
+		case "u", "U":
+			if (m.state == menuScreen || m.state == configScreen) && m.latestRelease.TagName != "" {
+				m.state = updateScreen
+				m.updateStage = "idle"
+				m.updateErr = nil
+				m.updateProgress = 0
 				return m, nil
 			}
 
@@ -799,6 +831,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					cfg := config.Load()
 					cfg.Theme = nextTheme.ID
 					_ = config.Save(cfg)
+				case 8: // Updates
+					if m.latestRelease.TagName != "" {
+						m.state = updateScreen
+						m.updateStage = "idle"
+						m.updateErr = nil
+						m.updateProgress = 0
+						return m, nil
+					}
+				}
+			} else if m.state == updateScreen {
+				if m.updateStage == "idle" && m.latestRelease.TagName != "" {
+					m.updateStage = "checksums"
+					m.updateProgress = 0.05
+					m.updateErr = nil
+					ch := make(chan UpdateProgressMsg, 10)
+					m.updateEvents = ch
+					return m, tea.Batch(startUpdateCmd(m.latestRelease, ch), waitForUpdateProgress(ch))
+				} else if m.updateStage == "done" {
+					return m, tea.Quit
 				}
 			} else if m.state == accountsScreen {
 				if m.authStorage != nil && m.accountsCursor >= 0 && m.accountsCursor < len(m.authStorage.Accounts) {
@@ -1133,6 +1184,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state = accountsScreen
 			} else if m.state == worldsScreen || m.state == confirmScreen || m.state == configScreen || m.state == roadmapScreen {
 				m.state = menuScreen
+			} else if m.state == updateScreen {
+				if m.updateStage != "downloading" && m.updateStage != "verifying" && m.updateStage != "installing" {
+					m.state = configScreen
+				}
 			}
 		}
 	}
@@ -1346,4 +1401,27 @@ func (m Model) save() {
 		cfg.Version, cfg.Modloader, cfg.MemoryMB = m.versionSelect, m.modloader, m.memoryMB
 	}
 	config.Save(cfg)
+}
+
+func startUpdateCmd(rel updater.Release, ch chan UpdateProgressMsg) tea.Cmd {
+	return func() tea.Msg {
+		err := updater.InstallRelease(rel, func(stage string, percent float64) {
+			select {
+			case ch <- UpdateProgressMsg{Stage: stage, Percent: percent}:
+			default:
+			}
+		})
+		close(ch)
+		return UpdateFinishedMsg{Err: err}
+	}
+}
+
+func waitForUpdateProgress(ch chan UpdateProgressMsg) tea.Cmd {
+	return func() tea.Msg {
+		msg, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return msg
+	}
 }

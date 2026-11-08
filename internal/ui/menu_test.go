@@ -224,7 +224,7 @@ func TestConfigSubmenuOptionsAndNavigation(t *testing.T) {
 		t.Errorf("configScreen should show CONFIGS header:\n%s", view)
 	}
 
-	// Config screen must contain all 8 config options
+	// Config screen must contain all 9 config options
 	expectedConfigs := []string{
 		"Accounts",
 		"Minecraft: 1.20.4",
@@ -234,6 +234,7 @@ func TestConfigSubmenuOptionsAndNavigation(t *testing.T) {
 		"Java: Automatic",
 		"Language: English",
 		"Theme: mcTUI (Default)",
+		"Updates: mcTUI dev (Up to date)",
 	}
 	for _, opt := range expectedConfigs {
 		if !strings.Contains(view, opt) {
@@ -248,8 +249,8 @@ func TestConfigSubmenuOptionsAndNavigation(t *testing.T) {
 		t.Fatalf("expected cursorConfig 0, got %d", m.cursorConfig)
 	}
 
-	// Down navigates through all 8 options (indices 0..7)
-	for expected := 1; expected <= 7; expected++ {
+	// Down navigates through all 9 options (indices 0..8)
+	for expected := 1; expected <= 8; expected++ {
 		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 		m = updated.(Model)
 		if m.cursorConfig != expected {
@@ -257,11 +258,11 @@ func TestConfigSubmenuOptionsAndNavigation(t *testing.T) {
 		}
 	}
 
-	// Down at 7 stays at 7
+	// Down at 8 stays at 8
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m = updated.(Model)
-	if m.cursorConfig != 7 {
-		t.Fatalf("expected cursorConfig to stay at 7, got %d", m.cursorConfig)
+	if m.cursorConfig != 8 {
+		t.Fatalf("expected cursorConfig to stay at 8, got %d", m.cursorConfig)
 	}
 
 	// Memory panel rendered when cursorConfig == 3

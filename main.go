@@ -39,7 +39,7 @@ func main() {
 	latestRelease := <-updateCh
 
 	p := tea.NewProgram(
-		ui.New(validReleases, cfg, latestRelease),
+		ui.New(validReleases, cfg, latestRelease, Version),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)
