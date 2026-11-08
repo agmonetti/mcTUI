@@ -12,3 +12,6 @@ logs/
 mctui-darwin-*
 dist/
 coverage.out
+
+# Personal release notes
+/RELEASE_SUMMARY.txt
