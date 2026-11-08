@@ -24,17 +24,17 @@ import (
 )
 
 type modpackHomeOption struct {
-	key   string
-	label string
+	key      string
+	labelKey string
 }
 
 var modpackHomeOptions = []modpackHomeOption{
-	{"l", "Importar archivo .mrpack local"},
-	{"h", "Importar desde URL HTTPS"},
-	{"s", "Buscar modpacks en Modrinth"},
-	{"u", "Actualizar modpack de esta instancia"},
-	{"e", "Exportar instancia como .mrpack"},
-	{"r", "Recuperar actualización interrumpida"},
+	{"l", "modpacks.option_local"},
+	{"h", "modpacks.option_url"},
+	{"s", "modpacks.option_search"},
+	{"u", "modpacks.option_update"},
+	{"e", "modpacks.option_export"},
+	{"r", "modpacks.option_recover"},
 }
 
 type modpackState struct {
@@ -401,9 +401,9 @@ func (m Model) updateModpacks(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			m.mp.cursor, m.mp.step = 0, "conflicts"
 		case "install":
 			m.mp.step = "result"
-			m.mp.message = "Modpack instalado o actualizado con éxito."
+			m.mp.message = i18n.T("modpacks.success_install")
 			if m.mp.mode == "into" {
-				m.mp.message = "Modpack instalado en la instancia actual con éxito."
+				m.mp.message = i18n.T("modpacks.success_install_into")
 			}
 			if v.instance.ID != "" {
 				if err := m.setInstance(v.instance); err != nil {
@@ -419,9 +419,9 @@ func (m Model) updateModpacks(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		case "export choices":
 			m.mp.overrides, m.mp.selected, m.mp.cursor, m.mp.step = v.overrides, map[string]bool{}, 0, "export choices"
 		case "export":
-			m.mp.message, m.mp.step = "Modpack exportado con éxito.", "result"
+			m.mp.message, m.mp.step = i18n.T("modpacks.success_export"), "result"
 		case "recover":
-			m.mp.message, m.mp.step = "No queda una actualización interrumpida pendiente.", "result"
+			m.mp.message, m.mp.step = i18n.T("modpacks.success_recover"), "result"
 		}
 		m.mp.busy = ""
 		m.mp.progress = nil
@@ -442,11 +442,11 @@ func (m Model) executeHomeOption(key string) (tea.Model, tea.Cmd) {
 	switch key {
 	case "l":
 		m.mp.mode = "import"
-		m.modpackInput("local", "Archivo .mrpack local: ", "")
+		m.modpackInput("local", i18n.T("modpacks.input_local_prompt"), "")
 		return m, nil
 	case "h":
 		m.mp.mode = "import"
-		m.modpackInput("url", "URL HTTPS (.mrpack): ", "https://")
+		m.modpackInput("url", i18n.T("modpacks.input_url_prompt"), "https://")
 		return m, nil
 	case "s", "b":
 		m.mp.mode = "import"
@@ -455,23 +455,23 @@ func (m Model) executeHomeOption(key string) (tea.Model, tea.Cmd) {
 		return m.modpackSearch()
 	case "u":
 		if !m.modpackCanManageCurrent() {
-			m.mp.err = fmt.Errorf("esta instancia no tiene un modpack actualizable")
+			m.mp.err = fmt.Errorf("%s", i18n.T("modpacks.err_not_updatable"))
 			m.mp.step = "result"
 			return m, nil
 		}
 		m.mp.mode = "update"
-		m.modpackInput("local", "Nueva versión (.mrpack local): ", "")
+		m.modpackInput("local", i18n.T("modpacks.input_update_prompt"), "")
 		return m, nil
 	case "e":
 		if !m.modpackCanManageCurrent() {
-			m.mp.err = fmt.Errorf("esta instancia no tiene un modpack exportable")
+			m.mp.err = fmt.Errorf("%s", i18n.T("modpacks.err_not_exportable"))
 			m.mp.step = "result"
 			return m, nil
 		}
 		return m.modpackExportPaths()
 	case "r":
 		if m.instance.Kind != "managed" && (m.instance.ID != instances.LegacyID || m.instance.Kind != "legacy") {
-			m.mp.err = fmt.Errorf("esta instancia no tiene un modpack recuperable")
+			m.mp.err = fmt.Errorf("%s", i18n.T("modpacks.err_not_recoverable"))
 			m.mp.step = "result"
 			return m, nil
 		}
@@ -510,7 +510,7 @@ func (m Model) updateModpackKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "enter":
 			value := strings.TrimSpace(m.mp.input.Value())
 			if value == "" {
-				m.mp.err = fmt.Errorf("ingresá un valor válido")
+				m.mp.err = fmt.Errorf("%s", i18n.T("modpacks.err_invalid_value"))
 				return m, nil
 			}
 			switch m.mp.action {
@@ -647,7 +647,7 @@ func (m Model) updateModpackKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		case "n":
 			if m.mp.mode == "import" {
-				m.modpackInput("name", "Nombre de la nueva instancia: ", m.mp.name)
+				m.modpackInput("name", i18n.T("modpacks.input_name_prompt"), m.mp.name)
 				return m, nil
 			}
 		case "i":
@@ -711,7 +711,7 @@ func (m Model) updateModpackKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "enter":
-			m.modpackInput("export", "Guardar archivo como (.mrpack): ", m.instance.Name+".mrpack")
+			m.modpackInput("export", i18n.T("modpacks.input_export_prompt"), m.instance.Name+".mrpack")
 			return m, nil
 		}
 
@@ -765,7 +765,7 @@ func (m Model) modpackCanManageCurrent() bool {
 func (m Model) modpackCurrentTargetReason() string {
 	in := m.instance
 	if in.ID == "" || in.Kind != "managed" && (in.ID != instances.LegacyID || in.Kind != "legacy") {
-		return "no hay una instancia actual seleccionada"
+		return i18n.T("modpacks.reason_no_instance")
 	}
 	dep := m.mp.archive.Index.Dependencies
 	mc, loader, loaderVersion := dep["minecraft"], "Vanilla", ""
@@ -773,20 +773,20 @@ func (m Model) modpackCurrentTargetReason() string {
 		loader, loaderVersion = "Fabric", dep["fabric-loader"]
 	}
 	if in.MinecraftVersion == "" || in.Loader == "" || in.Loader == "Fabric" && in.LoaderVersion == "" {
-		return "la instancia actual no tiene versión exacta de Minecraft y cargador registrada"
+		return i18n.T("modpacks.reason_no_runtime")
 	}
 	if in.MinecraftVersion != mc || in.Loader != loader || in.LoaderVersion != loaderVersion {
-		return fmt.Sprintf("runtime distinto: instancia Minecraft %s / %s %s; pack %s",
+		return i18n.T("modpacks.reason_runtime_mismatch",
 			modText(in.MinecraftVersion), modText(in.Loader), modText(in.LoaderVersion), m.modpackRuntime())
 	}
 	gameDir, err := instances.GameDir(m.dataRoot, in)
 	if err != nil {
-		return "no se puede acceder a la carpeta de la instancia: " + displayError(err)
+		return i18n.T("modpacks.reason_cannot_access_dir", displayError(err))
 	}
 	if in.Kind == "legacy" {
 		info, err := os.Lstat(gameDir)
 		if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-			return "la carpeta de la instalación existente no está disponible"
+			return i18n.T("modpacks.reason_legacy_dir_unavailable")
 		}
 	}
 	manifestPath := filepath.Join(m.dataRoot, "legacy-pack", "pack.json")
@@ -794,9 +794,9 @@ func (m Model) modpackCurrentTargetReason() string {
 		manifestPath = filepath.Join(filepath.Dir(gameDir), "pack.json")
 	}
 	if _, err := os.Lstat(manifestPath); err == nil {
-		return "ya tiene un modpack; usá [u] Actualizar"
+		return i18n.T("modpacks.reason_already_has_pack")
 	} else if !os.IsNotExist(err) {
-		return "no se puede comprobar el modpack actual: " + displayError(err)
+		return i18n.T("modpacks.reason_cannot_check_pack", displayError(err))
 	}
 	return ""
 }
@@ -843,7 +843,7 @@ func (m Model) renderModpacks() string {
 
 	switch m.mp.step {
 	case "home":
-		title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("MODPACKS")
+		title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("modpacks.title"))
 		div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", max(46, m.centerWidth()-4)))
 		b.WriteString(title + "\n" + div + "\n\n")
 
@@ -857,27 +857,28 @@ func (m Model) renderModpacks() string {
 			lipgloss.NewStyle().Foreground(colorDimGray).Render(formatDisplayPath(modText(gameDir), pathWidth)) + "\n\n")
 		rowWidth := max(44, m.centerWidth()-6)
 		for i, opt := range modpackHomeOptions {
+			label := i18n.T(opt.labelKey)
 			if i == m.mp.homeCursor {
-				b.WriteString(cursorStyle.Render("► ") + lipgloss.NewStyle().Foreground(colorWhite).Bold(true).MaxWidth(rowWidth).Render(opt.label) + "\n")
+				b.WriteString(cursorStyle.Render("► ") + lipgloss.NewStyle().Foreground(colorWhite).Bold(true).MaxWidth(rowWidth).Render(label) + "\n")
 			} else {
-				b.WriteString("  " + lipgloss.NewStyle().Foreground(colorGray).MaxWidth(rowWidth).Render(opt.label) + "\n")
+				b.WriteString("  " + lipgloss.NewStyle().Foreground(colorGray).MaxWidth(rowWidth).Render(label) + "\n")
 			}
 		}
 		b.WriteString("\n")
 		if mf, ok := m.currentPackManifest(); ok {
-			b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(fmt.Sprintf("  %d files · Pack: %s (%s)", len(mf.Files), modText(mf.Name), modText(mf.IndexVersionID))) + "\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("modpacks.managed_pack_status", len(mf.Files), modText(mf.Name), modText(mf.IndexVersionID))) + "\n")
 		} else {
-			b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("  Sin modpack gestionado en esta instancia") + "\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("modpacks.no_managed_pack")) + "\n")
 		}
-		b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("  [Space/Enter] Seleccionar   [l] Local   [h] URL   [s] Buscar\n  [u] Actualizar   [e] Exportar   [r] Recuperar   [Esc] Volver") + "\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("modpacks.home_hint")) + "\n")
 	case "input":
-		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("MODPACKS") + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(i18n.T("modpacks.title")) + "\n\n")
 		b.WriteString(m.mp.input.View() + "\n\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("[Enter] Confirmar   [Esc] Volver") + "\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("modpacks.input_hint")) + "\n")
 	case "results":
 		headerWidth := max(20, m.centerWidth()-6)
-		headerLines := wrapResetLines([]string{"Modrinth Modpacks"}, headerWidth)
-		filterLines := wrapResetLines([]string{"[Minecraft: elegir después de seleccionar modpack]  [Sort: Relevance]"}, headerWidth)
+		headerLines := wrapResetLines([]string{i18n.T("modpacks.results_header")}, headerWidth)
+		filterLines := wrapResetLines([]string{i18n.T("modpacks.filter_hint")}, headerWidth)
 		b.WriteString(strings.Join(headerLines, "\n") + "\n" + strings.Join(filterLines, "\n") + "\n\n")
 
 		b.WriteString(i18n.T("modrinth.search_label", modText(m.mp.query)) + "\n")
@@ -885,7 +886,7 @@ func (m Model) renderModpacks() string {
 		useTable := m.width >= 75 && textWidth >= 55
 		descWidth := max(10, textWidth-54)
 		if useTable && len(m.mp.results.Hits) > 0 {
-			header := "  " + padCol("Name", 22) + "  " + padCol("Author", 14) + "  " + padCol("Downloads", 10) + "  " + padCol("Short description", descWidth)
+			header := "  " + padCol(i18n.T("modrinth.col_name"), 22) + "  " + padCol(i18n.T("modrinth.col_author"), 14) + "  " + padCol(i18n.T("modrinth.col_downloads"), 10) + "  " + padCol(i18n.T("modrinth.col_description"), descWidth)
 			b.WriteString(lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(header) + "\n")
 			divWidth := max(40, textWidth-2)
 			b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("  "+strings.Repeat("─", divWidth)) + "\n")
@@ -912,14 +913,14 @@ func (m Model) renderModpacks() string {
 			reserve = 9
 		}
 		b.WriteString(m.catalogPage(lines, m.mp.cursor, reserve))
-		b.WriteString(fmt.Sprintf("Showing %d of %d modpacks\n", len(m.mp.results.Hits), m.mp.results.Total))
-		b.WriteString("[↑/↓] Navigate   [Enter] View details   [Esc] Back\n")
+		b.WriteString(i18n.T("modpacks.search_results_count", len(m.mp.results.Hits), m.mp.results.Total) + "\n")
+		b.WriteString(i18n.T("modpacks.search_nav_hint") + "\n")
 
 	case "minecraft":
 		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(modText(m.mp.projectTitle)) + "\n")
-		b.WriteString("Elegí la versión de Minecraft del modpack (independiente de la instancia actual):\n\n")
+		b.WriteString(i18n.T("modpacks.choose_mc_version") + "\n\n")
 		if len(m.mp.minecraftVersions) == 0 {
-			b.WriteString("  No hay versiones de Minecraft publicadas para este modpack.\n")
+			b.WriteString(i18n.T("modpacks.no_mc_versions") + "\n")
 		}
 		lines := make([]string, 0, len(m.mp.minecraftVersions))
 		for i, game := range m.mp.minecraftVersions {
@@ -930,7 +931,7 @@ func (m Model) renderModpacks() string {
 			lines = append(lines, prefix+modText(game))
 		}
 		b.WriteString(m.catalogPage(lines, m.mp.cursor, 6))
-		b.WriteString("[↑/↓] Navegar   [Enter] Elegir versión   [Esc] Volver\n")
+		b.WriteString(i18n.T("modpacks.mc_nav_hint") + "\n")
 
 	case "releases":
 		title := modText(m.mp.projectTitle)
@@ -941,11 +942,11 @@ func (m Model) renderModpacks() string {
 		count := len(versions)
 		if count == 0 {
 			b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(title) + "\n\n")
-			b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("  No hay releases para esta versión de Minecraft.") + "\n\n")
-			b.WriteString("[Esc] Elegir otra versión de Minecraft\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("modpacks.no_releases")) + "\n\n")
+			b.WriteString(i18n.T("modpacks.choose_other_mc_version") + "\n")
 		} else if !m.mp.showAllVersions {
 			b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(title) + "\n")
-			b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("Minecraft "+modText(m.mp.selectedMinecraft)+" · Elegí el release del modpack:") + "\n\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("modpacks.choose_release", modText(m.mp.selectedMinecraft))) + "\n\n")
 			limit := min(3, count)
 			for i := range limit {
 				v := versions[i]
@@ -965,13 +966,13 @@ func (m Model) renderModpacks() string {
 				if m.mp.cursor == limit {
 					prefix = cursorStyle.Render("► ")
 				}
-				expandText := fmt.Sprintf("[▼ Ver todo el historial / otras versiones (%d disponibles)]", count)
+				expandText := i18n.T("modpacks.view_all_releases", count)
 				b.WriteString("\n" + prefix + lipgloss.NewStyle().Foreground(colorAccent).Render(expandText) + "\n")
 			}
-			b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render("[↑/↓] Navegar   [Enter] Inspeccionar / Desplegar   [v / Tab] Expandir   [Esc] Volver") + "\n")
+			b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("modpacks.releases_nav_hint")) + "\n")
 		} else {
-			b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(title) + "  " + lipgloss.NewStyle().Foreground(colorDimGray).Render(fmt.Sprintf("(Minecraft %s: %d releases)", modText(m.mp.selectedMinecraft), count)) + "\n")
-			b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("Historial completo · Presioná [v] o [Tab] para colapsar a los últimos releases.") + "\n\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(title) + "  " + lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("modpacks.mc_releases_count", modText(m.mp.selectedMinecraft), count)) + "\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("modpacks.full_history_hint")) + "\n\n")
 			lines := make([]string, 0, count)
 			for i, v := range versions {
 				prefix := "  "
@@ -985,8 +986,8 @@ func (m Model) renderModpacks() string {
 				lines = append(lines, prefix+padCol(verStr, 34)+"  "+padCol(modText(v.Channel), 10)+"  "+modText(strings.Join(v.Loaders, ", ")))
 			}
 			b.WriteString(m.catalogPage(lines, m.mp.cursor, 8))
-			b.WriteString(fmt.Sprintf("Showing %d of %d versions\n", min(count, 8), count))
-			b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("[↑/↓] Navegar   [Enter] Inspeccionar versión   [v / Tab] Colapsar   [Esc] Volver") + "\n")
+			b.WriteString(i18n.T("modpacks.versions_count", min(count, 8), count) + "\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("modpacks.full_history_nav_hint")) + "\n")
 		}
 	case "review":
 		idx := m.mp.archive.Index
@@ -994,26 +995,26 @@ func (m Model) renderModpacks() string {
 		if idx.Summary != "" {
 			b.WriteString(lipgloss.NewStyle().Foreground(colorWhite).Render(modText(idx.Summary)) + "\n\n")
 		}
-		b.WriteString(padCol("Runtime pack:", 14) + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Render(m.modpackRuntime()) + "\n")
-		b.WriteString(padCol("Archivos:", 14) + "  " + fmt.Sprintf("%d declarados", len(idx.Files)) + "\n")
-		b.WriteString(padCol("Tamaño:", 14) + "  " + fmt.Sprintf("%.1f MiB", float64(m.modpackSize())/(1<<20)) + "\n\n")
+		b.WriteString(padCol(i18n.T("modpacks.label_runtime"), 14) + "  " + lipgloss.NewStyle().Foreground(colorAccent2).Render(m.modpackRuntime()) + "\n")
+		b.WriteString(padCol(i18n.T("modpacks.label_files"), 14) + "  " + i18n.T("modpacks.files_declared", len(idx.Files)) + "\n")
+		b.WriteString(padCol(i18n.T("modpacks.label_size"), 14) + "  " + fmt.Sprintf("%.1f MiB", float64(m.modpackSize())/(1<<20)) + "\n\n")
 
 		if m.mp.mode == "import" || m.mp.mode == "into" {
-			b.WriteString(padCol("Nueva:", 14) + "  " + lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render(modText(m.mp.name)) + "  " + lipgloss.NewStyle().Foreground(colorDimGray).Render("[n] Cambiar nombre") + "\n")
-			b.WriteString(padCol("Actual:", 14) + "  " + modText(m.instance.Name) + "\n")
+			b.WriteString(padCol(i18n.T("modpacks.label_new"), 14) + "  " + lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render(modText(m.mp.name)) + "  " + lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("modpacks.change_name_hint")) + "\n")
+			b.WriteString(padCol(i18n.T("modpacks.label_current"), 14) + "  " + modText(m.instance.Name) + "\n")
 			if gameDir, err := instances.GameDir(m.dataRoot, m.instance); err == nil {
-				b.WriteString(padCol("Ruta actual:", 14) + "  " + formatDisplayPath(modText(gameDir), max(20, m.centerWidth()-16)) + "\n")
+				b.WriteString(padCol(i18n.T("modpacks.label_current_path"), 14) + "  " + formatDisplayPath(modText(gameDir), max(20, m.centerWidth()-16)) + "\n")
 			}
 			if reason := m.modpackCurrentTargetReason(); reason != "" {
-				b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("  [i] No disponible: "+modText(reason)) + "\n\n")
+				b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("modpacks.target_unavailable", modText(reason))) + "\n\n")
 			} else {
-				b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("  [i] Comparar rutas e instalar en la instancia actual") + "\n\n")
+				b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("modpacks.target_available")) + "\n\n")
 			}
 		}
 
 		optional := m.modpackOptionals()
 		if len(optional) > 0 {
-			b.WriteString(lipgloss.NewStyle().Foreground(colorBlue).Render("Archivos cliente opcionales:") + "\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorBlue).Render(i18n.T("modpacks.optional_files_title")) + "\n")
 			for i, p := range optional {
 				prefix := "  "
 				if i == m.mp.cursor {
@@ -1027,26 +1028,26 @@ func (m Model) renderModpacks() string {
 			}
 			b.WriteString("\n")
 		}
-		prompt := "[Enter] Instalar en instancia nueva (predeterminado)   [Esc] Cancelar"
+		prompt := i18n.T("modpacks.review_prompt_new")
 		if m.mp.mode == "update" {
-			b.WriteString(padCol("Destino:", 14) + "  " + modText(m.instance.Name) + "\n")
-			prompt = "[Enter] Comparar cambios y actualizar   [Esc] Cancelar"
+			b.WriteString(padCol(i18n.T("modpacks.label_destination"), 14) + "  " + modText(m.instance.Name) + "\n")
+			prompt = i18n.T("modpacks.review_prompt_update")
 		}
 		b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(prompt) + "\n")
 
 	case "conflicts":
-		title, verb := "ACTUALIZACIÓN DE MODPACK — RESOLUCIÓN DE CAMBIOS", "Aplicar actualización"
+		title, verb := i18n.T("modpacks.conflicts_title_update"), i18n.T("modpacks.conflicts_verb_update")
 		if m.mp.mode == "into" {
-			title, verb = "INSTALAR EN INSTANCIA ACTUAL — REVISIÓN DE RUTAS", "Instalar en instancia actual"
+			title, verb = i18n.T("modpacks.conflicts_title_into"), i18n.T("modpacks.conflicts_verb_into")
 		}
 		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(title) + "\n")
-		b.WriteString("Pack: " + m.modpackRuntime() + "  ·  Destino: " + modText(m.instance.Name) + "\n")
+		b.WriteString(i18n.T("modpacks.conflicts_pack_meta", m.modpackRuntime(), modText(m.instance.Name)) + "\n")
 		if gameDir, err := instances.GameDir(m.dataRoot, m.instance); err == nil {
-			b.WriteString("Ruta: " + formatDisplayPath(modText(gameDir), max(20, m.centerWidth()-12)) + "\n")
+			b.WriteString(i18n.T("modpacks.conflicts_path", formatDisplayPath(modText(gameDir), max(20, m.centerWidth()-12))) + "\n")
 		}
 		b.WriteString("\n")
-		b.WriteString(fmt.Sprintf("Cambios propuestos: %d · Conflictos detectados: %d\n", len(m.mp.plan.Changes), len(m.mp.conflicts)))
-		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Cada ruta local se conserva por defecto. [Espacio] permite sobrescribir solo la ruta seleccionada.") + "\n\n")
+		b.WriteString(i18n.T("modpacks.conflicts_summary", len(m.mp.plan.Changes), len(m.mp.conflicts)) + "\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("modpacks.conflicts_hint")) + "\n\n")
 
 		lines := make([]string, 0, len(m.mp.plan.Changes))
 		for i, change := range m.mp.plan.Changes {
@@ -1054,21 +1055,21 @@ func (m Model) renderModpacks() string {
 			if i == m.mp.cursor {
 				prefix = "► "
 			}
-			decision := "Automático"
+			decision := i18n.T("modpacks.decision_auto")
 			if change.Conflict {
-				decision = "Conservar local"
+				decision = i18n.T("modpacks.decision_keep")
 				if m.mp.decisions[change.Path] {
-					decision = "Sobrescribir"
+					decision = i18n.T("modpacks.decision_overwrite")
 				}
 			}
 			lines = append(lines, fmt.Sprintf("%s[%s] %s / local: %s — %s", prefix, decision, change.Upstream, change.LocalChange, modText(change.Path)))
 		}
 		b.WriteString(m.catalogPage(lines, m.mp.cursor, 7))
-		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render("[↑/↓] Revisar rutas   [Space] Alternar conflicto   [Enter] "+verb+"   [Esc] Volver") + "\n")
+		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("modpacks.conflicts_nav_hint", verb)) + "\n")
 
 	case "export choices":
-		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("EXPORTAR MODPACK (.mrpack)") + "\n\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("Seleccioná los archivos locales a incluir como overrides (saves y secretos excluidos):") + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(i18n.T("modpacks.export_title")) + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("modpacks.export_select_overrides")) + "\n\n")
 		for i, p := range m.mp.overrides {
 			prefix := "  "
 			if i == m.mp.cursor {
@@ -1080,53 +1081,53 @@ func (m Model) renderModpacks() string {
 			}
 			b.WriteString(prefix + "[" + mark + "] " + modText(p) + "\n")
 		}
-		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render("[Space] Alternar   [Enter] Confirmar selección   [Esc] Volver") + "\n")
+		b.WriteString("\n" + lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("modpacks.export_choices_hint")) + "\n")
 
 	case "working":
-		label := "Procesando modpack"
+		label := i18n.T("modpacks.busy_default")
 		switch m.mp.busy {
 		case "inspect":
-			label = "Descargando e inspeccionando modpack"
+			label = i18n.T("modpacks.busy_inspect")
 		case "search":
-			label = "Buscando modpacks"
+			label = i18n.T("modpacks.busy_search")
 		case "releases":
-			label = "Cargando versiones"
+			label = i18n.T("modpacks.busy_releases")
 		case "plan":
-			label = "Comparando cambios del modpack"
+			label = i18n.T("modpacks.busy_plan")
 		case "install":
-			label = "Instalando modpack"
+			label = i18n.T("modpacks.busy_install")
 		case "recover":
-			label = "Recuperando actualización"
+			label = i18n.T("modpacks.busy_recover")
 		case "export choices":
-			label = "Buscando archivos para exportar"
+			label = i18n.T("modpacks.busy_export_choices")
 		case "export":
-			label = "Exportando modpack"
+			label = i18n.T("modpacks.busy_export")
 		}
 		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render(label) + "\n\n")
 		if m.mp.busy == "install" && m.mp.progress != nil {
 			done, total := m.mp.progress.done.Load(), m.mp.progress.total.Load()
 			if total > 0 {
-				b.WriteString(fmt.Sprintf("Archivos descargados: %d%% (%.1f / %.1f MiB)\n\n", done*100/total, float64(done)/(1<<20), float64(total)/(1<<20)))
+				b.WriteString(i18n.T("modpacks.progress_downloaded", done*100/total, float64(done)/(1<<20), float64(total)/(1<<20)) + "\n\n")
 				if done == total {
-					b.WriteString("Preparando archivos y runtime...\n\n")
+					b.WriteString(i18n.T("modpacks.progress_preparing") + "\n\n")
 				}
 			} else {
-				b.WriteString("Preparando archivos y runtime...\n\n")
+				b.WriteString(i18n.T("modpacks.progress_preparing") + "\n\n")
 			}
 		}
 		if m.mp.cancelRequested {
-			b.WriteString("Cancelando; esperando a que termine la operación...\n")
+			b.WriteString(i18n.T("modpacks.cancelling") + "\n")
 		} else {
-			b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("[Esc] Cancelar") + "\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("modpacks.cancel_hint")) + "\n")
 		}
 
 	case "result":
 		if m.mp.err == nil {
 			b.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("✔ "+m.mp.message) + "\n\n")
 		} else {
-			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("⚠ Error: "+modText(displayError(m.mp.err))) + "\n\n")
+			b.WriteString(lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render(i18n.T("modpacks.error_prefix", modText(displayError(m.mp.err)))) + "\n\n")
 		}
-		b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("[Enter / Esc] Volver al menú de modpacks") + "\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("modpacks.result_hint")) + "\n")
 	}
 
 	return b.String()

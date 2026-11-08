@@ -754,7 +754,7 @@ func (m Model) controlsHint() string {
 	case modrinthHubScreen:
 		return i18n.T("packs.hub_hint")
 	case modpackScreen:
-		return "[↑↓] Elegir  [Espacio] Alternar  [Enter] Confirmar  [Esc] Volver"
+		return i18n.T("modpacks.footer_hint")
 	case packListScreen:
 		return i18n.T("packs.list_hint")
 	case packPickerScreen:

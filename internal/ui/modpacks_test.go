@@ -19,6 +19,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/mattn/go-runewidth"
 
+	"mcTUI/internal/i18n"
 	"mcTUI/internal/instances"
 	"mcTUI/internal/modpacks"
 	"mcTUI/internal/modrinth"
@@ -122,7 +123,7 @@ func TestModpacksUINavigationAndImport(t *testing.T) {
 
 	// Comprobar que renderModpacks muestra mensaje de éxito
 	rendered := m.renderModpacks()
-	if !strings.Contains(rendered, "Modpack instalado") {
+	if !strings.Contains(rendered, i18n.T("modpacks.success_install")) {
 		t.Fatalf("renderModpacks did not show success: %s", rendered)
 	}
 }
@@ -141,12 +142,12 @@ func TestModpackVersionCancellationReturnsToReleasesWithoutError(t *testing.T) {
 	}
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = next.(Model)
-	if cmd == nil || m.mp.step != "working" || !strings.Contains(m.renderModpacks(), "Descargando e inspeccionando") {
+	if cmd == nil || m.mp.step != "working" || !strings.Contains(m.renderModpacks(), i18n.T("modpacks.busy_inspect")) {
 		t.Fatalf("selecting a version did not show staging: %s", m.renderModpacks())
 	}
 	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	m = next.(Model)
-	if !strings.Contains(m.renderModpacks(), "Cancelando") {
+	if !strings.Contains(m.renderModpacks(), i18n.T("modpacks.cancelling")) {
 		t.Fatalf("cancellation was not visible: %s", m.renderModpacks())
 	}
 	next, _ = m.Update(cmd())
@@ -200,7 +201,7 @@ func TestModpackInstallCancellationKeepsReviewAndCleansTemporaryStage(t *testing
 	}
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = next.(Model)
-	if cmd == nil || !strings.Contains(m.renderModpacks(), "Instalando modpack") {
+	if cmd == nil || !strings.Contains(m.renderModpacks(), i18n.T("modpacks.busy_install")) {
 		t.Fatalf("install did not render working state: %s", m.renderModpacks())
 	}
 	work := cmd().(tea.BatchMsg)[0]
@@ -268,7 +269,7 @@ func TestModpackUpdateReviewShowsEveryChangeAndRequiresExplicitConflictChoice(t 
 	m = next.(Model)
 	next, _ = m.Update(tea.KeyMsg{Type: tea.KeySpace})
 	m = next.(Model)
-	if !m.mp.decisions["config/custom.cfg"] || !strings.Contains(m.renderModpacks(), "[Sobrescribir]") {
+	if !m.mp.decisions["config/custom.cfg"] || !strings.Contains(m.renderModpacks(), "["+i18n.T("modpacks.decision_overwrite")+"]") {
 		t.Fatal("selected conflict did not receive a visible overwrite decision")
 	}
 }
@@ -324,7 +325,7 @@ func TestModpacksHomeMenuAndSearchAppearance(t *testing.T) {
 	if !strings.Contains(view, "VERSION") || !strings.Contains(view, "26.1 / Fabric 0.19.5") {
 		t.Fatalf("missing VERSION metadata: %s", view)
 	}
-	if !strings.Contains(view, "►") || !strings.Contains(view, "Importar archivo .mrpack local") {
+	if !strings.Contains(view, "►") || !strings.Contains(view, i18n.T("modpacks.option_local")) {
 		t.Fatalf("missing cursor or first option: %s", view)
 	}
 
@@ -391,7 +392,7 @@ func TestModpacksReleasesCompactAndExpandable(t *testing.T) {
 	if strings.Contains(view, "Release 3.10.0") {
 		t.Fatalf("unexpected deep release in compact view: %s", view)
 	}
-	if !strings.Contains(view, "Ver todo el historial") || !strings.Contains(view, "28 disponibles") {
+	if !strings.Contains(view, i18n.T("modpacks.view_all_releases", 28)) {
 		t.Fatalf("missing expandable row hint: %s", view)
 	}
 
@@ -404,7 +405,7 @@ func TestModpacksReleasesCompactAndExpandable(t *testing.T) {
 
 	// En vista expandida: paginada con catalogPage (no más de 8 filas impresas a la vez)
 	expView := m.renderModpacks()
-	if !strings.Contains(expView, "Historial completo") || !strings.Contains(expView, "Showing 8 of 28 versions") {
+	if !strings.Contains(expView, i18n.T("modpacks.full_history_hint")) || !strings.Contains(expView, i18n.T("modpacks.versions_count", 8, 28)) {
 		t.Fatalf("expected paginated full history: %s", expView)
 	}
 
@@ -575,7 +576,7 @@ func TestModpackInstallIntoCurrentReviewsAndAppliesPerPathDecisions(t *testing.T
 		mp: modpackState{step: "review", mode: "import", name: "New Pack", archive: pack,
 			source: modpacks.Source{Type: "local"}, optional: map[string]bool{}, store: modpacks.Store{Root: root}}}
 	if view := m.renderModpacks(); !strings.Contains(view, "Actual") || !strings.Contains(view, "Fabric 0.16.0") ||
-		!strings.Contains(view, "[i] Comparar rutas") || !strings.Contains(view, "[Enter] Instalar en instancia nueva") {
+		!strings.Contains(view, i18n.T("modpacks.target_available")) || !strings.Contains(view, i18n.T("modpacks.review_prompt_new")) {
 		t.Fatalf("destination choices or runtime missing: %s", view)
 	}
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
@@ -590,7 +591,7 @@ func TestModpackInstallIntoCurrentReviewsAndAppliesPerPathDecisions(t *testing.T
 	}
 	if view := m.renderModpacks(); !strings.Contains(view, "config/keep.cfg") ||
 		!strings.Contains(view, "config/replace.cfg") || !strings.Contains(view, "config/added.cfg") ||
-		!strings.Contains(view, "Conservar local") || !strings.Contains(view, "Destino: Actual") {
+		!strings.Contains(view, i18n.T("modpacks.decision_keep")) || !strings.Contains(view, in.Name) {
 		t.Fatalf("path review incomplete: %s", view)
 	}
 	for i, change := range m.mp.plan.Changes {
@@ -647,7 +648,7 @@ func TestModpackCurrentTargetRequiresExactRuntimeAndNoExistingPack(t *testing.T)
 		next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
 		m = next.(Model)
 		if cmd != nil || m.mp.step != "review" || m.mp.mode != "import" ||
-			!strings.Contains(m.renderModpacks(), "No disponible:") {
+			!strings.Contains(m.renderModpacks(), i18n.T("modpacks.target_unavailable", "")[:12]) {
 			t.Fatalf("runtime mismatch offered current destination: %+v", changed)
 		}
 	}
@@ -661,7 +662,7 @@ func TestModpackCurrentTargetRequiresExactRuntimeAndNoExistingPack(t *testing.T)
 	}
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
 	m = next.(Model)
-	if cmd != nil || m.mp.mode != "import" || !strings.Contains(m.renderModpacks(), "[u] Actualizar") {
+	if cmd != nil || m.mp.mode != "import" || !strings.Contains(m.renderModpacks(), i18n.T("modpacks.reason_already_has_pack")) {
 		t.Fatal("existing pack offered an install instead of the update flow")
 	}
 }
@@ -711,5 +712,69 @@ func TestModpackLocalFileInputDisplaysEditablePath(t *testing.T) {
 	m.mp.input.SetValue("/tmp/sample.mrpack")
 	if m.mp.step != "input" || !strings.Contains(m.renderModpacks(), "/tmp/sample.mrpack") {
 		t.Fatalf("local pack path is not visible while editing: %s", m.renderModpacks())
+	}
+}
+
+func TestModpacksLocalizationEnglishAndSpanish(t *testing.T) {
+	orig := i18n.CurrentLanguage()
+	t.Cleanup(func() { i18n.SetLanguage(orig) })
+
+	m := Model{
+		state:    modpackScreen,
+		dataRoot: t.TempDir(),
+		width:    100,
+		height:   30,
+		instance: instances.Instance{ID: "test-1", Kind: "managed", Name: "Survival-1", MinecraftVersion: "26.3", Loader: "Vanilla"},
+		mp:       modpackState{step: "home", homeCursor: 0},
+	}
+
+	// 1. English
+	i18n.SetLanguage("en")
+	viewEN := m.renderModpacks()
+	for _, expected := range []string{
+		"MODPACKS",
+		"INSTANCE",
+		"Survival-1",
+		"Import local .mrpack file",
+		"Import from HTTPS URL",
+		"Search modpacks on Modrinth",
+		"Update modpack for this instance",
+		"Export instance as .mrpack",
+		"Recover interrupted update",
+		"No managed modpack in this instance",
+		"[Space/Enter] Select",
+		"[Esc] Back",
+	} {
+		if !strings.Contains(viewEN, expected) {
+			t.Fatalf("English modpack view missing %q:\n%s", expected, viewEN)
+		}
+	}
+	if got := m.controlsHint(); !strings.Contains(got, "[↑↓] Choose") {
+		t.Fatalf("English footer hint missing Choose: %s", got)
+	}
+
+	// 2. Spanish
+	i18n.SetLanguage("es")
+	viewES := m.renderModpacks()
+	for _, expected := range []string{
+		"MODPACKS",
+		"INSTANCIA",
+		"Survival-1",
+		"Importar archivo .mrpack local",
+		"Importar desde URL HTTPS",
+		"Buscar modpacks en Modrinth",
+		"Actualizar modpack de esta instancia",
+		"Exportar instancia como .mrpack",
+		"Recuperar actualización interrumpida",
+		"Sin modpack gestionado en esta instancia",
+		"[Space/Enter] Seleccionar",
+		"[Esc] Volver",
+	} {
+		if !strings.Contains(viewES, expected) {
+			t.Fatalf("Spanish modpack view missing %q:\n%s", expected, viewES)
+		}
+	}
+	if got := m.controlsHint(); !strings.Contains(got, "[↑↓] Elegir") {
+		t.Fatalf("Spanish footer hint missing Elegir: %s", got)
 	}
 }

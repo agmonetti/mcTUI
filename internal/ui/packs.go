@@ -462,7 +462,7 @@ func (m Model) renderPacks() string {
 	if m.state == modrinthHubScreen {
 		b.WriteString(labelStyle.Render(i18n.T("common.instance_label")) + "  " +
 			lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(modText(m.instance.Name)) + "\n\n")
-		for i, label := range []string{i18n.T("menu.mods"), i18n.T("packs.resource"), i18n.T("packs.shader"), "Modpacks"} {
+		for i, label := range []string{i18n.T("menu.mods"), i18n.T("packs.resource"), i18n.T("packs.shader"), i18n.T("packs.modpack")} {
 			if m.hubCursor == i {
 				b.WriteString(cursorStyle.Render("► "+label) + "\n")
 			} else {
