@@ -77,8 +77,8 @@ func TestMainMenuNavigationAndTransitions(t *testing.T) {
 		t.Fatalf("expected cursorMenu 0, got %d", m.cursorMenu)
 	}
 
-	// Down arrow moves cursor down to menuOptionsCount-1 (6)
-	for expected := 1; expected <= 6; expected++ {
+	// Down arrow moves cursor down to menuOptionsCount-1 (7)
+	for expected := 1; expected <= 7; expected++ {
 		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 		m = updated.(Model)
 		if m.cursorMenu != expected {
@@ -86,14 +86,14 @@ func TestMainMenuNavigationAndTransitions(t *testing.T) {
 		}
 	}
 
-	// Down when at cursorMenu 6 should stay at 6
+	// Down when at cursorMenu 7 should stay at 7
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m = updated.(Model)
-	if m.cursorMenu != 6 {
-		t.Fatalf("expected cursorMenu to stay at 6, got %d", m.cursorMenu)
+	if m.cursorMenu != 7 {
+		t.Fatalf("expected cursorMenu to stay at 7, got %d", m.cursorMenu)
 	}
 
-	// Enter on Quit (cursor 6) quits
+	// Enter on Quit (cursor 7) quits
 	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd == nil {
 		t.Fatal("expected quit cmd when pressing Enter on Quit option")
@@ -174,6 +174,20 @@ func TestMainMenuNavigationAndTransitions(t *testing.T) {
 	m = updated.(Model)
 	if m.state != configScreen || m.cursorConfig != 0 {
 		t.Fatalf("expected configScreen with cursorConfig 0, got state=%v, cursorConfig=%d", m.state, m.cursorConfig)
+	}
+
+	// 6: Roadmap -> roadmapScreen
+	m.state = menuScreen
+	m.cursorMenu = 6
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if m.state != roadmapScreen {
+		t.Fatalf("expected roadmapScreen, got %v", m.state)
+	}
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = updated.(Model)
+	if m.state != menuScreen {
+		t.Fatalf("expected menuScreen after Esc from roadmap, got %v", m.state)
 	}
 }
 
@@ -435,5 +449,20 @@ func TestInitialViewLayoutWidth(t *testing.T) {
 	// 4. On wide terminal (160), total dashboard width must be spacious (> 100 cols)
 	if w < 100 {
 		t.Errorf("expected spacious layout on wide terminal (w >= 100), got width %d", w)
+	}
+
+	// 5. Switching to Roadmap cursor must not change total view height
+	m.cursorMenu = 6
+	roadmapPreviewView := m.View()
+	_, rh := lipgloss.Size(roadmapPreviewView)
+	if rh != h {
+		t.Errorf("roadmap preview altered view height from %d to %d", h, rh)
+	}
+
+	m.state = roadmapScreen
+	roadmapScreenView := m.View()
+	_, sh := lipgloss.Size(roadmapScreenView)
+	if sh != h {
+		t.Errorf("roadmap screen altered view height from %d to %d", h, sh)
 	}
 }

@@ -18,6 +18,7 @@ import (
 	"mcTUI/internal/modpacks"
 	"mcTUI/internal/mojang"
 	"mcTUI/internal/resetconfigs"
+	"mcTUI/internal/roadmap"
 	"mcTUI/internal/theme"
 	"mcTUI/internal/worlds"
 	"time"
@@ -83,6 +84,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case roadmap.LoadedMsg:
+		m.roadmapLoading = false
+		m.roadmapData = msg.Data
+		m.roadmapOnline = msg.Online
+		return m, nil
 	case FabricLoaderDoneMsg:
 		if m.state != instanceLoaderScreen || m.creationVersion != msg.MinecraftVersion || m.fabricLoaderRequest != msg.Request {
 			return m, nil
@@ -521,6 +527,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursorVersions--
 			} else if m.state == worldsScreen && m.cursorWorlds > 0 {
 				m.cursorWorlds--
+			} else if m.state == roadmapScreen && m.roadmapCursor > 0 {
+				m.roadmapCursor--
 			}
 
 		case "down", "j":
@@ -538,6 +546,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursorVersions++
 			} else if m.state == worldsScreen && m.cursorWorlds < len(m.worlds)-1 {
 				m.cursorWorlds++
+			} else if m.state == roadmapScreen && m.roadmapCursor < len(m.roadmapData.Items)-1 {
+				m.roadmapCursor++
 			}
 
 		case "enter":
@@ -668,7 +678,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case 5: // Configs
 					m.cursorConfig = 0
 					m.state = configScreen
-				case 6: // Quit
+				case 6: // Roadmap
+					m.roadmapCursor = 0
+					m.state = roadmapScreen
+				case 7: // Quit
 					return m, tea.Quit
 				}
 			} else if m.state == configScreen {
@@ -998,6 +1011,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "r", "R":
+			if m.state == roadmapScreen {
+				m.roadmapLoading = true
+				return m, roadmap.FetchCmd()
+			}
 			if m.state == instancesScreen && len(m.instanceList) > 0 {
 				in := m.instanceList[m.instanceCursor]
 				if in.Kind != "managed" {
@@ -1114,7 +1131,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.deviceCodeResp = nil
 				m.state = accountsScreen
-			} else if m.state == worldsScreen || m.state == confirmScreen || m.state == configScreen {
+			} else if m.state == worldsScreen || m.state == confirmScreen || m.state == configScreen || m.state == roadmapScreen {
 				m.state = menuScreen
 			}
 		}

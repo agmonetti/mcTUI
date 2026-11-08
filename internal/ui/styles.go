@@ -51,7 +51,7 @@ var (
 
 	panelContent = lipgloss.NewStyle().
 			Width(50).
-			Height(16).
+			Height(20).
 			Border(lipgloss.NormalBorder()).
 			BorderForeground(colorBorder).
 			Padding(0, 1)
@@ -111,7 +111,7 @@ func ApplyTheme(t theme.Theme) {
 
 	panelContent = lipgloss.NewStyle().
 		Width(50).
-		Height(16).
+		Height(20).
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(colorBorder).
 		Padding(0, 1)
@@ -266,7 +266,8 @@ func renderTopBar(cursorMenu int, hasUpdate bool, state screenState, width int) 
 		{i18n.T("topbar.modrinth"), 3},
 		{i18n.T("topbar.instances"), 4},
 		{i18n.T("topbar.configs"), 5},
-		{i18n.T("topbar.quit"), 6},
+		{i18n.T("topbar.roadmap"), 6},
+		{i18n.T("topbar.quit"), 7},
 	}
 
 	// Determine which tab to highlight.
@@ -292,6 +293,8 @@ func renderTopBar(cursorMenu int, hasUpdate bool, state screenState, width int) 
 		activeIdx = 0
 	} else if configsActive {
 		activeIdx = 5
+	} else if state == roadmapScreen {
+		activeIdx = 6
 	}
 
 	var parts []string

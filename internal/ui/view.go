@@ -7,6 +7,7 @@ import (
 	"unicode"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/mattn/go-runewidth"
 
 	"mcTUI/internal/i18n"
 	"mcTUI/internal/instances"
@@ -95,6 +96,7 @@ func (m Model) View() string {
 		i18n.T("menu.modrinth"),
 		i18n.T("menu.change_instances"),
 		i18n.T("menu.configs"),
+		i18n.T("menu.roadmap"),
 		i18n.T("menu.quit"),
 	}
 
@@ -139,7 +141,7 @@ func (m Model) View() string {
 	}
 
 	leftBorderColor := colorBorder
-	if m.state == menuScreen || resetActive || isConfigScreen {
+	if m.state == menuScreen || resetActive || isConfigScreen || m.state == roadmapScreen {
 		leftBorderColor = colorAccent
 	}
 	leftPanel := lipgloss.NewStyle().
@@ -189,6 +191,8 @@ func (m Model) View() string {
 		contentStr.WriteString(m.renderAccountsContent())
 	case m.state == menuScreen && m.cursorMenu == 2:
 		m.renderWorldsHint(&contentStr)
+	case m.state == roadmapScreen || (m.state == menuScreen && m.cursorMenu == 6):
+		m.renderRoadmapContent(&contentStr)
 	case m.state == menuScreen:
 		m.renderActiveSession(&contentStr)
 	case m.state == nameScreen:
@@ -705,6 +709,8 @@ func (m Model) controlsHint() string {
 		return i18n.T("footer.save")
 	case configScreen, versionsScreen:
 		return i18n.T("footer.choose")
+	case roadmapScreen:
+		return i18n.T("roadmap.hint")
 	case worldsScreen:
 		return i18n.T("worldcopy.worlds_hint")
 	case worldCopyDestinationScreen:
@@ -830,6 +836,119 @@ func (m Model) renderThemePanel(c *strings.Builder) {
 	c.WriteString(div + "\n")
 	c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("menu.theme_hint")) + "\n")
 	c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(formatDisplayPath(theme.ThemesDir(), 44)))
+}
+
+func (m Model) renderRoadmapContent(c *strings.Builder) {
+	width := 46
+	if w := m.centerWidth() - 4; w > width {
+		width = w
+	}
+
+	titleText := i18n.T("roadmap.title")
+	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(titleText)
+
+	statusText := i18n.T("roadmap.offline")
+	statusColor := colorGray
+	if m.roadmapOnline {
+		statusText = i18n.T("roadmap.synced")
+		statusColor = colorGreen
+	}
+	if m.roadmapLoading {
+		statusText = "..."
+	}
+	statusBadge := lipgloss.NewStyle().Foreground(statusColor).Render(statusText)
+
+	topPad := width - runewidth.StringWidth(titleText) - runewidth.StringWidth(statusText)
+	if topPad < 1 {
+		topPad = 1
+	}
+	header := title + strings.Repeat(" ", topPad) + statusBadge
+	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", width))
+
+	c.WriteString(header + "\n" + div + "\n")
+
+	items := m.roadmapData.Items
+	if len(items) == 0 {
+		c.WriteString("\n" + lipgloss.NewStyle().Foreground(colorGray).Render("  No roadmap items.") + "\n\n")
+		return
+	}
+
+	const maxVisible = 10
+	startIdx := 0
+	if len(items) > maxVisible {
+		startIdx = m.roadmapCursor - maxVisible/2
+		if startIdx < 0 {
+			startIdx = 0
+		}
+		if startIdx+maxVisible > len(items) {
+			startIdx = len(items) - maxVisible
+		}
+	}
+	endIdx := startIdx + maxVisible
+	if endIdx > len(items) {
+		endIdx = len(items)
+	}
+
+	for i := startIdx; i < endIdx; i++ {
+		item := items[i]
+		isSel := m.state == roadmapScreen && m.roadmapCursor == i
+
+		badgeLabel := item.Status
+		badgeColor := colorBlue
+		switch item.Status {
+		case "in_progress":
+			badgeLabel = i18n.T("roadmap.status_in_progress")
+			badgeColor = colorAccent
+		case "done", "completed":
+			badgeLabel = i18n.T("roadmap.status_done")
+			badgeColor = colorGreen
+		default:
+			badgeLabel = i18n.T("roadmap.status_planned")
+			badgeColor = colorBlue
+		}
+
+		badgeStr := "[" + badgeLabel + "]"
+		badgeWidth := runewidth.StringWidth(badgeStr)
+
+		prefix := "  "
+		if isSel {
+			prefix = cursorStyle.Render("► ")
+		}
+
+		availTitleWidth := width - 2 - badgeWidth - 2
+		if availTitleWidth < 10 {
+			availTitleWidth = 10
+		}
+
+		titleStr := runewidth.Truncate(item.Title(), availTitleWidth, "…")
+		titleWidth := runewidth.StringWidth(titleStr)
+
+		padLen := width - 2 - titleWidth - badgeWidth
+		if padLen < 1 {
+			padLen = 1
+		}
+
+		itemTitleStyle := lipgloss.NewStyle().Foreground(colorGray)
+		if isSel {
+			itemTitleStyle = lipgloss.NewStyle().Foreground(colorWhite).Bold(true)
+		}
+
+		renderedBadge := lipgloss.NewStyle().Foreground(badgeColor).Bold(isSel).Render(badgeStr)
+
+		c.WriteString(prefix + itemTitleStyle.Render(titleStr) + strings.Repeat(" ", padLen) + renderedBadge + "\n")
+	}
+
+	// Pad remaining lines up to maxVisible to strictly fix vertical height
+	for i := endIdx - startIdx; i < maxVisible; i++ {
+		c.WriteString("\n")
+	}
+
+	c.WriteString(div + "\n")
+	if m.state == roadmapScreen {
+		c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("roadmap.hint")) + "\n")
+	} else {
+		c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("footer.default")) + "\n")
+	}
 }
 
 func (m Model) renderActiveSession(c *strings.Builder) {

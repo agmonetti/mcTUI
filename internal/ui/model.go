@@ -19,6 +19,7 @@ import (
 	"mcTUI/internal/mods"
 	"mcTUI/internal/packs"
 	"mcTUI/internal/resetconfigs"
+	"mcTUI/internal/roadmap"
 	"mcTUI/internal/theme"
 	"mcTUI/internal/updater"
 	"mcTUI/internal/worlds"
@@ -83,6 +84,7 @@ const (
 	accountsScreen
 	deviceCodeScreen
 	welcomeScreen
+	roadmapScreen
 )
 
 // World-copy states are kept outside the instance-copy range.
@@ -94,7 +96,7 @@ const (
 )
 
 // menuOptionsCount must match len(menuOptions) in View().
-const menuOptionsCount = 7
+const menuOptionsCount = 8
 
 // configOptionsCount must match len(configOptions) in View() for the config submenu.
 const configOptionsCount = 8
@@ -322,6 +324,11 @@ type Model struct {
 	width             int
 	height            int
 	javaOverrideMajor int // major version of the selected instance override
+
+	roadmapData    roadmap.Roadmap
+	roadmapCursor  int
+	roadmapOnline  bool
+	roadmapLoading bool
 }
 
 // New builds the initial model from the loaded config, available versions,
@@ -348,6 +355,7 @@ func New(versions []string, cfg config.Data, latest updater.Release) Model {
 		versions:      versions,
 		latestRelease: latest,
 		input:         ti,
+		roadmapData:   roadmap.Embedded(),
 	}
 	m.loadInstanceSelection()
 	m.loadAccounts()
@@ -358,7 +366,7 @@ func New(versions []string, cfg config.Data, latest updater.Release) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return textinput.Blink
+	return tea.Batch(textinput.Blink, roadmap.FetchCmd())
 }
 
 func (m *Model) loadAccounts() {
@@ -500,6 +508,10 @@ func (m Model) centerWidth() int {
 		return min(80, max(46, m.width-41))
 	}
 	return 76
+}
+
+func (m Model) panelsWidth() int {
+	return (leftColumnWidth + 2) + m.centerWidth() + 2
 }
 
 func (m Model) centerInnerHeight() int {

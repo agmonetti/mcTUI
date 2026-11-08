@@ -1,0 +1,60 @@
+{
+  "version": "2.0",
+  "updated_at": "2026-11-08",
+  "items": [
+    {
+      "id": "neoforge",
+      "status": "planned",
+      "title_en": "NeoForge & Quilt Support",
+      "title_es": "Soporte NeoForge y Quilt"
+    },
+    {
+      "id": "mod_toggle",
+      "status": "in_progress",
+      "title_en": "Enable / Disable Mods (.disabled)",
+      "title_es": "Activar / Desactivar Mods (.disabled)"
+    },
+    {
+      "id": "java_downloader",
+      "status": "planned",
+      "title_en": "Auto OpenJDK JRE Downloader",
+      "title_es": "Descargador automático de OpenJDK"
+    },
+    {
+      "id": "crash_analyzer",
+      "status": "planned",
+      "title_en": "Crash Log Analyzer & Diagnostic",
+      "title_es": "Analizador y diagnóstico de crashes"
+    },
+    {
+      "id": "server_favorites",
+      "status": "planned",
+      "title_en": "Server Favorites & Direct Ping",
+      "title_es": "Favoritos de servidores y ping"
+    },
+    {
+      "id": "instance_clone",
+      "status": "planned",
+      "title_en": "1-Click Instance Cloning",
+      "title_es": "Clonación de instancias en 1 clic"
+    },
+    {
+      "id": "curseforge_import",
+      "status": "planned",
+      "title_en": "CurseForge Modpack Import (.zip)",
+      "title_es": "Importar modpacks CurseForge (.zip)"
+    },
+    {
+      "id": "custom_jvm_args",
+      "status": "planned",
+      "title_en": "Custom JVM Arguments & Flags",
+      "title_es": "Argumentos y flags JVM personalizados"
+    },
+    {
+      "id": "screenshots_browser",
+      "status": "planned",
+      "title_en": "In-App Screenshots Manager",
+      "title_es": "Gestor de capturas de pantalla"
+    }
+  ]
+}

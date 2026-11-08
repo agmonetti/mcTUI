@@ -9,43 +9,109 @@ import (
 	"mcTUI/internal/i18n"
 )
 
+// minecraftBannerCompact is the scaled 7-line MINECRAFT dot-art (84 cols wide),
+// derived directly from the user's Braille art for comfortable terminal width fitting.
+var minecraftBannerCompact = []string{
+	"⠀⠀⠀⢠⡤⡤⢤⡄⠀⠀⠀⡤⠤⠤⢤⣤⡤⡤⡤⣤⡤⠤⠤⢤⡀⢠⠤⠤⠤⣤⡤⠤⠤⠤⠤⠤⠤⣤⡤⠤⠤⠤⠤⠤⠤⣤⡤⠤⠤⠤⠤⠤⠤⢤⣤⡤⠤⠤⠤⠤⠤⠤⠤⣤⡤⠤⠤⠤⠤⠤⠤⠤⣤⠤⠤⠤⠤⠤⠤⠤⠤⡄",
+	"⠀⠀⢠⠇⠀⠀⠸⢿⣧⡠⠼⠃⠀⠀⣸⡇⠀⠀⢠⣿⠃⠀⠀⠸⢿⣼⠄⠀⠀⣿⠃⠀⠀⢀⣄⣄⣄⣤⣿⠀⠀⠀⢀⣄⣄⣄⣠⣽⡇⠀⠀⢠⣄⠀⠀⠀⢻⡇⠀⢠⣄⠀⣤⣄⠀⢻⣇⠀⠀⠀⣄⣤⣀⣀⣿⣧⣀⣠⠀⠀⠀⢤⣀⡿",
+	"⠀⠀⡌⠀⠀⠀⠀⠺⠻⠃⠀⠀⠀⢰⣿⠃⠀⠀⢸⡏⠀⠀⠀⠀⠚⠃⠀⠀⠀⣿⠀⠀⠀⠘⠛⠻⠛⠛⣿⠀⠀⠀⢸⣿⣿⣿⣿⣿⡏⠀⠀⠈⠛⠀⠀⢠⣼⡇⠀⠀⢾⣿⣿⠁⠀⠈⣿⠀⠀⠀⠛⠛⠛⠛⠛⣿⣿⣿⡄⠀⠀⠘⡟⠀",
+	"⠀⢸⠁⠀⠀⣠⡄⠀⢠⡤⠀⠀⠀⢸⡏⠀⠀⠀⣾⠇⠀⠀⠀⣿⠀⠀⠀⠀⢰⣿⠀⠀⠀⣤⣤⣤⣤⣤⣿⠀⠀⠀⢸⡟⠛⠛⠛⢻⡇⠀⠀⠀⣤⡄⠀⠀⢸⣷⠀⠀⠈⠀⠈⠀⠀⠀⣿⡄⠀⠀⠀⣤⣤⣤⣤⣿⣿⣿⣷⠀⠀⠀⢳⠀",
+	"⢠⠇⠀⠀⢰⣿⣥⣤⣼⡇⠀⠀⠀⣿⠃⠀⠀⢸⡟⠀⠀⠀⢸⣿⣿⠀⠀⠀⣼⡟⠀⠀⠀⠛⠛⠛⠛⠛⣿⠀⠀⠀⠘⠓⠒⠓⠓⢺⡇⠀⠀⠀⣿⡇⠀⠀⠘⣿⠀⠀⠀⢸⣧⠀⠀⠀⢹⣧⠀⠀⠀⣿⣿⣿⠛⠹⣿⣿⣿⡇⠀⠀⠀⣇",
+	"⠿⣤⣤⣤⣾⣿⣿⣿⣿⣦⣤⣤⣾⣿⣤⣦⣤⣾⣷⣴⣦⣤⣾⣿⣿⣤⣴⣤⣿⣷⣤⣦⣤⣤⣤⣦⣤⣶⣿⣤⣴⣶⣦⣤⣤⣴⣦⣾⣷⣦⣤⣴⣾⣷⣴⣦⣴⣿⣧⣴⣦⣼⣿⣦⣤⣤⣼⣿⣤⣤⣤⡾⠉⠁⠀⠀⣿⣿⣿⣿⣦⣤⣤⠿",
+	"⠀⠈⠻⣿⣿⣿⣿⡿⠉⠉⠻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠏⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠟⠀⠀⠀⠀⠀⠹⣿⣿⣿⣿⠿⠉⠀",
+}
+
+// creeperDotArt is the user's Creeper dot-art.
+var creeperDotArt = []string{
+	"⠀⠀⡴⠦⠤⠶⠖⠒⠒⠒⠒⠒⠒⠒⠒⠓⢻⠒⠒⠤⠄⣀⡀⠀⠀",
+	"⠀⠀⡗⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⠀⠀⠀⠀⠀⠈⢹⡆⠀",
+	"⠀⠀⡇⢠⠤⡤⠤⣄⠀⠀⢀⡄⠀⠀⢠⠀⢸⠀⠀⠀⠀⠀⠀⢸⡇⠀",
+	"⠀⠀⡇⢸⠀⠀⠀⣷⠀⠀⢸⠀⠀⠀⢸⠀⢸⠀⠀⠀⠀⠀⠀⢸⠃⠀",
+	"⠀⠀⣷⠘⠦⠤⠤⣧⠄⠄⣼⠦⠀⠀⡾⠀⢸⠀⠀⠀⠀⠀⠀⢸⠀⠀",
+	"⠀⠀⣿⠀⠀⢀⣀⣳⠂⠀⢸⣄⣀⠀⠀⠀⢸⠀⠀⠀⠀⠀⠀⢼⠀⠀",
+	"⠀⠀⣿⠀⠀⣿⠀⠀⠀⠀⠀⠀⢨⡇⠀⠀⢸⠀⠀⠀⠀⠀⠀⣿⠀⠀",
+	"⠀⠀⢿⠀⠀⢸⠀⣄⣀⣀⣀⡀⠈⡇⠀⠀⢸⠀⠀⠀⠀⠀⠀⣿⠀⠀",
+	"⠀⠀⢼⣄⣀⣸⣁⣿⣀⡀⡈⣇⣘⡇⢀⡀⣸⢀⣀⣀⣀⣤⡤⠿⠀⠀",
+	"⠀⠀⠀⠀⢸⠀⠀⠀⠀⠀⠉⠉⠉⠉⠉⠉⠉⢹⡇⠉⠀⢰⡇⠀⠀⠀",
+	"⠀⠀⠀⠀⢸⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⡇⠀⠀⢠⡇⠀⠀⠀",
+	"⠀⠀⠀⠀⢸⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⡇⠀⠀⠠⡇⠀⠀⠀",
+	"⠀⠀⠀⠀⢸⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⡇⠀⠀⠀⡇⠀⠀⠀",
+	"⠀⠀⠀⠀⢸⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡇⠀⠀⠠⡇⠀⠀⠀",
+	"⠀⠀⠀⠀⢸⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠐⡇⠀⠀⠀⡇⠀⠀⠀",
+	"⠀⠀⠀⠀⠘⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡇⠀⠀⠰⡟⣲⠶⡆",
+	"⢀⣀⡤⠖⠊⠉⠙⠒⠒⠶⠤⠤⢀⣀⣀⣀⠀⠐⡇⣀⠴⢚⡏⠀⠀⡇",
+	"⢸⠉⠉⠁⠓⠒⠢⠤⠤⠄⣀⣀⣀⠀⢀⣉⠭⢛⡏⠁⠀⢸⡇⠀⠀⡇",
+	"⢸⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⢹⡏⠀⠀⠈⡇⠀⠀⠈⡇⠀⠀⡇",
+	"⢸⡆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡇⠀⠀⠀⡧⣤⣀⣈⡇⠀⠀⡇",
+	"⢘⣇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡇⠀⠀⠀⡇⠀⠀⢈⡇⠀⢀⡇",
+	"⠀⡇⠈⠉⠉⠒⠒⠂⠤⠤⢤⣀⣀⡀⡇⠀⠀⠀⡧⠤⠤⢬⠧⠞⠉⠀",
+	"⠀⠧⢄⣀⣀⠀⠀⠀⠀⠀⠀⠀⠀⠈⣇⠀⠀⣀⡇⠀⠀⠀⠀⠀⠀⠀",
+	"⠀⠀⠀⠀⠀⠈⠉⠁⠒⠒⠦⠤⠤⣀⣫⠴⠚⠉⠀⠀⠀⠀⠀⠀⠀⠀",
+}
+
 func (m Model) renderWelcomeScreen() string {
-	var b strings.Builder
+	centerWidth := m.centerWidth()
+	panelsWidth := (leftColumnWidth + 2) + centerWidth + 2
 
-	// Header banner
-	header := lipgloss.NewStyle().
-		Foreground(colorAccent).
-		Bold(true).
-		Render("mcTUI  ─  MINECRAFT TERMINAL LAUNCHER")
-	b.WriteString(header + "\n")
+	// ── Compact MINECRAFT Dot-Art Banner ──────────────────────────────────────
+	bannerStyle := lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
+	var bannerSB strings.Builder
+	for idx, line := range minecraftBannerCompact {
+		bannerSB.WriteString(bannerStyle.Render(line))
+		if idx < len(minecraftBannerCompact)-1 {
+			bannerSB.WriteString("\n")
+		}
+	}
 
-	sub := lipgloss.NewStyle().
-		Foreground(colorGray).
-		Render(i18n.T("welcome.subtitle"))
-	b.WriteString(sub + "\n")
+	bannerBox := lipgloss.NewStyle().
+		Width(panelsWidth).
+		Align(lipgloss.Center).
+		Render(bannerSB.String())
 
-	div := lipgloss.NewStyle().
-		Foreground(colorDimGray).
-		Render(strings.Repeat("─", 60))
-	b.WriteString(div + "\n\n")
+	// ── 2 Panels Layout (50/50 division) ──────────────────────────────────────
+	leftPanelWidth := (panelsWidth - 4) / 2
+	rightPanelWidth := panelsWidth - leftPanelWidth - 4
 
-	// Greeting
-	greeting := lipgloss.NewStyle().
+	// Left Panel: Creeper Dot-Art
+	creeperLines := creeperDotArt
+	panelHeight := len(creeperDotArt)
+
+	var leftSB strings.Builder
+	creeperStyle := lipgloss.NewStyle().Foreground(colorAccent2)
+	for idx, line := range creeperLines {
+		leftSB.WriteString(creeperStyle.Render(line))
+		if idx < len(creeperLines)-1 {
+			leftSB.WriteString("\n")
+		}
+	}
+
+	leftPanel := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(colorAccent).
+		Width(leftPanelWidth).
+		Height(panelHeight).
+		Align(lipgloss.Center, lipgloss.Center).
+		Render(leftSB.String())
+
+	// Right Panel: Welcome Guide & Getting Started
+	var rightSB strings.Builder
+
+	welcomeHdr := lipgloss.NewStyle().
 		Foreground(colorBlue).
 		Bold(true).
-		Render(i18n.T("welcome.title"))
-	b.WriteString(greeting + "\n\n")
+		Render(i18n.T("menu.options") + "  ►  " + i18n.T("welcome.title"))
+	divLine := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", max(20, rightPanelWidth-2)))
+	rightSB.WriteString(welcomeHdr + "\n" + divLine + "\n\n")
 
-	// Status header
 	statusHdr := lipgloss.NewStyle().
 		Foreground(colorWhite).
 		Bold(true).
 		Render(i18n.T("welcome.status_header"))
-	b.WriteString(statusHdr + "\n")
+	rightSB.WriteString(statusHdr + "\n")
 
 	warnBullet := lipgloss.NewStyle().Foreground(colorAccent).Render("○ ")
 	accText := lipgloss.NewStyle().Foreground(colorGray).Render(i18n.T("welcome.no_account"))
-	b.WriteString("  " + warnBullet + accText + "\n")
+	rightSB.WriteString("  " + warnBullet + accText + "\n")
 
 	managedCount := 0
 	for _, in := range m.instanceList {
@@ -57,46 +123,39 @@ func (m Model) renderWelcomeScreen() string {
 	if managedCount > 0 {
 		instText = lipgloss.NewStyle().Foreground(colorGray).Render(fmt.Sprintf("%d %s", managedCount, i18n.T("welcome.instances_managed")))
 	}
-	b.WriteString("  " + warnBullet + instText + "\n\n")
+	rightSB.WriteString("  " + warnBullet + instText + "\n\n")
 
-	// Guide text
 	guide := lipgloss.NewStyle().
 		Foreground(colorWhite).
-		Width(60).
+		Width(max(20, rightPanelWidth-4)).
 		Render(i18n.T("welcome.guide"))
-	b.WriteString(guide + "\n\n")
+	rightSB.WriteString(guide + "\n\n")
 
-	b.WriteString(div + "\n")
+	rightPanel := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(colorBorder).
+		Width(rightPanelWidth).
+		Height(panelHeight).
+		Padding(0, 1).
+		Render(rightSB.String())
 
-	// Action buttons
-	btnEnter := lipgloss.NewStyle().
-		Foreground(colorAccent2).
-		Bold(true).
-		Render(i18n.T("welcome.continue"))
-	btnLang := lipgloss.NewStyle().
-		Foreground(colorBlue).
-		Bold(true).
-		Render(i18n.T("welcome.language_toggle"))
-	btnEsc := lipgloss.NewStyle().
-		Foreground(colorDimGray).
-		Render(i18n.T("welcome.skip"))
+	// ── Composition identical to mainView ─────────────────────────────────────
+	topPanels := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
 
-	b.WriteString(btnEnter + "   " + btnLang + "\n" + btnEsc + "\n")
+	footerContent := lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(i18n.T("welcome.continue")) +
+		"  ·  " +
+		lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("welcome.language_toggle")) +
+		"  ·  " +
+		lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("welcome.skip"))
 
-	card := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colorAccent).
-		Padding(1, 3).
-		Width(68).
-		Render(b.String())
+	footerStyle := panelFooter
+	var sections []string
+	sections = append(sections, bannerBox, "", topPanels, footerStyle.Render(footerContent))
 
-	w := m.width
-	if w <= 0 {
-		w = 80
+	fullInterface := lipgloss.JoinVertical(lipgloss.Left, sections...)
+
+	if m.width > 0 && m.height > 0 {
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, fullInterface)
 	}
-	h := m.height
-	if h <= 0 {
-		h = 24
-	}
-	return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, card)
+	return "\n" + fullInterface
 }
