@@ -191,8 +191,8 @@ func (m Model) renderDeviceCodeContent() string {
 	inner := fmt.Sprintf("   %s   ", userCode)
 	bar := strings.Repeat("─", len(inner))
 	top := "┌" + bar + "┐"
-	mid := "│" + inner + "│"
-	bot := "└" + bar + "┘"
+	mid := "  │" + inner + "│"
+	bot := "  └" + bar + "┘"
 	codeBox := lipgloss.NewStyle().
 		Foreground(colorAccent).
 		Bold(true).
