@@ -12,10 +12,20 @@ import (
 )
 
 const (
+	// Official Minecraft Live endpoints (Client ID: 00000000402b5328)
+	liveDeviceCodeURL = "https://login.live.com/oauth20_connect.srf"
+	liveTokenURL      = "https://login.live.com/oauth20_token.srf"
+	liveScope         = "service::user.auth.xboxlive.com::MBI_SSL"
+
+	// Microsoft Entra ID / Graph v2 endpoints (UUID client IDs)
 	msDeviceCodeURL = "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode"
 	msTokenURL      = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token"
 	msScope         = "XboxLive.signin offline_access"
 )
+
+func isLiveClientID(clientID string) bool {
+	return strings.HasPrefix(clientID, "0000") || len(clientID) == 16
+}
 
 var httpClient = &http.Client{
 	Timeout: 30 * time.Second,
@@ -29,9 +39,18 @@ func RequestDeviceCode(ctx context.Context, clientID string) (*DeviceCodeRespons
 
 	data := url.Values{}
 	data.Set("client_id", clientID)
-	data.Set("scope", msScope)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, msDeviceCodeURL, strings.NewReader(data.Encode()))
+	var endpoint string
+	if isLiveClientID(clientID) {
+		endpoint = liveDeviceCodeURL
+		data.Set("scope", liveScope)
+		data.Set("response_type", "device_code")
+	} else {
+		endpoint = msDeviceCodeURL
+		data.Set("scope", msScope)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("create device code request: %w", err)
 	}
@@ -99,7 +118,14 @@ func PollDeviceToken(ctx context.Context, clientID, deviceCode string, interval 
 			data.Set("client_id", clientID)
 			data.Set("device_code", deviceCode)
 
-			req, err := http.NewRequestWithContext(ctx, http.MethodPost, msTokenURL, strings.NewReader(data.Encode()))
+			var tokenURL string
+			if isLiveClientID(clientID) {
+				tokenURL = liveTokenURL
+			} else {
+				tokenURL = msTokenURL
+			}
+
+			req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURL, strings.NewReader(data.Encode()))
 			if err != nil {
 				return nil, fmt.Errorf("create token request: %w", err)
 			}
@@ -160,9 +186,17 @@ func RefreshMicrosoftToken(ctx context.Context, clientID, refreshToken string) (
 	data.Set("grant_type", "refresh_token")
 	data.Set("client_id", clientID)
 	data.Set("refresh_token", refreshToken)
-	data.Set("scope", msScope)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, msTokenURL, strings.NewReader(data.Encode()))
+	var tokenURL string
+	if isLiveClientID(clientID) {
+		tokenURL = liveTokenURL
+		data.Set("scope", liveScope)
+	} else {
+		tokenURL = msTokenURL
+		data.Set("scope", msScope)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("create refresh request: %w", err)
 	}

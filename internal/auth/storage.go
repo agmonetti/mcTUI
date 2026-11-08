@@ -16,8 +16,8 @@ import (
 var (
 	storageMu sync.RWMutex
 	// DefaultClientID can be overridden by MCTUI_MSA_CLIENT_ID environment variable.
-	// We use the established whitelisted Client ID accepted by Mojang's authentication endpoints.
-	DefaultClientID = "c36a9fb6-4f2a-41ff-90bd-ae7cc92031eb"
+	// We default to the official Microsoft/Minecraft Client ID (displays "Minecraft" in browser).
+	DefaultClientID = "00000000402b5328"
 )
 
 // GetClientID returns the Azure Client ID used for Microsoft OAuth.

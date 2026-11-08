@@ -128,3 +128,15 @@ func TestEnsureValidAccount(t *testing.T) {
 		t.Fatalf("expected error when refreshing account with no refresh token")
 	}
 }
+
+func TestIsLiveClientID(t *testing.T) {
+	if !isLiveClientID("00000000402b5328") {
+		t.Errorf("expected 00000000402b5328 to be recognized as Live client ID")
+	}
+	if !isLiveClientID("00000000441cc96b") {
+		t.Errorf("expected 00000000441cc96b to be recognized as Live client ID")
+	}
+	if isLiveClientID("c36a9fb6-4f2a-41ff-90bd-ae7cc92031eb") {
+		t.Errorf("expected Prism UUID to not be recognized as Live client ID")
+	}
+}
