@@ -299,16 +299,18 @@ func renderTopBar(cursorMenu int, hasUpdate bool, state screenState, width int) 
 
 	var parts []string
 	for _, t := range tabs {
-		label := t.label
-		// Badge de update en el tab PLAY
-		if t.idx == 0 && hasUpdate {
-			label += lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render(" [!]")
-		}
+		var tab string
 		if activeIdx == t.idx {
-			parts = append(parts, tabActive.Render(label))
+			tab = tabActive.Render(t.label)
 		} else {
-			parts = append(parts, tabInactive.Render(label))
+			tab = tabInactive.Render(t.label)
 		}
+		// Keep the colored badge outside the tab style. Nesting ANSI output
+		// inside another Lipgloss Render call leaks escape sequences as text.
+		if t.idx == 0 && hasUpdate {
+			tab += lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render(" [!]")
+		}
+		parts = append(parts, tab)
 	}
 
 	bar := lipgloss.JoinHorizontal(lipgloss.Center, parts...)
