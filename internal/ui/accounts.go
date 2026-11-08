@@ -175,7 +175,7 @@ func (m Model) renderDeviceCodeContent() string {
 	if m.deviceCodeResp == nil {
 		spinner := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 		spinChar := spinner[m.deviceCodeTick%len(spinner)]
-		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Render(spinChar + " Obteniendo código de autorización...") + "\n\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Render(spinChar + " " + i18n.T("msa.getting_code")) + "\n\n")
 		return b.String()
 	}
 
