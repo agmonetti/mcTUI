@@ -12,6 +12,8 @@ import (
 )
 
 func TestAccountsScreenNavigationAndSwitch(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
 	storage := &auth.Storage{
 		ActiveAccountID: "acc-1",
 		Accounts: []auth.Account{

@@ -150,7 +150,7 @@ func (m Model) renderAccountsContent() string {
 	aAddMsa := lipgloss.NewStyle().Foreground(colorAccent).Render("[A] " + i18n.T("accounts.add_msa"))
 	aAddOff := lipgloss.NewStyle().Foreground(colorWhite).Render("[O] " + i18n.T("accounts.add_offline"))
 	aDel := lipgloss.NewStyle().Foreground(colorRed).Render("[D] " + i18n.T("accounts.delete"))
-	help := lipgloss.NewStyle().Foreground(colorGray).Render("[Enter] " + i18n.T("accounts.switch") + "   [Esc] " + i18n.T("msa.cancel"))
+	help := lipgloss.NewStyle().Foreground(colorGray).Render("[Enter] " + i18n.T("accounts.switch") + "   " + i18n.T("msa.cancel"))
 
 	b.WriteString(aAddMsa + "\n")
 	b.WriteString(aAddOff + "\n")
