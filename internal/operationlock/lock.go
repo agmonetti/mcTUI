@@ -10,8 +10,17 @@ import (
 // Platform implementations install the OS-specific non-blocking operations.
 var lock = func(*os.File) error { return fmt.Errorf("OS file locking unavailable") }
 var unlock = func(*os.File) error { return fmt.Errorf("OS file locking unavailable") }
-var openLockFile = func(path string) (*os.File, error) {
-	return os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
+var acquireFileLock = func(file *os.File) (func() error, error) {
+	if err := lock(file); err != nil {
+		return nil, err
+	}
+	return func() error {
+		err := unlock(file)
+		if closeErr := file.Close(); err == nil {
+			err = closeErr
+		}
+		return err
+	}, nil
 }
 
 // Acquire takes a non-blocking OS lock. The lock file is intentionally never
@@ -28,7 +37,7 @@ func Acquire(gameDir string) (func() error, error) {
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
-	file, err := openLockFile(path)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return nil, err
 	}
@@ -38,15 +47,10 @@ func Acquire(gameDir string) (func() error, error) {
 		file.Close()
 		return nil, fmt.Errorf("operation lock changed or is not a regular file: %s", path)
 	}
-	if err := lock(file); err != nil {
+	release, err := acquireFileLock(file)
+	if err != nil {
 		file.Close()
 		return nil, fmt.Errorf("instance busy (%s): %w", gameDir, err)
 	}
-	return func() error {
-		err := unlock(file)
-		if closeErr := file.Close(); err == nil {
-			err = closeErr
-		}
-		return err
-	}, nil
+	return release, nil
 }

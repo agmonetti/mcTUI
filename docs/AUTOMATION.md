@@ -99,6 +99,9 @@ On Windows, modpack file contents are flushed before publication, but directory
 metadata cannot be flushed through Go's POSIX-style directory sync. Recovery
 journals remain enabled; equivalent durability across sudden power loss is not
 guaranteed on Windows.
+Operation locks use a named Windows mutex keyed by the persistent lock file's
+volume and file ID. This keeps locks valid across instance renames without
+holding an open file inside the directory. Linux and macOS continue using flock.
 
 ## GitHub repository settings
 

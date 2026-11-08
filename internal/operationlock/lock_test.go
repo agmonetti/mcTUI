@@ -65,3 +65,45 @@ func TestLockSurvivesDirectoryRename(t *testing.T) {
 		t.Fatal("renaming the directory lost the held lock")
 	}
 }
+
+func TestProcessExitReleasesLock(t *testing.T) {
+	if dir := os.Getenv("MCTUI_CRASH_LOCK_DIR"); dir != "" {
+		if _, err := Acquire(dir); err != nil {
+			os.Exit(2)
+		}
+		os.Exit(0) // Deliberately exit without releasing the lock.
+	}
+	dir := t.TempDir()
+	cmd := exec.Command(os.Args[0], "-test.run=^TestProcessExitReleasesLock$")
+	cmd.Env = append(os.Environ(), "MCTUI_CRASH_LOCK_DIR="+dir)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("child could not acquire the lock: %v\n%s", err, output)
+	}
+	release, err := Acquire(dir)
+	if err != nil {
+		t.Fatalf("exited process left the instance busy: %v", err)
+	}
+	if err := release(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReleaseFromAnotherGoroutine(t *testing.T) {
+	dir := t.TempDir()
+	release, err := Acquire(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error)
+	go func() { done <- release() }()
+	if err := <-done; err != nil {
+		t.Fatalf("release from another goroutine: %v", err)
+	}
+	secondRelease, err := Acquire(dir)
+	if err != nil {
+		t.Fatalf("released instance remained busy: %v", err)
+	}
+	if err := secondRelease(); err != nil {
+		t.Fatal(err)
+	}
+}
