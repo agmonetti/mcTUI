@@ -347,15 +347,6 @@ func validateUpdateSource(old Source, source Source) error {
 	return nil
 }
 
-func syncDirectory(path string) error {
-	d, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer d.Close()
-	return d.Sync()
-}
-
 func copyUpdateFile(source, target string) (err error) {
 	info, err := os.Lstat(source)
 	if err != nil {

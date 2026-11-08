@@ -44,3 +44,24 @@ func TestExclusiveAcrossProcesses(t *testing.T) {
 		t.Fatalf("stable lock path missing: %v", err)
 	}
 }
+
+func TestLockSurvivesDirectoryRename(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "active")
+	if err := os.Mkdir(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	release, err := Acquire(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	retired := filepath.Join(root, "retired")
+	if err := os.Rename(dir, retired); err != nil {
+		t.Fatalf("cannot retire a directory while holding its operation lock: %v", err)
+	}
+	if secondRelease, err := Acquire(retired); err == nil {
+		secondRelease()
+		t.Fatal("renaming the directory lost the held lock")
+	}
+}

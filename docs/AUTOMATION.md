@@ -39,6 +39,8 @@ reachable vulnerabilities detected while introducing these checks.
 Coverage reports and build outputs are retained as workflow artifacts for seven
 days. CI artifacts use version `dev`, which disables update notifications.
 Cross-compilation checks compilation; native matrix tests exercise OS behavior.
+On macOS, CI uses the canonical runner temporary directory so symlink rejection
+does not mistake the system `/var` alias for an unsafe application directory.
 Interactive TUI, live Microsoft login, and launching real Minecraft still need
 manual smoke testing before a release.
 
@@ -92,6 +94,11 @@ bash scripts/build-release.sh v1.6.0
 Outputs are written to ignored `dist/`. Running the script without a version
 builds `dev` binaries. The script uses `sha256sum` and is intended for Linux/CI;
 macOS users need GNU coreutils to run it unchanged.
+
+On Windows, modpack file contents are flushed before publication, but directory
+metadata cannot be flushed through Go's POSIX-style directory sync. Recovery
+journals remain enabled; equivalent durability across sudden power loss is not
+guaranteed on Windows.
 
 ## GitHub repository settings
 

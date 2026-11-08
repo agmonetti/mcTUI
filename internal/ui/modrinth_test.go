@@ -199,7 +199,8 @@ func TestCatalogUpdatesViewportTracksSelectionAndVersions(t *testing.T) {
 		m = next.(Model)
 	}
 	view := m.renderCatalog()
-	if !strings.Contains(view, "► [ ] project-7: old → new · 1.0 KiB") || !strings.Contains(view, "/instances/A/backups/mods_replaced") {
+	backupDir := filepath.Join(filepath.Dir(m.modStore.Registry), "backups", "mods_replaced")
+	if !strings.Contains(view, "► [ ] project-7: old → new · 1.0 KiB") || !strings.Contains(view, backupDir) {
 		t.Fatalf("selected update or backup policy off screen: %s", view)
 	}
 }

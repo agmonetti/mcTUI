@@ -668,8 +668,10 @@ func TestModpackCurrentTargetRequiresExactRuntimeAndNoExistingPack(t *testing.T)
 
 func TestModpackLegacyVanillaCanChooseCurrentWithoutAssumingFabricVersion(t *testing.T) {
 	root := t.TempDir()
-	t.Setenv("HOME", t.TempDir())
-	gameDir := filepath.Join(os.Getenv("HOME"), ".minecraft")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("APPDATA", home)
+	gameDir := filepath.Join(home, ".minecraft")
 	if err := os.MkdirAll(gameDir, 0700); err != nil {
 		t.Fatal(err)
 	}

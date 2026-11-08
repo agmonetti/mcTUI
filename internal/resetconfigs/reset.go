@@ -387,11 +387,14 @@ func mkdirBackupRoot(base string) error {
 		}
 	}
 	for i := len(paths) - 1; i >= 0; i-- {
-		if _, err := checkedDir(paths[i], true); err != nil {
+		exists, err := checkedDir(paths[i], true)
+		if err != nil {
 			return err
 		}
-		if err := os.Mkdir(paths[i], 0700); err != nil && !errors.Is(err, os.ErrExist) {
-			return err
+		if !exists {
+			if err := os.Mkdir(paths[i], 0700); err != nil && !errors.Is(err, os.ErrExist) {
+				return err
+			}
 		}
 		if _, err := checkedDir(paths[i], false); err != nil {
 			return err

@@ -54,6 +54,10 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+      - name: Use a canonical temporary directory on macOS
+        if: runner.os == 'macOS'
+        run: |
+          python3 -c 'import os; print("TMPDIR=" + os.path.realpath(os.environ["RUNNER_TEMP"]))' >> "$GITHUB_ENV"
       - run: go vet ./...
       - name: Run tests (race detector on Linux)
         env:

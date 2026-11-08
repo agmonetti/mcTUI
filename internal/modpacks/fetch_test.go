@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -130,7 +131,8 @@ func TestFetchVerifiedStreaming(t *testing.T) {
 	if len(tempFiles(t, dir)) != 1 {
 		t.Fatal("download file not retained for caller")
 	}
-	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0600 {
+	// Windows permissions are represented by ACLs, not POSIX mode bits.
+	if info, err := os.Stat(path); err != nil || (goruntime.GOOS != "windows" && info.Mode().Perm() != 0600) {
 		t.Fatalf("download file not private: %v, %v", info, err)
 	}
 }
