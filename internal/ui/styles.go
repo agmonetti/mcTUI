@@ -102,7 +102,7 @@ func getAsciiArt() string {
 
 	sub := lipgloss.NewStyle().
 		Foreground(colorGray).
-		Render("  Minecraft Terminal UI  ·  Offline-first")
+		Render("  Minecraft Terminal UI")
 
 	line := lipgloss.NewStyle().
 		Foreground(colorDimGray).
