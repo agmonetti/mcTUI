@@ -1,0 +1,14 @@
+Accounts, authentication and automated releases
+
+Changes since v1.5:
+
+- Microsoft account sign-in through the Device Code flow, with Xbox Live and Minecraft authentication for official online servers.
+- New Accounts screen with multiple Microsoft/offline profiles and active-account switching.
+- Improved sign-in screens, authorization code layout, navigation hints and English/Spanish text.
+- Automated checks for pull requests and pushes: formatting, dependencies, go vet, tests, coverage and vulnerability scanning.
+- Tests on Linux, macOS and Windows, plus race detection on Linux.
+- Tag-based GitHub Releases with versioned builds, generated release notes and SHA-256 checksums. Targets: Linux amd64/arm64, macOS amd64/arm64 and Windows amd64.
+- Security fixes through Go 1.26.10 and golang.org/x/text v0.39.0, with weekly dependency update PRs.
+- Updated documentation, screenshots and development/release instructions.
+
+Building from source now requires Go 1.26.10 or newer. Java is still required to launch Minecraft.

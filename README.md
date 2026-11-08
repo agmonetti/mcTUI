@@ -40,7 +40,7 @@
 
 Download the executable for your operating system from the [latest release](https://github.com/agmonetti/mcTUI/releases/latest). On Linux and macOS, make it executable before running it. On Windows, run the downloaded `.exe` from PowerShell or File Explorer.
 
-To build from source, install Go 1.26.4 or newer, then run:
+To build from source, install Go 1.26.10 or newer, then run:
 
 ```bash
 git clone https://github.com/agmonetti/mcTUI.git
@@ -54,6 +54,9 @@ On Windows, use `go build -o mctui.exe .` and run `./mctui.exe` in PowerShell in
 ## Documentation
 
 For configuration, paths, features, and development instructions, see the [official documentation](https://agmonetti.github.io/mcTuiDocs/).
+
+For CI checks, supported build targets, and the tag-based release process, see
+[development and release automation](docs/AUTOMATION.md).
 
 ## Disclaimer
 

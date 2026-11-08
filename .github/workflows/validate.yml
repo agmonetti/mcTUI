@@ -1,0 +1,107 @@
+name: Validate
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        default: dev
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Format and dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Check formatting
+        run: |
+          files=$(git ls-files '*.go' | xargs gofmt -l)
+          if [[ -n "$files" ]]; then
+            printf 'Run gofmt on:\n%s\n' "$files"
+            exit 1
+          fi
+      - run: go mod verify
+      - name: Check module files are tidy
+        run: go mod tidy -diff
+      - name: Validate workflow syntax
+        run: |
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -color
+
+  test:
+    name: Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - name: Run tests (race detector on Linux)
+        env:
+          RUNNER_PLATFORM: ${{ runner.os }}
+        run: |
+          flags=()
+          if [[ "$RUNNER_PLATFORM" == Linux ]]; then
+            flags+=(-race)
+          fi
+          go test "${flags[@]}" -count=1 -timeout=10m -coverprofile=coverage.out ./...
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-${{ matrix.os }}
+          path: coverage.out
+          if-no-files-found: error
+          retention-days: 7
+
+  security:
+    name: Vulnerabilities
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+
+  build:
+    name: Build release binaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Cross-compile supported platforms
+        env:
+          BUILD_VERSION: ${{ inputs.version }}
+        run: bash scripts/build-release.sh "$BUILD_VERSION"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-binaries
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7

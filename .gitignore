@@ -10,3 +10,5 @@ mctui-linux-amd64
 vendor/
 logs/
 mctui-darwin-*
+dist/
+coverage.out
