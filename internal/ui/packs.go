@@ -9,13 +9,14 @@ import (
 	"time"
 	"unicode/utf8"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/mattn/go-runewidth"
 	"mcTUI/internal/i18n"
 	"mcTUI/internal/instances"
 	"mcTUI/internal/modrinth"
 	"mcTUI/internal/packs"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/mattn/go-runewidth"
 )
 
 type packListMsg struct {
