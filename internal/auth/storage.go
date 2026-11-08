@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
-	"time"
 
 	"mcTUI/internal/config"
 )
@@ -49,8 +47,8 @@ func AccountsPath() string {
 	return config.AppDataDir("mctui", "accounts.json")
 }
 
-// LoadStorage loads the accounts configuration. If the file doesn't exist, it initializes
-// an account based on the existing username from config.json (or "Player").
+// LoadStorage loads the accounts configuration. If the file doesn't exist, it returns
+// an empty storage without accounts.
 func LoadStorage() (*Storage, error) {
 	storageMu.RLock()
 	defer storageMu.RUnlock()
@@ -59,7 +57,7 @@ func LoadStorage() (*Storage, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return migrateFromConfig()
+			return &Storage{Accounts: []Account{}, ActiveAccountID: ""}, nil
 		}
 		return nil, fmt.Errorf("read accounts file: %w", err)
 	}
@@ -82,7 +80,7 @@ func LoadStorage() (*Storage, error) {
 			s.ActiveAccountID = s.Accounts[0].ID
 		}
 	} else {
-		return migrateFromConfig()
+		s.ActiveAccountID = ""
 	}
 
 	return &s, nil
@@ -114,28 +112,6 @@ func SaveStorage(s *Storage) error {
 	}
 
 	return nil
-}
-
-func migrateFromConfig() (*Storage, error) {
-	cfg := config.Load()
-	defaultName := "Player"
-	if strings.TrimSpace(cfg.Username) != "" {
-		defaultName = strings.TrimSpace(cfg.Username)
-	}
-
-	offlineID := OfflineUUID(defaultName)
-	initAcc := Account{
-		ID:        offlineID,
-		Username:  defaultName,
-		Type:      AccountTypeOffline,
-		CreatedAt: time.Now(),
-	}
-
-	s := &Storage{
-		ActiveAccountID: offlineID,
-		Accounts:        []Account{initAcc},
-	}
-	return s, nil
 }
 
 // GetActive returns a pointer to the active Account, or nil if none.

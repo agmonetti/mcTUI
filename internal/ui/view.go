@@ -16,6 +16,9 @@ import (
 )
 
 func (m Model) View() string {
+	if m.state == welcomeScreen {
+		return m.renderWelcomeScreen()
+	}
 	if m.state == javaPickerScreen {
 		return lipgloss.Place(m.width, m.height, lipgloss.Left, lipgloss.Top, m.pickerPanelContent())
 	}
@@ -685,6 +688,8 @@ func (m Model) controlsHint() string {
 		return " " + i18n.T("footer.controls")
 	}
 	switch m.state {
+	case welcomeScreen:
+		return i18n.T("welcome.help")
 	case accountsScreen:
 		return i18n.T("accounts.help")
 	case deviceCodeScreen:

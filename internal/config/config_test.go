@@ -10,6 +10,9 @@ import (
 func TestLanguageDefaultsAndPersistence(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("LC_ALL", "")
+	t.Setenv("LC_MESSAGES", "")
+	t.Setenv("LANG", "en_US.UTF-8")
 	if runtime.GOOS == "windows" {
 		t.Setenv("USERPROFILE", home)
 		t.Setenv("APPDATA", home)

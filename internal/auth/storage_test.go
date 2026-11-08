@@ -118,3 +118,27 @@ func TestFormatUUID(t *testing.T) {
 		t.Fatalf("expected unchanged formatted uuid")
 	}
 }
+
+func TestLoadStorageEmptyWhenNoFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	origAppData := os.Getenv("APPDATA")
+	origXDG := os.Getenv("XDG_DATA_HOME")
+	origHome := os.Getenv("HOME")
+	defer func() {
+		os.Setenv("APPDATA", origAppData)
+		os.Setenv("XDG_DATA_HOME", origXDG)
+		os.Setenv("HOME", origHome)
+	}()
+
+	os.Setenv("APPDATA", tmpDir)
+	os.Setenv("XDG_DATA_HOME", tmpDir)
+	os.Setenv("HOME", tmpDir)
+
+	loaded, err := LoadStorage()
+	if err != nil {
+		t.Fatalf("unexpected error loading empty storage: %v", err)
+	}
+	if len(loaded.Accounts) != 0 || loaded.ActiveAccountID != "" {
+		t.Fatalf("expected 0 accounts and empty active account, got %+v", loaded)
+	}
+}

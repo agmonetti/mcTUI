@@ -125,10 +125,17 @@ func renderProfileCard(username, version, modloader, accountType string) string 
 		Bold(true).
 		Render(rankBadge)
 
+	displayName := username
+	nameColor := colorWhite
+	if displayName == "" {
+		displayName = i18n.T("accounts.no_profile")
+		nameColor = colorGray
+	}
+
 	user := lipgloss.NewStyle().
-		Foreground(colorWhite).
-		Bold(true).
-		Render(username)
+		Foreground(nameColor).
+		Bold(username != "").
+		Render(displayName)
 
 	verStr := version
 	if modloader != "Vanilla" {

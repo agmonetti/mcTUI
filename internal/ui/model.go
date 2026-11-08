@@ -81,6 +81,7 @@ const (
 	modpackScreen
 	accountsScreen
 	deviceCodeScreen
+	welcomeScreen
 )
 
 // World-copy states are kept outside the instance-copy range.
@@ -346,6 +347,9 @@ func New(versions []string, cfg config.Data, latest updater.Release) Model {
 	}
 	m.loadInstanceSelection()
 	m.loadAccounts()
+	if m.authStorage == nil || len(m.authStorage.Accounts) == 0 {
+		m.state = welcomeScreen
+	}
 	return m
 }
 
@@ -359,6 +363,13 @@ func (m *Model) loadAccounts() {
 		m.authStorage = storage
 		if act := storage.GetActive(); act != nil {
 			m.username = act.Username
+		} else if m.username != "" {
+			offID := auth.OfflineUUID(m.username)
+			m.authStorage.AddAccount(auth.Account{
+				ID:       offID,
+				Username: m.username,
+				Type:     auth.AccountTypeOffline,
+			}, true)
 		}
 	}
 }

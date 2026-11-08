@@ -496,6 +496,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
+		case "l", "L":
+			if m.state == welcomeScreen {
+				lang := i18n.NextLanguage()
+				cfg := config.Load()
+				cfg.Language = lang
+				_ = config.Save(cfg)
+				return m, nil
+			}
+
 		case "up", "k":
 			if m.state == instanceCopySelectScreen && m.copyCursor > 0 {
 				m.copyCursor--
@@ -531,7 +540,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "enter":
-			if m.state == instanceCopyResultScreen {
+			if m.state == welcomeScreen {
+				m.state = accountsScreen
+				m.accountsFromConfig = false
+			} else if m.state == instanceCopyResultScreen {
 				if m.copyErr == nil && m.copyResult.Instance.ID != "" {
 					m.state = menuScreen
 				} else {
@@ -613,6 +625,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if m.state == menuScreen {
 				switch m.cursorMenu {
 				case 0: // Play
+					if m.username == "" || (m.authStorage != nil && len(m.authStorage.Accounts) > 0 && m.authStorage.GetActive() == nil) {
+						m.state = accountsScreen
+						m.accountsFromConfig = false
+						return m, nil
+					}
 					m.state = confirmScreen
 				case 1: // Accounts
 					m.state = accountsScreen
@@ -982,7 +999,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case " ":
-			if m.state == instanceCopySelectScreen && len(m.copyItems) > 0 {
+			if m.state == welcomeScreen {
+				m.state = accountsScreen
+				m.accountsFromConfig = false
+			} else if m.state == instanceCopySelectScreen && len(m.copyItems) > 0 {
 				item := m.copyItems[m.copyCursor]
 				if item.Exists && item.Error == "" {
 					m.copySelected[item.Name] = !m.copySelected[item.Name]
@@ -1059,6 +1079,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					m.state = configScreen
 				}
+			} else if m.state == welcomeScreen {
+				m.state = menuScreen
+				m.cursorMenu = 0
 			} else if m.state == nameScreen {
 				m.state = accountsScreen
 			} else if m.state == accountsScreen {

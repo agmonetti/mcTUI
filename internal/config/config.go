@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+
+	"mcTUI/internal/i18n"
 )
 
 // Data is the persisted user configuration, stored as JSON under
@@ -26,11 +28,11 @@ type Data struct {
 // or to fill in missing/zero fields from a partially-populated one.
 func defaults() Data {
 	return Data{
-		Username:   "Player",
+		Username:   "",
 		Version:    "1.20.4",
 		Modloader:  "Vanilla",
 		MemoryMB:   2048,
-		Language:   "en",
+		Language:   i18n.DetectSystemLanguage(),
 		ModChannel: "release",
 	}
 }
