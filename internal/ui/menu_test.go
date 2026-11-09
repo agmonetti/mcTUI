@@ -234,7 +234,7 @@ func TestConfigSubmenuOptionsAndNavigation(t *testing.T) {
 		"Java: Automatic",
 		"Language: English",
 		"Theme: mcTUI (Default)",
-		"Updates: Up to date",
+		"Up to date",
 	}
 	for _, opt := range expectedConfigs {
 		if !strings.Contains(view, opt) {

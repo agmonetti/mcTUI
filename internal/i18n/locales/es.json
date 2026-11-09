@@ -50,7 +50,7 @@
   "menu.theme_panel_title": "CONFIGURACIÓN DE TEMAS",
   "menu.theme_hint": "[Enter] Cambiar tema • Temas propios en:",
   "menu.update_available": "Actualizaciones: %s (Disponible)",
-  "menu.update_up_to_date": "Actualizaciones: Al día",
+  "menu.update_up_to_date": "Al día",
   "update.title": "ACTUALIZADOR DE MCTUI",
   "update.up_to_date": "Al día",
   "update.current_version": "Versión actual: %s",

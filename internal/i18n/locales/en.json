@@ -50,7 +50,7 @@
   "menu.theme_panel_title": "THEME CONFIGURATION",
   "menu.theme_hint": "[Enter] Cycle themes • Custom themes in:",
   "menu.update_available": "Updates: %s (Available)",
-  "menu.update_up_to_date": "Updates: Up to date",
+  "menu.update_up_to_date": "Up to date",
   "update.title": "MCTUI UPDATER",
   "update.up_to_date": "Up to date",
   "update.current_version": "Current version: %s",
