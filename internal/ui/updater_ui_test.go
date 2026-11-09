@@ -46,6 +46,9 @@ func TestUpdateUIFlow(t *testing.T) {
 	if !strings.Contains(updateView, "MCTUI UPDATER") {
 		t.Errorf("expected MCTUI UPDATER header in update view:\n%s", updateView)
 	}
+	if !strings.Contains(updateView, strings.Repeat("─", 46)) {
+		t.Errorf("expected 46-character fixed divider in update view:\n%s", updateView)
+	}
 	if !strings.Contains(updateView, "v2.0.0") || !strings.Contains(updateView, "v2.1.0") {
 		t.Errorf("expected current and latest version in update view:\n%s", updateView)
 	}

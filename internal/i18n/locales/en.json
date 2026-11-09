@@ -156,7 +156,7 @@
   "banner.loader": "MOD",
   "banner.memory": "RAM",
   "footer.controls": "[i] Instances  [m] Modrinth  [↑/↓] Navigate  [Enter] Select  [q] Quit",
-  "footer.update": "⬆ %s [u] Update",
+  "footer.update": "⬆ %s [u] Update Available!",
   "status.files_present": "● FILES PRESENT · verify before Play",
   "status.files_missing": "● FILES MISSING",
   "status.files_present_short": "● FILES PRESENT",

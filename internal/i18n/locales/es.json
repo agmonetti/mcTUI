@@ -156,7 +156,7 @@
   "banner.loader": "MOD",
   "banner.memory": "RAM",
   "footer.controls": "[i] Instancias  [m] Modrinth  [↑/↓] Navegar  [Enter] Elegir  [q] Salir",
-  "footer.update": "⬆ %s [u] Actualizar",
+  "footer.update": "⬆ %s [u] Actualización Disponible!",
   "status.files_present": "● ARCHIVOS LISTOS · verificar antes de Jugar",
   "status.files_missing": "● FALTAN ARCHIVOS",
   "status.files_present_short": "● ARCHIVOS LISTOS",

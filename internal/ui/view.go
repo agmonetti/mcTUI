@@ -856,8 +856,7 @@ func (m Model) renderThemePanel(c *strings.Builder) {
 
 func (m Model) renderUpdatePanel(c *strings.Builder) {
 	title := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render(i18n.T("update.title"))
-	noteWidth := max(20, m.centerWidth()-6)
-	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", noteWidth))
+	div := lipgloss.NewStyle().Foreground(colorDimGray).Render(strings.Repeat("─", 46))
 	c.WriteString(title + "\n" + div + "\n\n")
 
 	c.WriteString(labelStyle.Render(i18n.T("update.current_version", m.appVersion)) + "\n\n")
@@ -870,24 +869,24 @@ func (m Model) renderUpdatePanel(c *strings.Builder) {
 	}
 
 	c.WriteString(lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).
-		Render(fmt.Sprintf("  ⬆ %s\n", i18n.T("update.latest_version", latestTag))))
+		Render(fmt.Sprintf("  ⬆ %s", i18n.T("update.latest_version", latestTag))) + "\n")
 
 	targetAsset := updater.TargetAssetName(runtime.GOOS, runtime.GOARCH)
 	c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).
-		Render(fmt.Sprintf("  • %s\n\n", i18n.T("update.platform", targetAsset, runtime.GOARCH))))
+		Render(fmt.Sprintf("  • %s", i18n.T("update.platform", targetAsset, runtime.GOARCH))) + "\n\n")
 
 	switch m.updateStage {
 	case "idle":
 		if m.latestRelease.Body != "" {
 			c.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Bold(true).
-				Render("  " + i18n.T("update.release_notes") + "\n"))
-			lines := formatReleaseNotes(m.latestRelease.Body, noteWidth-4)
+				Render("  " + i18n.T("update.release_notes")) + "\n")
+			lines := formatReleaseNotes(m.latestRelease.Body, 40)
 			for i, line := range lines {
 				if i >= 6 {
-					c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("    ...\n"))
+					c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("    ...") + "\n")
 					break
 				}
-				c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(fmt.Sprintf("    %s\n", line)))
+				c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(fmt.Sprintf("    %s", line)) + "\n")
 			}
 			c.WriteString("\n")
 		}
@@ -909,9 +908,9 @@ func (m Model) renderUpdatePanel(c *strings.Builder) {
 		}
 		bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
 		c.WriteString(lipgloss.NewStyle().Foreground(colorAccent).
-			Render(fmt.Sprintf("  [%s] %3d%%\n", bar, pct)))
+			Render(fmt.Sprintf("  [%s] %3d%%", bar, pct)) + "\n")
 		c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).
-			Render(fmt.Sprintf("  %s\n", i18n.T("update.status_downloading", pct))))
+			Render(fmt.Sprintf("  %s", i18n.T("update.status_downloading", pct))) + "\n")
 
 	case "verifying":
 		c.WriteString(lipgloss.NewStyle().Foreground(colorAccent2).
@@ -935,7 +934,7 @@ func (m Model) renderUpdatePanel(c *strings.Builder) {
 			errMsg = m.updateErr.Error()
 		}
 		c.WriteString(lipgloss.NewStyle().Foreground(colorRed).Bold(true).
-			Render(fmt.Sprintf("  ✖ %s\n\n", i18n.T("update.error_prefix", errMsg))))
+			Render(fmt.Sprintf("  ✖ %s", i18n.T("update.error_prefix", errMsg))) + "\n\n")
 		c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).
 			Render("  [Esc] "+i18n.T("msa.cancel")) + "\n")
 	}
