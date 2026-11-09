@@ -1,7 +1,8 @@
 <h1 align="center">mcTUI</h1>
 
 <p align="center">
-  <img src="assets/main.png" alt="mcTUI terminal interface" width="700">
+  <img src="assets/welcome.png" alt="mcTUI welcome screen" width="48%">
+  <img src="assets/main.png" alt="mcTUI terminal interface" width="48%">
 </p>
 
 <p align="center">
