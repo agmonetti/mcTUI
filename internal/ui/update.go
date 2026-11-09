@@ -276,6 +276,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
+		if m.state == updateScreen && m.updateStage == "idle" {
+			switch msg.Button {
+			case tea.MouseButtonWheelUp:
+				if m.updateScroll > 0 {
+					m.updateScroll--
+				}
+				return m, nil
+			case tea.MouseButtonWheelDown:
+				lines := formatReleaseNotes(m.latestRelease.Body, 40)
+				maxScroll := max(0, len(lines)-5)
+				if m.updateScroll < maxScroll {
+					m.updateScroll++
+				}
+				return m, nil
+			}
+		}
 
 	case deviceCodeInitMsg:
 		if msg.err != nil {
@@ -541,6 +557,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.updateStage = "idle"
 				m.updateErr = nil
 				m.updateProgress = 0
+				m.updateScroll = 0
 				return m, nil
 			}
 
@@ -561,6 +578,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursorWorlds--
 			} else if m.state == roadmapScreen && m.roadmapCursor > 0 {
 				m.roadmapCursor--
+			} else if m.state == updateScreen && m.updateStage == "idle" && m.updateScroll > 0 {
+				m.updateScroll--
 			}
 
 		case "down", "j":
@@ -580,6 +599,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursorWorlds++
 			} else if m.state == roadmapScreen && m.roadmapCursor < len(m.roadmapData.Items)-1 {
 				m.roadmapCursor++
+			} else if m.state == updateScreen && m.updateStage == "idle" {
+				lines := formatReleaseNotes(m.latestRelease.Body, 40)
+				maxScroll := max(0, len(lines)-5)
+				if m.updateScroll < maxScroll {
+					m.updateScroll++
+				}
 			}
 
 		case "enter":
@@ -837,6 +862,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.updateStage = "idle"
 						m.updateErr = nil
 						m.updateProgress = 0
+						m.updateScroll = 0
 						return m, nil
 					}
 				}

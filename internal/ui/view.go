@@ -111,7 +111,7 @@ func (m Model) View() string {
 		if m.latestRelease.TagName != "" {
 			updateOpt = i18n.T("menu.update_available", m.latestRelease.TagName)
 		} else {
-			updateOpt = i18n.T("menu.update_up_to_date", appVer)
+			updateOpt = i18n.T("menu.update_up_to_date")
 		}
 		configOptions := []string{
 			i18n.T("menu.accounts_simple"),
@@ -863,7 +863,7 @@ func (m Model) renderUpdatePanel(c *strings.Builder) {
 
 	latestTag := m.latestRelease.TagName
 	if latestTag == "" {
-		upToDateText := i18n.T("menu.update_up_to_date", m.appVersion)
+		upToDateText := i18n.T("update.up_to_date")
 		c.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Render("  ✔ "+upToDateText) + "\n\n")
 		return
 	}
@@ -881,12 +881,21 @@ func (m Model) renderUpdatePanel(c *strings.Builder) {
 			c.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Bold(true).
 				Render("  " + i18n.T("update.release_notes")) + "\n")
 			lines := formatReleaseNotes(m.latestRelease.Body, 40)
-			for i, line := range lines {
-				if i >= 6 {
-					c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render("    ...") + "\n")
-					break
-				}
+			visible := 5
+			maxScroll := max(0, len(lines)-visible)
+			start := min(m.updateScroll, maxScroll)
+			if start < 0 {
+				start = 0
+			}
+			if start > 0 {
+				c.WriteString(lipgloss.NewStyle().Foreground(colorAccent2).Render("    ↑") + "\n")
+			}
+			end := min(len(lines), start+visible)
+			for _, line := range lines[start:end] {
 				c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).Render(fmt.Sprintf("    %s", line)) + "\n")
+			}
+			if end < len(lines) {
+				c.WriteString(lipgloss.NewStyle().Foreground(colorAccent2).Render("    ↓") + "\n")
 			}
 			c.WriteString("\n")
 		}

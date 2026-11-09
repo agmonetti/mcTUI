@@ -295,6 +295,7 @@ type Model struct {
 	updateStage            string // "idle", "checksums", "downloading", "verifying", "installing", "done", "error"
 	updateErr              error
 	updateEvents           chan UpdateProgressMsg
+	updateScroll           int
 
 	// Download progress (usado en downloadScreen)
 	dlProgressFrame int

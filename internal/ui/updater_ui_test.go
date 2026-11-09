@@ -95,3 +95,58 @@ func TestUpdateUIFlow(t *testing.T) {
 		t.Errorf("expected Enter on config cursor 8 to enter updateScreen, got %v", m.state)
 	}
 }
+
+func TestUpdateScrollReleaseNotes(t *testing.T) {
+	cfg := config.Data{
+		Username: "UpdaterTester",
+		Language: "en",
+		Theme:    "mctui",
+	}
+	body := "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\nLine 8\nLine 9\nLine 10"
+	rel := updater.Release{
+		TagName: "v2.1.0",
+		Name:    "v2.1.0 Release",
+		Body:    body,
+	}
+
+	m := New([]string{"1.20.4"}, cfg, rel, "v2.0.0")
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'u'}})
+	m = updated.(Model)
+
+	// Initial view: scroll is 0, should show down arrow '↓' but not up arrow '↑' in release notes
+	v0 := m.View()
+	if !strings.Contains(v0, "    ↓") {
+		t.Errorf("expected down arrow in release notes when more lines are below:\n%s", v0)
+	}
+	if strings.Contains(v0, "    ↑") {
+		t.Errorf("did not expect up arrow in release notes at top:\n%s", v0)
+	}
+	if !strings.Contains(v0, "Line 1") {
+		t.Errorf("expected Line 1 to be visible at top:\n%s", v0)
+	}
+
+	// Press down
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(Model)
+	if m.updateScroll != 1 {
+		t.Fatalf("expected updateScroll = 1, got %d", m.updateScroll)
+	}
+	v1 := m.View()
+	if !strings.Contains(v1, "    ↑") {
+		t.Errorf("expected up arrow in release notes after scrolling down:\n%s", v1)
+	}
+	if !strings.Contains(v1, "    ↓") {
+		t.Errorf("expected down arrow in release notes when more lines still exist below:\n%s", v1)
+	}
+
+	// Press up
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	m = updated.(Model)
+	if m.updateScroll != 0 {
+		t.Fatalf("expected updateScroll = 0 after pressing up, got %d", m.updateScroll)
+	}
+	v2 := m.View()
+	if strings.Contains(v2, "    ↑") {
+		t.Errorf("did not expect up arrow in release notes after scrolling back to top:\n%s", v2)
+	}
+}
