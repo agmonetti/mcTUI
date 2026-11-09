@@ -879,7 +879,7 @@ func (m Model) renderUpdatePanel(c *strings.Builder) {
 	case "idle":
 		if m.latestRelease.Body != "" {
 			c.WriteString(lipgloss.NewStyle().Foreground(colorAccent).Bold(true).
-				Render("  " + i18n.T("update.release_notes")) + "\n")
+				Render("  "+i18n.T("update.release_notes")) + "\n")
 			lines := formatReleaseNotes(m.latestRelease.Body, 40)
 			visible := 5
 			maxScroll := max(0, len(lines)-visible)
