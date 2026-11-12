@@ -298,8 +298,8 @@ type Model struct {
 	updateEvents           chan UpdateProgressMsg
 	updateScroll           int
 
-	pendingRestart         bool
-	shouldRestart          bool
+	pendingRestart bool
+	shouldRestart  bool
 	// Download progress (usado en downloadScreen)
 	dlProgressFrame int
 	dlStage         downloadStageMsg
