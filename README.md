@@ -41,7 +41,7 @@
 
 Download the executable for your operating system from the [latest release](https://github.com/agmonetti/mcTUI/releases/latest). On Linux and macOS, make it executable before running it. On Windows, run the downloaded `.exe` from PowerShell or File Explorer.
 
-To build from source, install Go 1.26.10 or newer, then run:
+To build from source, install Go 1.26.11 or newer, then run:
 
 ```bash
 git clone https://github.com/agmonetti/mcTUI.git

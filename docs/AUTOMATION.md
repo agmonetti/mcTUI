@@ -34,7 +34,7 @@ The reusable `validate.yml` workflow performs:
 - Cross-compilation of Linux amd64/arm64, macOS amd64/arm64, and Windows amd64.
 
 Go comes from `go.mod`, keeping local builds, tests, and release builds aligned.
-The baseline was updated to Go 1.26.10 and `golang.org/x/text` v0.39.0 to address
+The baseline was updated to Go 1.26.11 and `golang.org/x/text` v0.39.0 to address
 reachable vulnerabilities detected while introducing these checks.
 Coverage reports and build outputs are retained as workflow artifacts for seven
 days. CI artifacts use version `dev`, which disables update notifications.
