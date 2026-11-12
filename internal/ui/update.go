@@ -393,10 +393,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.Err != nil {
 				m.updateStage = "error"
 				m.updateErr = msg.Err
-			} else {
-				m.updateStage = "done"
-				m.updateProgress = 1.0
+				m.pendingRestart = false
+				return m, nil
 			}
+			m.updateStage = "done"
+			m.updateProgress = 1.0
+			m.pendingRestart = true
+			return m, scheduleRestartCmd()
+		}
+		return m, nil
+
+	case updateRestartMsg:
+		if m.pendingRestart {
+			m.cleanupBeforeRestart()
+			m.shouldRestart = true
+			return m, tea.Quit
 		}
 		return m, nil
 
@@ -875,6 +886,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.updateEvents = ch
 					return m, tea.Batch(startUpdateCmd(m.latestRelease, ch), waitForUpdateProgress(ch))
 				} else if m.updateStage == "done" {
+					m.shouldRestart = m.pendingRestart
+					m.cleanupBeforeRestart()
 					return m, tea.Quit
 				}
 			} else if m.state == accountsScreen {
@@ -1211,7 +1224,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if m.state == worldsScreen || m.state == confirmScreen || m.state == configScreen || m.state == roadmapScreen {
 				m.state = menuScreen
 			} else if m.state == updateScreen {
-				if m.updateStage != "downloading" && m.updateStage != "verifying" && m.updateStage != "installing" {
+				if m.updateStage != "downloading" && m.updateStage != "verifying" && m.updateStage != "installing" && m.updateStage != "done" {
 					m.state = configScreen
 				}
 			}
@@ -1450,4 +1463,27 @@ func waitForUpdateProgress(ch chan UpdateProgressMsg) tea.Cmd {
 		}
 		return msg
 	}
+}
+
+var updateRestartDelay = 1200 * time.Millisecond
+
+type updateRestartMsg struct{}
+
+func scheduleRestartCmd() tea.Cmd {
+	return tea.Tick(updateRestartDelay, func(time.Time) tea.Msg {
+		return updateRestartMsg{}
+	})
+}
+
+func (m *Model) cleanupBeforeRestart() {
+	m.save()
+	if m.dlCancel != nil {
+		m.dlCancel()
+		m.dlCancel = nil
+	}
+	if m.packCancel != nil {
+		m.packCancel()
+		m.packCancel = nil
+	}
+	m.updateEvents = nil
 }

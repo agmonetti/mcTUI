@@ -1,8 +1,10 @@
 package ui
 
 import (
+	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -148,5 +150,108 @@ func TestUpdateScrollReleaseNotes(t *testing.T) {
 	v2 := m.View()
 	if strings.Contains(v2, "    ↑") {
 		t.Errorf("did not expect up arrow in release notes after scrolling back to top:\n%s", v2)
+	}
+}
+
+func TestUpdateSuccessSchedulesRestartAndQuitsOnTimer(t *testing.T) {
+	origDelay := updateRestartDelay
+	updateRestartDelay = 5 * time.Millisecond
+	t.Cleanup(func() { updateRestartDelay = origDelay })
+
+	m := Model{
+		state:         updateScreen,
+		updateStage:   "installing",
+		latestRelease: updater.Release{TagName: "v2.1.0"},
+		appVersion:    "v2.0.0",
+	}
+
+	// 1. Finished message transitions to done, marks pendingRestart, and schedules restart
+	updated, cmd := m.Update(UpdateFinishedMsg{Err: nil})
+	m = updated.(Model)
+	if m.updateStage != "done" {
+		t.Fatalf("expected updateStage = done, got %s", m.updateStage)
+	}
+	if !m.pendingRestart {
+		t.Fatal("expected pendingRestart = true")
+	}
+	if cmd == nil {
+		t.Fatal("expected schedule restart cmd, got nil")
+	}
+
+	// 2. Escape while on done must not dismiss the screen
+	updated, escCmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = updated.(Model)
+	if m.state != updateScreen || m.updateStage != "done" {
+		t.Fatalf("expected to remain on updateScreen done stage, got state=%v stage=%v", m.state, m.updateStage)
+	}
+	if escCmd != nil {
+		t.Fatalf("expected nil cmd for esc on done stage, got %v", escCmd)
+	}
+
+	// 3. Restart message triggers tea.Quit, cleans up, and sets ShouldRestart
+	msg := cmd()
+	if _, ok := msg.(updateRestartMsg); !ok {
+		t.Fatalf("cmd produced %T, want updateRestartMsg", msg)
+	}
+	quitModel, quitCmd := m.Update(msg)
+	final := quitModel.(Model)
+	if !final.ShouldRestart() {
+		t.Fatal("expected ShouldRestart() = true after updateRestartMsg")
+	}
+	if quitCmd == nil {
+		t.Fatal("expected quit cmd, got nil")
+	}
+	if _, ok := quitCmd().(tea.QuitMsg); !ok {
+		t.Fatalf("quit cmd returned %T, want tea.QuitMsg", quitCmd())
+	}
+}
+
+func TestUpdateFailureDoesNotScheduleRestart(t *testing.T) {
+	m := Model{
+		state:         updateScreen,
+		updateStage:   "downloading",
+		latestRelease: updater.Release{TagName: "v2.1.0"},
+	}
+
+	updated, cmd := m.Update(UpdateFinishedMsg{Err: errors.New("network failure")})
+	m = updated.(Model)
+	if m.updateStage != "error" {
+		t.Fatalf("expected stage error, got %s", m.updateStage)
+	}
+	if m.pendingRestart || m.ShouldRestart() {
+		t.Fatal("expected pendingRestart and ShouldRestart to be false on update error")
+	}
+	if cmd != nil {
+		t.Fatalf("expected nil cmd on error, got %v", cmd)
+	}
+
+	// Esc on error must return to configScreen without restarting
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = updated.(Model)
+	if m.state != configScreen {
+		t.Fatalf("expected Esc to return to configScreen, got %v", m.state)
+	}
+	if m.ShouldRestart() {
+		t.Fatal("ShouldRestart must remain false")
+	}
+}
+
+func TestUpdateEnterOnDoneTriggersImmediateRestart(t *testing.T) {
+	m := Model{
+		state:          updateScreen,
+		updateStage:    "done",
+		pendingRestart: true,
+	}
+
+	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+	if !m.ShouldRestart() {
+		t.Fatal("expected ShouldRestart = true on Enter during done stage")
+	}
+	if cmd == nil {
+		t.Fatal("expected quit cmd, got nil")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatalf("cmd returned %T, want tea.QuitMsg", cmd())
 	}
 }

@@ -21,6 +21,24 @@ import (
 // Defaults to "dev" for local builds, which disables update checks.
 var Version = "dev"
 
+var runRestart = updater.Restart
+
+func handleProgramExit(m tea.Model, err error) error {
+	if err != nil {
+		return err
+	}
+	if model, ok := m.(ui.Model); ok && model.ShouldRestart() {
+		selfExe, err := updater.ExecutablePath()
+		if err != nil {
+			return fmt.Errorf("cannot determine executable path for restart: %w", err)
+		}
+		args := make([]string, 0, len(os.Args))
+		args = append(args, selfExe)
+		args = append(args, os.Args[1:]...)
+		return runRestart(selfExe, args)
+	}
+	return nil
+}
 func main() {
 	validReleases := mojang.FetchReleases()
 	cfg := config.Load()
@@ -50,7 +68,8 @@ func main() {
 		tea.WithMouseCellMotion(),
 	)
 
-	if _, err := p.Run(); err != nil {
+	finalModel, err := p.Run()
+	if err := handleProgramExit(finalModel, err); err != nil {
 		fmt.Printf("TUI Error: %v\n", err)
 		os.Exit(1)
 	}

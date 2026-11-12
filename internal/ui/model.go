@@ -298,6 +298,8 @@ type Model struct {
 	updateEvents           chan UpdateProgressMsg
 	updateScroll           int
 
+	pendingRestart         bool
+	shouldRestart          bool
 	// Download progress (usado en downloadScreen)
 	dlProgressFrame int
 	dlStage         downloadStageMsg
@@ -393,6 +395,18 @@ func New(versions []string, cfg config.Data, latest updater.Release, appVersion 
 // quietly in the update panel and footer without blocking the TUI.
 func (m Model) WithUpdateCheckError(err error) Model {
 	m.updateCheckErr = err
+	return m
+}
+
+// ShouldRestart reports whether the application should re-execute itself
+// after cleanly shutting down the TUI to run an updated binary.
+func (m Model) ShouldRestart() bool {
+	return m.shouldRestart
+}
+
+// WithRestart sets whether the model requests a process restart upon exit.
+func (m Model) WithRestart(restart bool) Model {
+	m.shouldRestart = restart
 	return m
 }
 
