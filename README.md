@@ -54,6 +54,8 @@ On Windows, use `go build -o mctui.exe .` and run `./mctui.exe` in PowerShell in
 
 ## Documentation
 
+Browse screenshots of the [built-in themes](themes/README.md).
+
 For configuration, paths, features, and development instructions, see the [official documentation](https://agmonetti.github.io/mcTuiDocs/).
 
 For CI checks, supported build targets, and the tag-based release process, see
