@@ -290,6 +290,7 @@ type Model struct {
 	mp                     modpackState
 	launch                 LaunchConfig
 	latestRelease          updater.Release // zero value = no update available
+	updateCheckErr         error           // quiet notice when the release check could not run
 	appVersion             string
 	updateProgress         float64
 	updateStage            string // "idle", "checksums", "downloading", "verifying", "installing", "done", "error"
@@ -385,6 +386,13 @@ func New(versions []string, cfg config.Data, latest updater.Release, appVersion 
 	if m.authStorage == nil || len(m.authStorage.Accounts) == 0 {
 		m.state = welcomeScreen
 	}
+	return m
+}
+
+// WithUpdateCheckError records a release-check failure that should be shown
+// quietly in the update panel and footer without blocking the TUI.
+func (m Model) WithUpdateCheckError(err error) Model {
+	m.updateCheckErr = err
 	return m
 }
 

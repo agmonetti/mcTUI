@@ -3,9 +3,15 @@
 package updater
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -32,6 +38,102 @@ type Release struct {
 
 var client = &http.Client{Timeout: 5 * time.Second}
 
+// ErrRateLimited reports that the anonymous GitHub request was rate-limited
+// and the optional authenticated gh fallback could not provide metadata.
+var ErrRateLimited = errors.New("github rate limit")
+
+// CheckResult carries the outcome of a release check. Err is only surfaced
+// for conditions callers may want to show quietly, such as a rate limit whose
+// gh fallback also failed.
+type CheckResult struct {
+	Release   Release
+	Available bool
+	Err       error
+}
+
+// ghLatestReleaseJSON fetches the release through the authenticated gh CLI.
+// It is a variable so tests can supply a fixture without invoking gh.
+var ghLatestReleaseJSON = runGHLatestRelease
+
+// ghRun executes gh without a shell and returns stdout only. Stderr is
+// deliberately discarded so credentials or diagnostics never reach the UI.
+var ghRun = func(ctx context.Context, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "gh", args...)
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	if err := cmd.Run(); err != nil {
+		return nil, err
+	}
+	return stdout.Bytes(), nil
+}
+
+// ghAPIPath converts the public releases endpoint into the path expected by
+// "gh api". Only the public GitHub API is accepted.
+func ghAPIPath(apiURL string) (string, error) {
+	u, err := url.Parse(apiURL)
+	if err != nil {
+		return "", err
+	}
+	if u.Scheme != "https" || u.Hostname() != "api.github.com" || u.RawQuery != "" || u.Fragment != "" {
+		return "", errors.New("gh fallback requires the public GitHub API")
+	}
+	path := strings.TrimPrefix(u.Path, "/")
+	if !strings.HasPrefix(path, "repos/") || !strings.HasSuffix(path, "/releases/latest") {
+		return "", errors.New("gh fallback cannot derive a releases endpoint")
+	}
+	return path, nil
+}
+
+// runGHLatestRelease asks the authenticated gh CLI for the full release JSON.
+// Only the repository path is passed, and no credential is read or logged.
+func runGHLatestRelease(apiURL string) ([]byte, error) {
+	path, err := ghAPIPath(apiURL)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	body, err := ghRun(ctx, "api", path)
+	if err != nil {
+		return nil, fmt.Errorf("gh api: %w", err)
+	}
+	if len(bytes.TrimSpace(body)) == 0 {
+		return nil, errors.New("gh api: empty response")
+	}
+	return body, nil
+}
+
+// fetchReleaseJSON queries the public API first. A 403 or 429 response is
+// treated as a rate limit and the authenticated gh CLI is tried as an
+// optional fallback. Any other failure is returned unchanged.
+func fetchReleaseJSON(apiURL string) ([]byte, error) {
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "mcTUI-Updater")
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		return io.ReadAll(resp.Body)
+	}
+	if resp.StatusCode != http.StatusForbidden && resp.StatusCode != http.StatusTooManyRequests {
+		return nil, fmt.Errorf("github releases: status %d", resp.StatusCode)
+	}
+
+	body, ghErr := ghLatestReleaseJSON(apiURL)
+	if ghErr == nil {
+		return body, nil
+	}
+	return nil, fmt.Errorf("%w: status %d; gh fallback failed: %v", ErrRateLimited, resp.StatusCode, ghErr)
+}
+
 // Check fetches the latest release from GitHub and returns it along with
 // ok=true if a newer version than currentVersion is available.
 // Returns ok=false silently on any network error, parse failure, or if
@@ -41,48 +143,44 @@ func Check(currentVersion string) (Release, bool) {
 	return CheckWithURL(defaultAPIURL, currentVersion)
 }
 
+// CheckStatus is Check with error details for the caller. Ordinary failures
+// remain silent through the (Release, bool) wrapper; ErrRateLimited is exposed
+// so the UI can show a quiet notice instead of claiming the app is up to date.
+func CheckStatus(currentVersion string) CheckResult {
+	return CheckWithURLStatus(defaultAPIURL, currentVersion)
+}
+
 // CheckWithURL allows overriding the GitHub API endpoint for testing.
 func CheckWithURL(apiURL, currentVersion string) (Release, bool) {
+	result := CheckWithURLStatus(apiURL, currentVersion)
+	return result.Release, result.Available
+}
+
+// CheckWithURLStatus is CheckWithURL with error details.
+func CheckWithURLStatus(apiURL, currentVersion string) CheckResult {
 	if currentVersion == "dev" {
-		return Release{}, false
+		return CheckResult{}
 	}
 
-	req, err := http.NewRequest("GET", apiURL, nil)
+	body, err := fetchReleaseJSON(apiURL)
 	if err != nil {
-		return Release{}, false
-	}
-	req.Header.Set("User-Agent", "mcTUI-Updater")
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
-
-	resp, err := client.Do(req)
-	if err != nil || resp == nil {
-		return Release{}, false
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return Release{}, false
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return Release{}, false
+		return CheckResult{Err: err}
 	}
 
 	var release Release
 	if err := json.Unmarshal(body, &release); err != nil {
-		return Release{}, false
+		return CheckResult{Err: err}
 	}
 
 	if release.TagName == "" {
-		return Release{}, false
+		return CheckResult{}
 	}
 
 	if !IsNewer(release.TagName, currentVersion) {
-		return Release{}, false
+		return CheckResult{}
 	}
 
-	return release, true
+	return CheckResult{Release: release, Available: true}
 }
 
 // IsNewer returns true if latestVersion has higher precedence than currentVersion.

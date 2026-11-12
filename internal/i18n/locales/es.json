@@ -66,6 +66,7 @@
   "update.status_success": "¡mcTUI se actualizó con éxito a %s!",
   "update.prompt_restart": "Presiona [Enter] para salir y reiniciar mcTUI.",
   "update.error_prefix": "Falló la actualización: %s",
+  "update.check_unavailable": "No se pudo comprobar actualizaciones (límite de GitHub)",
   "menu.quit": "Salir",
   "menu.change_instances": "Instancias",
   "menu.configs": "Configuración",

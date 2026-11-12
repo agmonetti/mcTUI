@@ -3,6 +3,7 @@ package updater
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -173,5 +174,105 @@ func TestApplyUpdate(t *testing.T) {
 	}
 	if string(content) != "v2" {
 		t.Errorf("expected content 'v2', got %s", string(content))
+	}
+}
+
+func TestCheckWithURLStatusPublicAPISucceedsWithoutFallback(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"tag_name":"v2.1.0","assets":[]}`))
+	}))
+	defer server.Close()
+
+	original := ghLatestReleaseJSON
+	t.Cleanup(func() { ghLatestReleaseJSON = original })
+	called := 0
+	ghLatestReleaseJSON = func(string) ([]byte, error) {
+		called++
+		return nil, errors.New("fallback must not run")
+	}
+
+	result := CheckWithURLStatus(server.URL, "v2.0.0")
+	if !result.Available || result.Err != nil {
+		t.Fatalf("result = %+v, want an available update", result)
+	}
+	if called != 0 {
+		t.Errorf("gh fallback called %d times on a successful public check", called)
+	}
+}
+
+func TestCheckWithURLStatusRateLimitUsesGHFallback(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"message":"API rate limit exceeded"}`))
+	}))
+	defer server.Close()
+
+	original := ghLatestReleaseJSON
+	t.Cleanup(func() { ghLatestReleaseJSON = original })
+	ghLatestReleaseJSON = func(string) ([]byte, error) {
+		return []byte(`{"tag_name":"v2.1.0","assets":[` +
+			`{"name":"checksums.txt","browser_download_url":"https://example.com/checksums.txt"},` +
+			`{"name":"mctui-linux-amd64","browser_download_url":"https://example.com/mctui"}]}`), nil
+	}
+
+	result := CheckWithURLStatus(server.URL, "v2.0.0")
+	if !result.Available || result.Err != nil {
+		t.Fatalf("result = %+v, want an available update from the fallback", result)
+	}
+	if result.Release.TagName != "v2.1.0" || len(result.Release.Assets) != 2 {
+		t.Errorf("fallback metadata lost release details: %+v", result.Release)
+	}
+}
+
+func TestCheckWithURLStatusRateLimitWithoutFallback(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+
+	original := ghLatestReleaseJSON
+	t.Cleanup(func() { ghLatestReleaseJSON = original })
+	ghLatestReleaseJSON = func(string) ([]byte, error) {
+		return nil, errors.New("gh not found")
+	}
+
+	result := CheckWithURLStatus(server.URL, "v2.0.0")
+	if !errors.Is(result.Err, ErrRateLimited) {
+		t.Fatalf("Err = %v, want ErrRateLimited", result.Err)
+	}
+	if result.Available {
+		t.Error("rate-limited check must not report an available update")
+	}
+}
+
+func TestCheckWithURLKeepsSilentContractForOtherErrors(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	if _, ok := CheckWithURL(server.URL, "v2.0.0"); ok {
+		t.Error("CheckWithURL must stay silent/no-update on non-rate-limit errors")
+	}
+}
+
+func TestGHAPIPath(t *testing.T) {
+	got, err := ghAPIPath(defaultAPIURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "repos/agmonetti/mcTUI/releases/latest"; got != want {
+		t.Errorf("ghAPIPath() = %q, want %q", got, want)
+	}
+
+	for _, raw := range []string{
+		"http://api.github.com/repos/o/r/releases/latest",
+		"https://example.com/repos/o/r/releases/latest",
+		"https://api.github.com/repos/o/r/tags",
+	} {
+		if _, err := ghAPIPath(raw); err == nil {
+			t.Errorf("ghAPIPath(%q) expected error", raw)
+		}
 	}
 }

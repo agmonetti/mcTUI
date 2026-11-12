@@ -259,6 +259,10 @@ func (m Model) View() string {
 		updatePart = "   " + lipgloss.NewStyle().Foreground(colorAccent2).Bold(true).Render(
 			i18n.T("footer.update", m.latestRelease.TagName),
 		)
+	} else if m.updateCheckErr != nil {
+		updatePart = "   " + lipgloss.NewStyle().Foreground(colorDimGray).Render(
+			i18n.T("update.check_unavailable"),
+		)
 	}
 	footerContent := fmt.Sprintf("%s   %s", statusPart, userPart)
 	if controls != "" {
@@ -863,6 +867,11 @@ func (m Model) renderUpdatePanel(c *strings.Builder) {
 
 	latestTag := m.latestRelease.TagName
 	if latestTag == "" {
+		if m.updateCheckErr != nil {
+			c.WriteString(lipgloss.NewStyle().Foreground(colorDimGray).
+				Render("  ⚠ "+i18n.T("update.check_unavailable")) + "\n\n")
+			return
+		}
 		upToDateText := i18n.T("update.up_to_date")
 		c.WriteString(lipgloss.NewStyle().Foreground(colorGreen).Render("  ✔ "+upToDateText) + "\n\n")
 		return

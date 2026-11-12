@@ -66,6 +66,7 @@
   "update.status_success": "mcTUI successfully updated to %s!",
   "update.prompt_restart": "Press [Enter] to exit and restart mcTUI.",
   "update.error_prefix": "Update failed: %s",
+  "update.check_unavailable": "Update check unavailable (GitHub rate limit)",
   "menu.quit": "Quit",
   "menu.change_instances": "Instances",
   "menu.configs": "Configs",

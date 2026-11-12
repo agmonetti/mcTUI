@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -29,17 +30,22 @@ func main() {
 	}
 
 	// Check for updates concurrently so startup isn't delayed.
-	// The updater has a 2s timeout — if GitHub doesn't respond in time,
-	// latestRelease is zero-value and the UI shows nothing.
-	updateCh := make(chan updater.Release, 1)
+	// If GitHub does not respond, latestRelease stays zero-value and the UI
+	// shows nothing. A rate limit with a failed gh fallback adds a quiet
+	// notice instead of claiming the app is up to date.
+	updateCh := make(chan updater.CheckResult, 1)
 	go func() {
-		release, _ := updater.Check(Version)
-		updateCh <- release
+		updateCh <- updater.CheckStatus(Version)
 	}()
-	latestRelease := <-updateCh
+	result := <-updateCh
+
+	model := ui.New(validReleases, cfg, result.Release, Version)
+	if errors.Is(result.Err, updater.ErrRateLimited) {
+		model = model.WithUpdateCheckError(result.Err)
+	}
 
 	p := tea.NewProgram(
-		ui.New(validReleases, cfg, latestRelease, Version),
+		model,
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)
