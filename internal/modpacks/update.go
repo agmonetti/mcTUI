@@ -16,8 +16,8 @@ import (
 	"sort"
 	"strings"
 
-	"mcTUI/internal/instances"
-	"mcTUI/internal/operationlock"
+	"github.com/agmonetti/notamclauncher/internal/instances"
+	"github.com/agmonetti/notamclauncher/internal/operationlock"
 )
 
 // UpdatePath describes the three states of a pack-owned path or a new pack
@@ -40,7 +40,7 @@ type UpdatePlan struct {
 	Conflicts []UpdatePath `json:"conflicts"`
 }
 
-const updateJournalName = ".mctui-pack-update.json"
+const updateJournalName = ".notamclauncher-pack-update.json"
 
 type updateJournal struct {
 	Schema    int            `json:"schema"`
@@ -513,7 +513,7 @@ func (s Store) Update(ctx context.Context, in instances.Instance, archive Archiv
 			return fmt.Errorf("unexpected conflict decision: %s", path)
 		}
 	}
-	stage, err := os.MkdirTemp(dir, ".mctui-pack-stage-")
+	stage, err := os.MkdirTemp(dir, ".notamclauncher-pack-stage-")
 	if err != nil {
 		return err
 	}
@@ -760,7 +760,7 @@ func recoverUpdateLocked(gameDir, dir string) error {
 	if err := json.Unmarshal(bytes, &journal); err != nil {
 		return fmt.Errorf("invalid pack recovery journal: %w", err)
 	}
-	if (journal.Schema != 1 && journal.Schema != 2) || journal.OldAbsent != (journal.Schema == 2) || !strings.HasPrefix(journal.Stage, ".mctui-pack-stage-") || filepath.Base(journal.Stage) != journal.Stage || !journal.OldAbsent && journal.Old.validate() != nil || journal.Next.validate() != nil {
+	if (journal.Schema != 1 && journal.Schema != 2) || journal.OldAbsent != (journal.Schema == 2) || !strings.HasPrefix(journal.Stage, ".notamclauncher-pack-stage-") || filepath.Base(journal.Stage) != journal.Stage || !journal.OldAbsent && journal.Old.validate() != nil || journal.Next.validate() != nil {
 		return fmt.Errorf("invalid pack recovery journal")
 	}
 	if journal.OldAbsent && (journal.Old.SchemaVersion != 0 || len(journal.Old.Files) != 0) {

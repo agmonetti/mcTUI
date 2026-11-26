@@ -9,13 +9,13 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
 
-	"mcTUI/internal/i18n"
-	"mcTUI/internal/instances"
-	"mcTUI/internal/mojang"
-	"mcTUI/internal/resetconfigs"
-	"mcTUI/internal/theme"
-	"mcTUI/internal/updater"
-	"mcTUI/internal/worlds"
+	"github.com/agmonetti/notamclauncher/internal/i18n"
+	"github.com/agmonetti/notamclauncher/internal/instances"
+	"github.com/agmonetti/notamclauncher/internal/mojang"
+	"github.com/agmonetti/notamclauncher/internal/resetconfigs"
+	"github.com/agmonetti/notamclauncher/internal/theme"
+	"github.com/agmonetti/notamclauncher/internal/updater"
+	"github.com/agmonetti/notamclauncher/internal/worlds"
 )
 
 func (m Model) View() string {
@@ -38,7 +38,7 @@ func (m Model) View() string {
 		if m.state == resetPickerScreen {
 			content = m.pickerPanelContent()
 		}
-		header := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("  mcTUI  LAUNCHER") + "\n" +
+		header := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("  notamclauncher") + "\n" +
 			lipgloss.NewStyle().Foreground(colorBlue).Render("  "+i18n.T("menu.options")+"  ► "+i18n.T("menu.reset")) + "\n\n"
 		return lipgloss.Place(m.width, m.height, lipgloss.Left, lipgloss.Top, header+content)
 	}
@@ -1197,7 +1197,9 @@ func (m Model) renderActiveSession(c *strings.Builder) {
 	} else {
 		c.WriteString(pad + lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render(i18n.T("menu.files_missing")))
 	}
-	c.WriteString("\n\n" + pad + lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("menu.game_data", m.gameDir())))
+	pathWidth := m.centerWidth() - len(pad) - lipgloss.Width(i18n.T("menu.game_data", ""))
+	gamePath := formatDisplayPath(m.gameDir(), pathWidth)
+	c.WriteString("\n\n" + pad + lipgloss.NewStyle().Foreground(colorDimGray).Render(i18n.T("menu.game_data", gamePath)))
 	if m.instanceErr != nil {
 		c.WriteString("\n\n" + lipgloss.NewStyle().Foreground(colorRed).Render("⚠ "+displayError(m.instanceErr)))
 	}

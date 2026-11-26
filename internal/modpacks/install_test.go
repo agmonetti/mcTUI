@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"mcTUI/internal/instances"
+	"github.com/agmonetti/notamclauncher/internal/instances"
 )
 
 func TestImportLocalMrpackAtomicCreationAndMetadata(t *testing.T) {
@@ -139,10 +139,10 @@ func TestImportLocalMrpackAtomicCreationAndMetadata(t *testing.T) {
 		t.Fatalf("expected 2 override files in manifest, got %d", len(manifest.Files))
 	}
 
-	// Comprobar que no quedaron directorios temporales .mctui-modpack-* huérfanos
+	// Comprobar que no quedaron directorios temporales .notamclauncher-modpack-* huérfanos
 	entries, _ := os.ReadDir(root)
 	for _, entry := range entries {
-		if filepath.HasPrefix(entry.Name(), ".mctui-modpack-") {
+		if filepath.HasPrefix(entry.Name(), ".notamclauncher-modpack-") {
 			t.Fatalf("orphan staging directory retained: %s", entry.Name())
 		}
 	}

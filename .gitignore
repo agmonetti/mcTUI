@@ -1,16 +1,12 @@
 # Binarios compilados
-mcTUI
+/notamclauncher
+/notamclauncher-*
 *.exe
-mctui
-mctui.exe
-mctui-windows-amd64.exe
-mctui-linux-amd64
+/dist/
 
 # Carpetas de entorno de Go
 vendor/
 logs/
-mctui-darwin-*
-dist/
 coverage.out
 
 # Personal release notes

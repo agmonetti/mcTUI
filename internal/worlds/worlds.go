@@ -12,8 +12,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"mcTUI/internal/i18n"
-	"mcTUI/internal/nbt"
+	"github.com/agmonetti/notamclauncher/internal/i18n"
+	"github.com/agmonetti/notamclauncher/internal/nbt"
 )
 
 // Info holds the subset of level.dat data needed to display a world in

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"mcTUI/internal/instances"
+	"github.com/agmonetti/notamclauncher/internal/instances"
 )
 
 // Copy duplicates a saved world into another instance without changing the
@@ -54,7 +54,7 @@ func Copy(root string, source, destination instances.Instance, folder string) (s
 	}
 	// Stage next to saves, rather than inside it: no incomplete save can be
 	// discovered by Minecraft or List, and the final rename stays on one FS.
-	stage, err := os.MkdirTemp(destinationGame, ".mctui-world-copy-")
+	stage, err := os.MkdirTemp(destinationGame, ".notamclauncher-world-copy-")
 	if err != nil {
 		return "", err
 	}

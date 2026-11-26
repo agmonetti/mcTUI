@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"mcTUI/internal/instances"
+	"github.com/agmonetti/notamclauncher/internal/instances"
 )
 
 func TestInstancePickerAndLaunchPathsStayIsolated(t *testing.T) {

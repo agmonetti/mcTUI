@@ -8,12 +8,12 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/agmonetti/notamclauncher/internal/i18n"
+	"github.com/agmonetti/notamclauncher/internal/modrinth"
+	"github.com/agmonetti/notamclauncher/internal/mods"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
-	"mcTUI/internal/i18n"
-	"mcTUI/internal/modrinth"
-	"mcTUI/internal/mods"
 )
 
 type catalogSearchMsg struct {

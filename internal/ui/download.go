@@ -7,8 +7,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"mcTUI/internal/i18n"
-	"mcTUI/internal/launcher"
+	"github.com/agmonetti/notamclauncher/internal/i18n"
+	"github.com/agmonetti/notamclauncher/internal/launcher"
 )
 
 type downloadAnimationTickMsg struct{}

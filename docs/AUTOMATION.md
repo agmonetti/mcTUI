@@ -1,6 +1,6 @@
 # Development, checks, and releases
 
-mcTUI is a Go desktop application built with Bubble Tea. Distribution happens
+notamclauncher is a Go desktop application built with Bubble Tea. Distribution happens
 through GitHub Releases; there is no application server to deploy. The separate
 documentation site is maintained in `mcTuiDocs` and is outside these workflows.
 
@@ -72,10 +72,10 @@ validation jobs against that exact tag. Only if every job passes does it:
 3. Publish it, marking stable releases as latest and prereleases as prerelease.
 
 Builds inject the tag through `-X main.Version=...`, enabling the existing update
-notification. Binaries retain the existing `mctui-<os>-<arch>` naming convention;
-Windows keeps `.exe` and its checked-in amd64 icon resource. Linux arm64 is also
-included. Executables are unsigned; macOS notarization and Windows code signing
-are not configured.
+notification. Release binaries are named `notamclauncher-<os>-<arch>`; Windows
+adds `.exe` and embeds the checked-in amd64 icon resource. The first release under
+this name requires a fresh download for users of older builds. Executables are
+unsigned; macOS notarization and Windows code signing are not configured.
 
 If validation fails, fix the problem and release a new tag. If publication fails
 after creating a draft, inspect and delete that incomplete draft before rerunning

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"mcTUI/internal/i18n"
+	"github.com/agmonetti/notamclauncher/internal/i18n"
 )
 
 func TestSpanishSecondaryViews(t *testing.T) {

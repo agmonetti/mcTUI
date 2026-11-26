@@ -3,7 +3,7 @@ package ui
 import (
 	"strings"
 
-	"mcTUI/internal/i18n"
+	"github.com/agmonetti/notamclauncher/internal/i18n"
 )
 
 var appErrorKeys = map[string]string{
@@ -29,7 +29,7 @@ var appErrorPrefixes = map[string]string{
 	"instance removed but backups remain at ": "error.backups_remain",
 }
 
-// displayError translates mcTUI-owned error text and leaves all other details intact.
+// displayError translates notamclauncher-owned error text and leaves all other details intact.
 func displayError(err error) string {
 	if err == nil {
 		return ""

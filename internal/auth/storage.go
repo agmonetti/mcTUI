@@ -8,19 +8,19 @@ import (
 	"path/filepath"
 	"sync"
 
-	"mcTUI/internal/config"
+	"github.com/agmonetti/notamclauncher/internal/config"
 )
 
 var (
 	storageMu sync.RWMutex
-	// DefaultClientID can be overridden by MCTUI_MSA_CLIENT_ID environment variable.
+	// DefaultClientID can be overridden by NOTAMCLAUNCHER_MSA_CLIENT_ID environment variable.
 	// We default to the official Microsoft/Minecraft Client ID (displays "Minecraft" in browser).
 	DefaultClientID = "00000000402b5328"
 )
 
 // GetClientID returns the Azure Client ID used for Microsoft OAuth.
 func GetClientID() string {
-	if env := os.Getenv("MCTUI_MSA_CLIENT_ID"); env != "" {
+	if env := os.Getenv("NOTAMCLAUNCHER_MSA_CLIENT_ID"); env != "" {
 		return env
 	}
 	return DefaultClientID
@@ -44,7 +44,7 @@ func OfflineUUID(username string) string {
 
 // AccountsPath returns the file path for accounts.json under the app data directory.
 func AccountsPath() string {
-	return config.AppDataDir("mctui", "accounts.json")
+	return config.AppDataDir("notamclauncher", "accounts.json")
 }
 
 // LoadStorage loads the accounts configuration. If the file doesn't exist, it returns

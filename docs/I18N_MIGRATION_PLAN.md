@@ -1,10 +1,10 @@
-# Plan de migración y arquitectura técnica: i18n (Internacionalización) en mcTUI
+# Plan de migración y arquitectura técnica: i18n (Internacionalización) en notamclauncher
 
 > **Estado:** Propuesta de arquitectura y evaluación de impacto.  
 > **Fecha:** 2026-09-26  
 > **Idiomas iniciales:** Inglés (`en`, idioma base/fallback) y Español (`es`).  
 > **Enfoque técnico:** Estándar Go (`go:embed` + JSON), cero dependencias externas, fallback determinista y persistencia en configuración global.
-> **Requisito mandatorio:** mcTUI solo funciona si el usuario cuenta con una copia de Minecraft: Java Edition comprada y descargada oficialmente en su equipo (`~/.minecraft` o `%APPDATA%\.minecraft`). No brinda soporte a versiones no autorizadas.
+> **Requisito mandatorio:** notamclauncher solo funciona si el usuario cuenta con una copia de Minecraft: Java Edition comprada y descargada oficialmente en su equipo (`~/.minecraft` o `%APPDATA%\.minecraft`). No brinda soporte a versiones no autorizadas.
 
 
 ---
@@ -13,10 +13,10 @@
 
 ### 1.1. ¿Vale la pena la migración a i18n?
 **Sí, absolutamente.**  
-Minecraft es un fenómeno global donde las comunidades de habla hispana, portuguesa, francesa, etc., representan una porción masiva de los jugadores de escritorio. mcTUI nació con textos mixtos (menús principales en inglés tipo CS:GO, pero mensajes de error, advertencias de Reset Configs y gestor de instancias en español). Unificar y profesionalizar todos los textos bajo un sistema i18n:
+Minecraft es un fenómeno global donde las comunidades de habla hispana, portuguesa, francesa, etc., representan una porción masiva de los jugadores de escritorio. notamclauncher nació con textos mixtos (menús principales en inglés tipo CS:GO, pero mensajes de error, advertencias de Reset Configs y gestor de instancias en español). Unificar y profesionalizar todos los textos bajo un sistema i18n:
 - Da coherencia visual a la aplicación.
 - Permite a la comunidad contribuir con nuevas traducciones (JSONs aislados) sin tocar una sola línea de código Go.
-- Convierte a mcTUI en una alternativa de primer nivel frente a Prism Launcher o CurseForge App para usuarios de cualquier región.
+- Convierte a notamclauncher en una alternativa de primer nivel frente a Prism Launcher o CurseForge App para usuarios de cualquier región.
 
 ### 1.2. El factor crítico: ¿Cuándo implementarlo respecto a la Fase 5?
 Actualmente nos encontramos a mitad de la **Fase 5 (Instancias y Mods)**:
@@ -47,7 +47,7 @@ A partir de la investigación previa (`I18N_INVESTIGATION.md`), se formalizan la
 
 ### Política 3: Retiro definitivo del Roadmap externo
 - El panel derecho de "Future Changes" que descargaba dinámicamente `roadmap.json` desde GitHub queda **oficialmente deprecado y eliminado**.
-- *Motivo:* mcTUI ya no es un prototipo inicial; el plan de implementación reside en el repositorio (`PHASE_5_IMPLEMENTATION_PLAN.md`). El panel además ya se oculta en terminales estrechas y en pantallas de subflujo. Retirarlo simplifica el modelo, elimina una petición HTTP innecesaria en el arranque y libera espacio horizontal para textos en otros idiomas.
+- *Motivo:* notamclauncher ya no es un prototipo inicial; el plan de implementación reside en el repositorio (`PHASE_5_IMPLEMENTATION_PLAN.md`). El panel además ya se oculta en terminales estrechas y en pantallas de subflujo. Retirarlo simplifica el modelo, elimina una petición HTTP innecesaria en el arranque y libera espacio horizontal para textos en otros idiomas.
 
 ### Política 4: Fallback determinista a inglés (`en`)
 - Si una clave no existe en el idioma activo (por ejemplo, una traducción incompleta en español), el motor recurre automáticamente a la versión en inglés.
@@ -57,7 +57,7 @@ A partir de la investigación previa (`I18N_INVESTIGATION.md`), se formalizan la
 
 ## 3. Arquitectura técnica del paquete `internal/i18n`
 
-Se descartan librerías de terceros pesadas (`nicksnyder/go-i18n`) o herramientas complejas de generación de código (`golang.org/x/text`). mcTUI utiliza la biblioteca estándar de Go con `embed.FS`:
+Se descartan librerías de terceros pesadas (`nicksnyder/go-i18n`) o herramientas complejas de generación de código (`golang.org/x/text`). notamclauncher utiliza la biblioteca estándar de Go con `embed.FS`:
 
 ```text
 internal/
@@ -224,7 +224,7 @@ Las terminales no son navegadores web con auto-reflow. El español suele requeri
 
 ### 5.1. Comparativa de términos y riesgos de layout
 
-| Concepto | Inglés (`en`) | Español (`es`) | Riesgo en mcTUI |
+| Concepto | Inglés (`en`) | Español (`es`) | Riesgo en notamclauncher |
 | --- | --- | --- | --- |
 | Menú Jugar | `Play (%s)` | `Jugar (%s)` | Bajo (cabe perfectamente). |
 | Selector Loader | `Modloader: %s` | `Cargador: %s` | Usar "Cargador" o "Modloader" para no sobrepasar el ancho de 28 caracteres del panel izquierdo. |
@@ -382,6 +382,6 @@ Para evitar dispersión y mantener la estabilidad de la rama `main`:
 
 ## 8. Conclusión y recomendación de ejecución
 
-La migración a i18n es **totalmente viable, limpia y de gran valor para mcTUI**.
+La migración a i18n es **totalmente viable, limpia y de gran valor para notamclauncher**.
 
 Implementar la **Etapa 1** ahora mismo dejará listos los cimientos para que la **Fase 5C (Modrinth)** se construya de forma limpia e internacionalizada desde su primera línea de código, evitando tener que refactorizarla más adelante.

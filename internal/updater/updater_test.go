@@ -63,25 +63,25 @@ func TestIsNewer(t *testing.T) {
 func TestParseChecksums(t *testing.T) {
 	input := `
 # Comment line
-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  mctui-linux-amd64
-a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3 *mctui-windows-amd64.exe
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  notamclauncher-linux-amd64
+a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3 *notamclauncher-windows-amd64.exe
 `
 	checksums := ParseChecksums(input)
 	if len(checksums) != 2 {
 		t.Fatalf("expected 2 checksum entries, got %d", len(checksums))
 	}
-	if checksums["mctui-linux-amd64"] != "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" {
-		t.Errorf("unexpected linux checksum: %s", checksums["mctui-linux-amd64"])
+	if checksums["notamclauncher-linux-amd64"] != "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" {
+		t.Errorf("unexpected linux checksum: %s", checksums["notamclauncher-linux-amd64"])
 	}
-	if checksums["mctui-windows-amd64.exe"] != "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3" {
-		t.Errorf("unexpected windows checksum: %s", checksums["mctui-windows-amd64.exe"])
+	if checksums["notamclauncher-windows-amd64.exe"] != "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3" {
+		t.Errorf("unexpected windows checksum: %s", checksums["notamclauncher-windows-amd64.exe"])
 	}
 }
 
 func TestVerifySHA256(t *testing.T) {
 	tmpDir := t.TempDir()
 	sampleFile := filepath.Join(tmpDir, "test.bin")
-	content := []byte("Hello, mcTUI world!")
+	content := []byte("Hello, notamclauncher world!")
 	if err := os.WriteFile(sampleFile, content, 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -101,14 +101,14 @@ func TestVerifySHA256(t *testing.T) {
 }
 
 func TestTargetAssetName(t *testing.T) {
-	if got := TargetAssetName("linux", "amd64"); got != "mctui-linux-amd64" {
-		t.Errorf("got %s, want mctui-linux-amd64", got)
+	if got := TargetAssetName("linux", "amd64"); got != "notamclauncher-linux-amd64" {
+		t.Errorf("got %s, want notamclauncher-linux-amd64", got)
 	}
-	if got := TargetAssetName("windows", "amd64"); got != "mctui-windows-amd64.exe" {
-		t.Errorf("got %s, want mctui-windows-amd64.exe", got)
+	if got := TargetAssetName("windows", "amd64"); got != "notamclauncher-windows-amd64.exe" {
+		t.Errorf("got %s, want notamclauncher-windows-amd64.exe", got)
 	}
-	if got := TargetAssetName("darwin", "arm64"); got != "mctui-darwin-arm64" {
-		t.Errorf("got %s, want mctui-darwin-arm64", got)
+	if got := TargetAssetName("darwin", "arm64"); got != "notamclauncher-darwin-arm64" {
+		t.Errorf("got %s, want notamclauncher-darwin-arm64", got)
 	}
 }
 
@@ -117,11 +117,11 @@ func TestCheckWithURL(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{
 			"tag_name": "v2.1.0",
-			"html_url": "https://github.com/agmonetti/mcTUI/releases/tag/v2.1.0",
+			"html_url": "https://github.com/agmonetti/notamclauncher/releases/tag/v2.1.0",
 			"body": "Fixes and new features",
 			"assets": [
 				{"name": "checksums.txt", "size": 100, "browser_download_url": "https://example.com/checksums.txt"},
-				{"name": "mctui-linux-amd64", "size": 5000000, "browser_download_url": "https://example.com/binary"}
+				{"name": "notamclauncher-linux-amd64", "size": 5000000, "browser_download_url": "https://example.com/binary"}
 			]
 		}`))
 	}))
@@ -154,8 +154,8 @@ func TestCheckWithURL(t *testing.T) {
 
 func TestApplyUpdate(t *testing.T) {
 	tmpDir := t.TempDir()
-	origBin := filepath.Join(tmpDir, "mctui")
-	newBin := filepath.Join(tmpDir, "mctui.tmp")
+	origBin := filepath.Join(tmpDir, "notamclauncher")
+	newBin := filepath.Join(tmpDir, "notamclauncher.tmp")
 
 	if err := os.WriteFile(origBin, []byte("v1"), 0755); err != nil {
 		t.Fatal(err)
@@ -213,7 +213,7 @@ func TestCheckWithURLStatusRateLimitUsesGHFallback(t *testing.T) {
 	ghLatestReleaseJSON = func(string) ([]byte, error) {
 		return []byte(`{"tag_name":"v2.1.0","assets":[` +
 			`{"name":"checksums.txt","browser_download_url":"https://example.com/checksums.txt"},` +
-			`{"name":"mctui-linux-amd64","browser_download_url":"https://example.com/mctui"}]}`), nil
+			`{"name":"notamclauncher-linux-amd64","browser_download_url":"https://example.com/notamclauncher"}]}`), nil
 	}
 
 	result := CheckWithURLStatus(server.URL, "v2.0.0")
@@ -262,7 +262,7 @@ func TestGHAPIPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := "repos/agmonetti/mcTUI/releases/latest"; got != want {
+	if want := "repos/agmonetti/notamclauncher/releases/latest"; got != want {
 		t.Errorf("ghAPIPath() = %q, want %q", got, want)
 	}
 

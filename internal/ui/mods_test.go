@@ -8,14 +8,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/agmonetti/notamclauncher/internal/i18n"
+	"github.com/agmonetti/notamclauncher/internal/instances"
+	"github.com/agmonetti/notamclauncher/internal/modrinth"
+	"github.com/agmonetti/notamclauncher/internal/mods"
+	"github.com/agmonetti/notamclauncher/internal/operationlock"
+	"github.com/agmonetti/notamclauncher/internal/packs"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"mcTUI/internal/i18n"
-	"mcTUI/internal/instances"
-	"mcTUI/internal/modrinth"
-	"mcTUI/internal/mods"
-	"mcTUI/internal/operationlock"
-	"mcTUI/internal/packs"
 )
 
 func TestModsUIOfflineLifecycle(t *testing.T) {

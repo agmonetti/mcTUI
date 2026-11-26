@@ -1,15 +1,15 @@
 // Package theme provides color theme definitions, built-in presets,
-// and user theme loading for mcTUI.
+// and user theme loading for notamclauncher.
 package theme
 
 import (
 	"strings"
 )
 
-// DefaultThemeID is the ID of the default theme ("mctui").
-const DefaultThemeID = "mctui"
+// DefaultThemeID is the ID of the default theme ("notamclauncher").
+const DefaultThemeID = "notamclauncher"
 
-// Theme defines the complete color palette and metadata for the mcTUI interface.
+// Theme defines the complete color palette and metadata for the notamclauncher interface.
 type Theme struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`

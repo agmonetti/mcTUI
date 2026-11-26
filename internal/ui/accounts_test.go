@@ -8,7 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"mcTUI/internal/auth"
+	"github.com/agmonetti/notamclauncher/internal/auth"
 )
 
 func TestAccountsScreenNavigationAndSwitch(t *testing.T) {

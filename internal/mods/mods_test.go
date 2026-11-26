@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"mcTUI/internal/operationlock"
+	"github.com/agmonetti/notamclauncher/internal/operationlock"
 )
 
 func jar(t *testing.T, filename string, entries map[string]string) []byte {

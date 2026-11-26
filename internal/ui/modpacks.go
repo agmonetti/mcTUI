@@ -17,10 +17,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"mcTUI/internal/i18n"
-	"mcTUI/internal/instances"
-	"mcTUI/internal/modpacks"
-	"mcTUI/internal/modrinth"
+	"github.com/agmonetti/notamclauncher/internal/i18n"
+	"github.com/agmonetti/notamclauncher/internal/instances"
+	"github.com/agmonetti/notamclauncher/internal/modpacks"
+	"github.com/agmonetti/notamclauncher/internal/modrinth"
 )
 
 type modpackHomeOption struct {

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"unicode"
 
-	"mcTUI/internal/config"
+	"github.com/agmonetti/notamclauncher/internal/config"
 )
 
 const LegacyID = "legacy"
@@ -65,11 +65,11 @@ func RuntimeDir(root string, in Instance) (string, error) {
 }
 
 // BackupDir keeps managed Reset history separate from mutable game data.
-// The legacy entry retains its existing in-game history unchanged.
+// The legacy entry stores Reset history inside its game directory.
 func BackupDir(root string, in Instance) (string, error) {
 	if in.ID == LegacyID && in.Kind == "legacy" {
 		gameDir, err := config.MinecraftDirChecked()
-		return filepath.Join(gameDir, "mctui-backups"), err
+		return filepath.Join(gameDir, "notamclauncher-backups"), err
 	}
 	if in.Kind != "managed" || !validID(in.ID) || !filepath.IsAbs(root) {
 		return "", fmt.Errorf("invalid managed backup path")

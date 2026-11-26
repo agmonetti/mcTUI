@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"mcTUI/internal/operationlock"
+	"github.com/agmonetti/notamclauncher/internal/operationlock"
 )
 
 func TestRetireRestoreAndPermanentDelete(t *testing.T) {

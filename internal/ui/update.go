@@ -9,19 +9,19 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"mcTUI/internal/auth"
-	"mcTUI/internal/config"
-	"mcTUI/internal/fabric"
-	"mcTUI/internal/i18n"
-	"mcTUI/internal/instances"
-	"mcTUI/internal/launcher"
-	"mcTUI/internal/modpacks"
-	"mcTUI/internal/mojang"
-	"mcTUI/internal/resetconfigs"
-	"mcTUI/internal/roadmap"
-	"mcTUI/internal/theme"
-	"mcTUI/internal/updater"
-	"mcTUI/internal/worlds"
+	"github.com/agmonetti/notamclauncher/internal/auth"
+	"github.com/agmonetti/notamclauncher/internal/config"
+	"github.com/agmonetti/notamclauncher/internal/fabric"
+	"github.com/agmonetti/notamclauncher/internal/i18n"
+	"github.com/agmonetti/notamclauncher/internal/instances"
+	"github.com/agmonetti/notamclauncher/internal/launcher"
+	"github.com/agmonetti/notamclauncher/internal/modpacks"
+	"github.com/agmonetti/notamclauncher/internal/mojang"
+	"github.com/agmonetti/notamclauncher/internal/resetconfigs"
+	"github.com/agmonetti/notamclauncher/internal/roadmap"
+	"github.com/agmonetti/notamclauncher/internal/theme"
+	"github.com/agmonetti/notamclauncher/internal/updater"
+	"github.com/agmonetti/notamclauncher/internal/worlds"
 	"time"
 )
 
@@ -818,7 +818,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					if m.instance.ID == "" {
 						m.resetDir, m.resetErr = config.MinecraftDirChecked()
-						m.resetBackupRoot = filepath.Join(m.resetDir, "mctui-backups")
+						m.resetBackupRoot = filepath.Join(m.resetDir, "notamclauncher-backups")
 					} else {
 						m.resetDir, m.resetErr = instances.GameDir(m.dataRoot, m.instance)
 						if m.resetErr == nil {

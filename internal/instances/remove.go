@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"mcTUI/internal/operationlock"
+	"github.com/agmonetti/notamclauncher/internal/operationlock"
 )
 
 // RetiredList returns managed instances removed from the picker but still recoverable.

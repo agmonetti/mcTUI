@@ -10,9 +10,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"mcTUI/internal/config"
-	"mcTUI/internal/instances"
-	"mcTUI/internal/resetconfigs"
+	"github.com/agmonetti/notamclauncher/internal/config"
+	"github.com/agmonetti/notamclauncher/internal/instances"
+	"github.com/agmonetti/notamclauncher/internal/resetconfigs"
 )
 
 func resetKey(t *testing.T, m Model, key tea.KeyMsg) (Model, tea.Cmd) {
@@ -313,7 +313,7 @@ func TestResetCommandsKeepCapturedDirectoryAfterSelectionChanges(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	m := Model{state: resetConfirmScreen, resetDir: legacy, resetBackupRoot: filepath.Join(legacy, "mctui-backups"), resetMode: resetconfigs.Backup}
+	m := Model{state: resetConfirmScreen, resetDir: legacy, resetBackupRoot: filepath.Join(legacy, "notamclauncher-backups"), resetMode: resetconfigs.Backup}
 	m, cmd := resetKey(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	m.instance = b // A selection change must not redirect an already confirmed command.
 	msg := cmd().(ResetDoneMsg)
@@ -544,7 +544,7 @@ func TestResetScreensFitTerminal(t *testing.T) {
 			if state == resetConfirmScreen && !strings.Contains(view, "PERMANENT DELETION") {
 				t.Errorf("deletion warning hidden at %dx%d", m.width, m.height)
 			}
-			if !strings.Contains(view, "mcTUI") || !strings.Contains(view, "OPTIONS") {
+			if !strings.Contains(view, "notamclauncher") || !strings.Contains(view, "OPTIONS") {
 				t.Errorf("dashboard context missing at %dx%d", m.width, m.height)
 			}
 		}

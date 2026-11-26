@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"mcTUI/internal/i18n"
+	"github.com/agmonetti/notamclauncher/internal/i18n"
 )
 
 func TestFormatRelativeTimeUsesSelectedLanguage(t *testing.T) {

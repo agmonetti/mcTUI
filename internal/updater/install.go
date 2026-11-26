@@ -19,7 +19,7 @@ func TargetAssetName(goos, goarch string) string {
 	if goos == "windows" {
 		ext = ".exe"
 	}
-	return fmt.Sprintf("mctui-%s-%s%s", goos, goarch, ext)
+	return fmt.Sprintf("notamclauncher-%s-%s%s", goos, goarch, ext)
 }
 
 // ParseChecksums parses a standard sha256sum file into a map of filename -> sha256 hex.
@@ -70,7 +70,7 @@ func DownloadFile(url, destPath string, onProgress func(written, total int64)) e
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", "mcTUI-Updater")
+	req.Header.Set("User-Agent", "notamclauncher-Updater")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -176,7 +176,7 @@ func InstallRelease(rel Release, onProgress ProgressCallback) error {
 	if err != nil {
 		return fmt.Errorf("failed to create request for checksums: %w", err)
 	}
-	req.Header.Set("User-Agent", "mcTUI-Updater")
+	req.Header.Set("User-Agent", "notamclauncher-Updater")
 	resp, err := client.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to download checksums.txt")
@@ -204,7 +204,7 @@ func InstallRelease(rel Release, onProgress ProgressCallback) error {
 	}
 
 	execDir := filepath.Dir(execPath)
-	tempFile := filepath.Join(execDir, fmt.Sprintf(".mctui-update-%d.tmp", os.Getpid()))
+	tempFile := filepath.Join(execDir, fmt.Sprintf(".notamclauncher-update-%d.tmp", os.Getpid()))
 	defer func() {
 		_ = os.Remove(tempFile)
 	}()

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"mcTUI/internal/i18n"
+	"github.com/agmonetti/notamclauncher/internal/i18n"
 )
 
 func TestDisplayErrorTranslatesOwnedCopyAndPreservesDetails(t *testing.T) {

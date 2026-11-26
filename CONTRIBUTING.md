@@ -1,6 +1,6 @@
-# Contributing to mcTUI
+# Contributing to notamclauncher
 
-Thanks for your interest in contributing to mcTUI. Bug reports, documentation improvements, and code contributions are welcome.
+Thanks for your interest in contributing to notamclauncher. Bug reports, documentation improvements, and code contributions are welcome.
 
 ## Before you start
 
@@ -20,7 +20,7 @@ Please do not include compiled binaries, personal configuration, credentials, or
 
 ## Reporting bugs
 
-When opening an issue, include the operating system, mcTUI version, steps to reproduce the problem, and any relevant error output. Remove account details, tokens, and other sensitive information before sharing logs.
+When opening an issue, include the operating system, notamclauncher version, steps to reproduce the problem, and any relevant error output. Remove account details, tokens, and other sensitive information before sharing logs.
 
 ## License
 

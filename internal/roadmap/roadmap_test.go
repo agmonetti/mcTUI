@@ -3,7 +3,7 @@ package roadmap
 import (
 	"testing"
 
-	"mcTUI/internal/i18n"
+	"github.com/agmonetti/notamclauncher/internal/i18n"
 )
 
 func TestEmbeddedRoadmap(t *testing.T) {

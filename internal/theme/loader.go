@@ -6,12 +6,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"mcTUI/internal/config"
+	"github.com/agmonetti/notamclauncher/internal/config"
 )
 
 // ThemesDir returns the standard directory where custom user themes are stored.
 func ThemesDir() string {
-	return config.AppDataDir("mctui", "themes")
+	return config.AppDataDir("notamclauncher", "themes")
 }
 
 // LoadUserThemes reads all valid .json theme files located in the given directory.

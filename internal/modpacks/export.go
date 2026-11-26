@@ -19,8 +19,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"mcTUI/internal/instances"
-	"mcTUI/internal/operationlock"
+	"github.com/agmonetti/notamclauncher/internal/instances"
+	"github.com/agmonetti/notamclauncher/internal/operationlock"
 )
 
 // Export writes an offline, client-side mrpack. The selected override paths are
@@ -171,7 +171,7 @@ func (s Store) Export(ctx context.Context, in instances.Instance, output string,
 	}
 	// Build the archive entirely on the destination filesystem. The temp is
 	// never visible at the requested path, even if Inspect or cancellation fails.
-	tmp, err := os.CreateTemp(filepath.Dir(output), ".mctui-export-*.mrpack")
+	tmp, err := os.CreateTemp(filepath.Dir(output), ".notamclauncher-export-*.mrpack")
 	if err != nil {
 		return err
 	}
@@ -354,7 +354,7 @@ func exportPrivatePath(path string) error {
 				return fmt.Errorf("private or generated instance data")
 			}
 		}
-		if strings.HasPrefix(component, ".mctui") {
+		if strings.HasPrefix(component, ".notamclauncher") {
 			return fmt.Errorf("private instance metadata")
 		}
 	}

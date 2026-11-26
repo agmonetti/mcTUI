@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"mcTUI/internal/modrinth"
+	"github.com/agmonetti/notamclauncher/internal/modrinth"
 )
 
 // Identify links local JARs only when Modrinth confirms their current SHA-512.

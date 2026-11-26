@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"mcTUI/internal/operationlock"
+	"github.com/agmonetti/notamclauncher/internal/operationlock"
 )
 
 func TestGameLifecycle(t *testing.T) {

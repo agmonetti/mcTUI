@@ -6,8 +6,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"mcTUI/internal/i18n"
-	"mcTUI/internal/worlds"
+	"github.com/agmonetti/notamclauncher/internal/i18n"
+	"github.com/agmonetti/notamclauncher/internal/worlds"
 )
 
 func (m Model) updateWorldCopy(msg tea.Msg) (tea.Model, tea.Cmd, bool) {

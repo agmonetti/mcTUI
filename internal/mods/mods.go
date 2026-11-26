@@ -17,7 +17,7 @@ import (
 	"strings"
 	"unicode"
 
-	"mcTUI/internal/operationlock"
+	"github.com/agmonetti/notamclauncher/internal/operationlock"
 )
 
 const (

@@ -3,9 +3,9 @@
 > Estado: 5A, 5B y 5C cerradas para Linux x86_64; el usuario confirma pruebas manuales y locales de 5C y corrección de los fallos encontrados. 5D está implementada en el árbol de trabajo y el usuario ya instaló modpacks sin fallas; falta registrar por separado la validación de actualización, exportación y recuperación. 5E permanece pendiente.
 > Base de código revisada: `119b8ff` — `Accept alternate Modrinth CDN host` (incluye los commits de catálogo y ajustes de TUI anteriores).
 > Antecedente: [RESET_CONFIGS.md](RESET_CONFIGS.md), sección «Fase 5: gestor de mods».
-> Objetivo solicitado: integración completa en mcTUI, tomando Prism Launcher como referencia funcional.
+> Objetivo solicitado: integración completa en notamclauncher, tomando Prism Launcher como referencia funcional.
 > Este documento conserva la investigación, la propuesta técnica, las tareas y las decisiones abiertas. Una propuesta aquí no equivale a una funcionalidad implementada ni a una decisión de producto aprobada.
-> **Requisito mandatorio:** mcTUI solo funciona si el usuario posee Minecraft: Java Edition comprado y descargado oficialmente en su sistema. mcTUI no distribuye el juego de forma independiente ni evade licencias.
+> **Requisito mandatorio:** notamclauncher solo funciona si el usuario posee Minecraft: Java Edition comprado y descargado oficialmente en su sistema. notamclauncher no distribuye el juego de forma independiente ni evade licencias.
 
 
 ## 1. Objetivo y definición de alcance
@@ -47,7 +47,7 @@ Su documentación describe:
 - Importación de packs `.zip` y `.mrpack`; algunos archivos de CurseForge pueden requerir intervención fuera del launcher [S5].
 - Selección de Java y memoria, incluidos ajustes específicos de instancia [S6].
 
-**Aplicación a mcTUI:** adoptar el modelo centrado en instancias, no limitarse a agregar una pantalla de descarga de `.jar`.
+**Aplicación a notamclauncher:** adoptar el modelo centrado en instancias, no limitarse a agregar una pantalla de descarga de `.jar`.
 
 ### 2.2. Modrinth
 
@@ -86,7 +86,7 @@ Fabric Meta permite descubrir versiones y solicitar el perfil correspondiente al
 
 Forge/NeoForge no se implementan cambiando el nombre del filtro: requieren instalación y lanzamiento compatibles con sus perfiles, bibliotecas y procesadores. Definir versiones soportadas y validar el flujo real de cliente; no extrapolar instrucciones de servidor [S15].
 
-mcTUI actualmente lanza offline/LAN. Gestión de mods no incorpora autenticación oficial por sí sola. Si la meta incluye servidores autenticados, planificar Microsoft/Minecraft como trabajo separado con credenciales protegidas y sin mecanismos de evasión.
+notamclauncher actualmente lanza offline/LAN. Gestión de mods no incorpora autenticación oficial por sí sola. Si la meta incluye servidores autenticados, planificar Microsoft/Minecraft como trabajo separado con credenciales protegidas y sin mecanismos de evasión.
 
 ## 3. Estado real del repositorio y cambios necesarios
 
@@ -122,7 +122,7 @@ Las comprobaciones previas a este plan pasaron tests, race, vet y compilación c
 Layout conceptual, pendiente de fijar ubicaciones por sistema:
 
 ```text
-datos-mctui/
+datos-notamclauncher/
 ├── instances/
 │   └── <id-estable>/
 │       ├── instance.json
@@ -241,8 +241,8 @@ Instancias → Instancia seleccionada
 
 ### Concurrencia y juego en ejecución
 
-- [ ] Serializar mutaciones por instancia, incluyendo procesos simultáneos de mcTUI.
-- [ ] Si mcTUI conoce que esa instancia está ejecutándose, bloquear operaciones incompatibles.
+- [ ] Serializar mutaciones por instancia, incluyendo procesos simultáneos de notamclauncher.
+- [ ] Si notamclauncher conoce que esa instancia está ejecutándose, bloquear operaciones incompatibles.
 - [ ] No usar únicamente PID como prueba persistente: puede reutilizarse.
 - [ ] Procesos iniciados por otros launchers siguen siendo «no verificados» si no se detectan con certeza.
 - [ ] Mantener advertencia de cerrar Minecraft y manejo de archivos en uso. La fase 3 aplazada no se convierte mágicamente en detección multiplataforma completa.
@@ -370,17 +370,17 @@ Usar tests Go con directorios temporales, `httptest` y procesos simulados para l
 
 ### Pruebas manuales de versiones
 
-La entrada real a Minecraft por versión/loader se valida manualmente por el usuario en el equipo objetivo; el agente no debe intentar instalar y arrancar por su cuenta cada versión. El agente cubre la lógica con tests automatizados, ayuda a preparar la matriz y analiza los resultados/logs aportados. Registrar por cada intento: fecha, commit/build, OS/arquitectura, Minecraft, loader y versión, Java, resultado de preparación/descarga, si llegó al menú, salida/código y `mctui_latest.log` (o la ruta disponible). Un test automatizado o una compilación cruzada no sustituye esta evidencia manual.
+La entrada real a Minecraft por versión/loader se valida manualmente por el usuario en el equipo objetivo; el agente no debe intentar instalar y arrancar por su cuenta cada versión. El agente cubre la lógica con tests automatizados, ayuda a preparar la matriz y analiza los resultados/logs aportados. Registrar por cada intento: fecha, commit/build, OS/arquitectura, Minecraft, loader y versión, Java, resultado de preparación/descarga, si llegó al menú, salida/código y `notamclauncher_latest.log` (o la ruta disponible). Un test automatizado o una compilación cruzada no sustituye esta evidencia manual.
 
 #### Protocolo para cerrar el corte vertical 5A
 
-Usar un build de este árbol de trabajo (registrar `git rev-parse HEAD` y si hay cambios locales). En la TUI, crear dos instancias Vanilla de la misma versión con `i` → `n`; jugar A hasta el menú, salir normalmente y comprobar que `mctui_latest.log` quedó en el `minecraft/` de A. Repetir con B y confirmar que `mods/`, `config/` y `saves/` de A no aparecen en B. En A, probar backup y restauración desde Reset; cambiar a B y comprobar que sus datos e historial no cambiaron. Volver a la instalación heredada, comprobar que conserva su ruta e historial y jugarla sin alterar A/B. Durante una partida, intentar Reset desde otra TUI sobre esa misma instancia: debe responder «instance busy» sin mutaciones. **No** usar cierre forzado como prueba segura: si Java sobrevive a mcTUI, el lock puede liberarse; cerrar Minecraft antes de volver a operar.
+Usar un build de este árbol de trabajo (registrar `git rev-parse HEAD` y si hay cambios locales). En la TUI, crear dos instancias Vanilla de la misma versión con `i` → `n`; jugar A hasta el menú, salir normalmente y comprobar que `notamclauncher_latest.log` quedó en el `minecraft/` de A. Repetir con B y confirmar que `mods/`, `config/` y `saves/` de A no aparecen en B. En A, probar backup y restauración desde Reset; cambiar a B y comprobar que sus datos e historial no cambiaron. Volver a la instalación heredada, comprobar que conserva su ruta e historial y jugarla sin alterar A/B. Durante una partida, intentar Reset desde otra TUI sobre esa misma instancia: debe responder «instance busy» sin mutaciones. **No** usar cierre forzado como prueba segura: si Java sobrevive a notamclauncher, el lock puede liberarse; cerrar Minecraft antes de volver a operar.
 
 Anotar en la tabla siguiente OS/arquitectura, build, versión, loader, Java, preparación, llegada al menú, salida y log. Hacerlo en cada plataforma que se anuncie compatible; los binarios compilados para otro OS no prueban ejecución. No marcar A02/A03/A06/A08/A10/A11 como cerradas solo por tests o compilación.
 
 **Cierre de validación manual del corte vertical 5A (2026-09-26):** El usuario confirma y da por cerrado el protocolo completo en Linux x86_64:
 - Creación de instancias Vanilla independientes (`i` → `n`).
-- Arranque y juego hasta el menú principal con salida limpia (código 0) y comprobación de `mctui_latest.log` en el `minecraft/` de cada instancia.
+- Arranque y juego hasta el menú principal con salida limpia (código 0) y comprobación de `notamclauncher_latest.log` en el `minecraft/` de cada instancia.
 - Aislamiento estricto verificado: `mods/`, `config/` y `saves/` de una instancia no contaminan la otra.
 - Reset/restore probado en una instancia sin alterar datos ni historial de otra instancia ni de la instalación heredada.
 - Instalación heredada (legacy) accesible e intacta, conservando su ruta e historial.
@@ -395,10 +395,10 @@ La validación en Windows y macOS queda diferida hasta disponer de entornos fís
 | No confirmada | No confirmado | Arch Linux (reportado; arquitectura/build no confirmados) | 1.20.4 | Vanilla | No confirmado | Sin fallas (reportado; detalles no confirmados) | No confirmado | No confirmado |
 | No confirmada | No confirmado | Arch Linux (reportado; arquitectura/build no confirmados) | 1.21.1 | Vanilla | No confirmado | Sin fallas (reportado; detalles no confirmados) | No confirmado | No confirmado |
 | No confirmada | No confirmado | Arch Linux (reportado; arquitectura/build no confirmados) | 1.20.4 | Fabric (loader exacto no confirmado) | No confirmado | Sin fallas (reportado; detalles no confirmados) | No confirmado | No confirmado |
-| No confirmada | `go run .` (árbol local) | Linux / Arch Linux reportado; arquitectura no confirmada | 1.21.2 | Vanilla, instancia `prueba` | Automático (Java 21+) | Preparación exitosa | Sí; salida normal, código 0 | `instances/50ebfeb76d00e58c87638b8e430aa64f/minecraft/mctui_latest.log` |
-| No confirmada | `go run .` (árbol local) | Linux / Arch Linux reportado; arquitectura no confirmada | 1.21.2 | Vanilla, instancia `test Fase 5` | Manual Java 27 | Preparación exitosa | Sí; salida normal, código 0 | `instances/2efef7fa3925f5271b674d528bbda27f/minecraft/mctui_latest.log` |
-| 2026-09-26 | `ccb659beffccf3716cca6966de7a48b98ba5f7e0` (modo de ejecución/estado local no registrados) | Linux x86_64 | 26.1 | Vanilla, instancia `A` | Automático; OpenJDK 27 en PATH (binario exacto no registrado) | Usuario reporta funcionamiento exitoso | Usuario reporta funcionamiento exitoso; evidencia detallada no transcrita | GameDir mostrado: `/home/agus-hy/.local/share/mctui/instances/2275cc15ad13672cd0ecad603758d93a/minecraft`; log esperado: `mctui_latest.log` dentro de ese directorio (no se registró su lectura) |
-| 2026-09-26 | `2a9f5e9` (`go run .`) | Linux x86_64 | 1.21.2 / 26.1 | Vanilla, instancias A y B | Automático (Java 21+) | Preparación exitosa | Sí; llegada al menú y salida normal (código 0) | **Protocolo 5A cerrado:** aislamiento de carpetas (`mods`, `config`, `saves`), log en `minecraft/mctui_latest.log`, reset/restore independiente, legacy intacta y lock de exclusión («instance busy») confirmado por el usuario. |
+| No confirmada | `go run .` (árbol local) | Linux / Arch Linux reportado; arquitectura no confirmada | 1.21.2 | Vanilla, instancia `prueba` | Automático (Java 21+) | Preparación exitosa | Sí; salida normal, código 0 | `instances/50ebfeb76d00e58c87638b8e430aa64f/minecraft/notamclauncher_latest.log` |
+| No confirmada | `go run .` (árbol local) | Linux / Arch Linux reportado; arquitectura no confirmada | 1.21.2 | Vanilla, instancia `test Fase 5` | Manual Java 27 | Preparación exitosa | Sí; salida normal, código 0 | `instances/2efef7fa3925f5271b674d528bbda27f/minecraft/notamclauncher_latest.log` |
+| 2026-09-26 | `ccb659beffccf3716cca6966de7a48b98ba5f7e0` (modo de ejecución/estado local no registrados) | Linux x86_64 | 26.1 | Vanilla, instancia `A` | Automático; OpenJDK 27 en PATH (binario exacto no registrado) | Usuario reporta funcionamiento exitoso | Usuario reporta funcionamiento exitoso; evidencia detallada no transcrita | GameDir mostrado: `/home/agus-hy/.local/share/notamclauncher/instances/2275cc15ad13672cd0ecad603758d93a/minecraft`; log esperado: `notamclauncher_latest.log` dentro de ese directorio (no se registró su lectura) |
+| 2026-09-26 | `2a9f5e9` (`go run .`) | Linux x86_64 | 1.21.2 / 26.1 | Vanilla, instancias A y B | Automático (Java 21+) | Preparación exitosa | Sí; llegada al menú y salida normal (código 0) | **Protocolo 5A cerrado:** aislamiento de carpetas (`mods`, `config`, `saves`), log en `minecraft/notamclauncher_latest.log`, reset/restore independiente, legacy intacta y lock de exclusión («instance busy») confirmado por el usuario. |
 
 ### Plataformas
 
@@ -411,7 +411,7 @@ La validación en Windows y macOS queda diferida hasta disponer de entornos fís
 
 **Matriz para la próxima validación Windows (sin ejecutar aún):** usar una raíz de datos de prueba, no la instalación habitual; anotar build, versión de Windows, arquitectura, tipo de cuenta y ubicación de `%LOCALAPPDATA%`/`%APPDATA%`. Comprobar creación y aislamiento de instancias, instalación local/Modrinth y un `.mrpack` soportado; actualizar con `config/` modificado y verificar la decisión por archivo; exportar y reimportar en otra instancia; repetir con rutas que contengan espacios y Unicode, un destino ya existente, un archivo del juego abierto y una segunda TUI intentando mutar la misma instancia. Registrar error/ruta/estado de archivos y si queda una recuperación pendiente; no forzar una caída del proceso sobre datos reales. Compilación cruzada y tests ejecutados en Linux no validan ACL, renombrados, archivos abiertos ni antivirus en Windows.
 
-**Riesgo Windows concreto de 5D:** actualización y recuperación sincronizan directorios con `os.Open(dir).Sync()` y publican mediante renombrados/enlaces; el comportamiento frente a `FlushFileBuffers` sobre directorios, archivos en uso, ACL y antivirus debe comprobarse en Windows real. No se desactivó la sincronización para hacer pasar una compilación cruzada. Si falla, registrar operación, ruta, error y presencia de `.mctui-pack-update.json` sin borrar backups ni journal.
+**Riesgo Windows concreto de 5D:** actualización y recuperación sincronizan directorios con `os.Open(dir).Sync()` y publican mediante renombrados/enlaces; el comportamiento frente a `FlushFileBuffers` sobre directorios, archivos en uso, ACL y antivirus debe comprobarse en Windows real. No se desactivó la sincronización para hacer pasar una compilación cruzada. Si falla, registrar operación, ruta, error y presencia de `.notamclauncher-pack-update.json` sin borrar backups ni journal.
 
 ## 10. Decisiones pendientes antes de cada hito
 
@@ -433,17 +433,17 @@ Registrar decisión, motivo, fecha/commit y consecuencias. Las recomendaciones s
 
 ### 10.1. A01 — rutas y esquema (2026-09-25; base `c7e7af9`)
 
-**DEC-01, resuelta:** mantener `config.json` donde lo lee hoy `AppDataDir("mctui", "config.json")`: `%APPDATA%/mctui/config.json` en Windows y `~/.config/mctui/config.json` en Linux/macOS. No trasladar ese archivo ni cambiar el comportamiento de `Load`/`Save` en este corte. Los datos nuevos viven bajo una raíz independiente:
+**DEC-01, resuelta:** mantener `config.json` donde lo lee hoy `AppDataDir("notamclauncher", "config.json")`: `%APPDATA%/notamclauncher/config.json` en Windows y `~/.config/notamclauncher/config.json` en Linux/macOS. No trasladar ese archivo ni cambiar el comportamiento de `Load`/`Save` en este corte. Los datos nuevos viven bajo una raíz independiente:
 
 | OS | Raíz de datos nuevos | Instalación heredada (sin mover) |
 | --- | --- | --- |
-| Windows | `%LOCALAPPDATA%/mctui` (si falta: `~/AppData/Local/mctui`) | `%APPDATA%/.minecraft` (fallback actual) |
-| Linux | `${XDG_DATA_HOME:-~/.local/share}/mctui` | `~/.minecraft` |
-| macOS | `~/Library/Application Support/mctui` | `~/.minecraft` |
+| Windows | `%LOCALAPPDATA%/notamclauncher` (si falta: `~/AppData/Local/notamclauncher`) | `%APPDATA%/.minecraft` (fallback actual) |
+| Linux | `${XDG_DATA_HOME:-~/.local/share}/notamclauncher` | `~/.minecraft` |
+| macOS | `~/Library/Application Support/notamclauncher` | `~/.minecraft` |
 
 No depender de `XDG_CONFIG_HOME` para encontrar configuración anterior: el código actual no lo usa. Si una raíz nueva no puede resolverse, crearse o escribirse, mostrar el error; no usar el directorio de trabajo como fallback. `LOCALAPPDATA`/`XDG_DATA_HOME` deben ser rutas absolutas antes de usarse. Esta decisión no crea carpetas ni cambia las rutas actuales; implementar la resolución y sus pruebas en A02/A03.
 
-Bajo esa raíz: `instances/<id>/instance.json`, `instances/<id>/minecraft/` para datos mutables, `runtime/` para artefactos compartidos y `backups/<id>/` para respaldos nuevos. El runtime permanece en datos, no en una caché descartable: eliminarlo arbitrariamente rompería el arranque offline. La instalación heredada usa `MinecraftDirChecked()` y conserva `.minecraft/mctui-backups` y su historial, incluso si se selecciona otra instancia. No se borran ni enlazan carpetas de jugador para ahorrar espacio. La reutilización de artefactos heredados se decide en DEC-02 (§10.2); su validación aún no está implementada.
+Bajo esa raíz: `instances/<id>/instance.json`, `instances/<id>/minecraft/` para datos mutables, `runtime/` para artefactos compartidos y `backups/<id>/` para respaldos nuevos. El runtime permanece en datos, no en una caché descartable: eliminarlo arbitrariamente rompería el arranque offline. La instalación heredada usa `MinecraftDirChecked()` y guarda su historial en `.minecraft/notamclauncher-backups`, incluso si se selecciona otra instancia. No se borran ni enlazan carpetas de jugador para ahorrar espacio. La reutilización de artefactos heredados se decide en DEC-02 (§10.2); su validación aún no está implementada.
 
 **Esquema inicial:** `instance.json` versión 1, con `schema_version`, `id` opaco estable, `name` visible, `kind` (`managed` o `legacy`), `minecraft_version`, `loader` (`Vanilla` o `Fabric` inicialmente), `loader_version` exacta cuando aplique, `java_path` opcional y `memory_mb`. Reservar `legacy` como ID fijo de la referencia heredada; no escribir `instance.json` dentro de la `.minecraft` existente. `config.json` conserva los campos antiguos para esa referencia; la selección nueva se guarda en `selection.json` bajo la raíz de datos, sin reescribir la configuración heredada. Nombre visible y rutas externas nunca se usan como ID ni como segmento de ruta; rechazar IDs inválidos y versiones de esquema desconocidas. Escribir metadata nueva con temporal en el mismo directorio y propagación de errores; la recuperación ante interrupción y la semántica de renombrado en Windows deben validarse antes de prometer atomicidad. El registro de mods y procedencia de packs se añaden en sus hitos, no en A01.
 
@@ -451,7 +451,7 @@ Bajo esa raíz: `instances/<id>/instance.json`, `instances/<id>/minecraft/` para
 
 ### 10.2. Primer corte de 5A — runtime y persistencia (2026-09-25)
 
-**DEC-02, resuelta:** nuevas instancias comparten `datos-mctui/runtime` y nunca los directorios mutables del juego; la instancia heredada conserva `.minecraft` como gameDir **y** runtime por ahora. No copiar ni enlazar automáticamente artefactos de la instalación heredada: la comprobación actual de «archivo no vacío» no acredita integridad. Solo importar/reutilizar tras verificar hashes y metadata en A07; mientras tanto se permite descargar de nuevo, informando el costo de espacio. No mover ni borrar artefactos previos.
+**DEC-02, resuelta:** nuevas instancias comparten `datos-notamclauncher/runtime` y nunca los directorios mutables del juego; la instancia heredada conserva `.minecraft` como gameDir **y** runtime por ahora. No copiar ni enlazar automáticamente artefactos de la instalación heredada: la comprobación actual de «archivo no vacío» no acredita integridad. Solo importar/reutilizar tras verificar hashes y metadata en A07; mientras tanto se permite descargar de nuevo, informando el costo de espacio. No mover ni borrar artefactos previos.
 
 Implementado en este corte: `DataDirChecked()` resuelve la raíz nueva sin crearla; `launcher.Launch` recibe `gameDir` y `runtimeDir` separados, pasa `--gameDir` y `--assetsDir` apropiados, fija `cmd.Dir`, y guarda logs en el gameDir. El aislamiento de natives por OS/arquitectura sigue pendiente antes de usar el runtime compartido en la TUI; no se modifica la caché heredada en este corte. `internal/instances` persiste metadata versionada con ID aleatorio, lista la referencia heredada sin escribir en ella y permite crear, leer, seleccionar y renombrar instancias gestionadas; rechaza IDs/rutas inválidas y enlaces en metadata. Fallar la resolución de Fabric ya no cae a Vanilla en el lanzador.
 
@@ -507,17 +507,17 @@ Las rutas managed rechazan `minecraft/` o `runtime/` si son symlinks para evitar
 
 Las operaciones de Reset exponen variantes con `gameDir` explícito y la TUI fija esa raíz al confirmar el worker, sin resolverla otra vez durante la mutación. Se conservan las entradas heredadas y su historial existente. Un test cambia la selección a B tras confirmar backup/restauración de A y verifica que B no cambia.
 
-**Continuación:** Reset gestionado usa `datos-mctui/backups/<id>`; no ofrece selector de destino externo para evitar mezclar historiales de distintas instancias. El historial legacy y sus destinos externos previos permanecen intactos. La UI muestra la identidad y ruta capturadas al confirmar; tests con A, B y legacy prueban backup, rechazo de restaurar el backup de A en B y recuperación sin contaminación cruzada. Reset/restore y Play comparten lock entre procesos mientras mcTUI supervisa Java (límite de cierre forzado en §10.8). Pasan `go test ./...`, `go test -race ./...`, `go vet ./...` y `git diff --check`. **Validación manual reportada por el usuario:** Reset/restore de una instancia no afectó otra y la instalación legacy conservó acceso a sus datos e historial. Fecha, build y detalles de versión no fueron registrados. La cobertura de otros sistemas operativos queda diferida (§9); evaluar el cierre total de A10 según las plataformas que se declaren compatibles.
+**Continuación:** Reset gestionado usa `datos-notamclauncher/backups/<id>`; no ofrece selector de destino externo para evitar mezclar historiales de distintas instancias. El historial legacy y sus destinos externos previos permanecen intactos. La UI muestra la identidad y ruta capturadas al confirmar; tests con A, B y legacy prueban backup, rechazo de restaurar el backup de A en B y recuperación sin contaminación cruzada. Reset/restore y Play comparten lock entre procesos mientras notamclauncher supervisa Java (límite de cierre forzado en §10.8). Pasan `go test ./...`, `go test -race ./...`, `go vet ./...` y `git diff --check`. **Validación manual reportada por el usuario:** Reset/restore de una instancia no afectó otra y la instalación legacy conservó acceso a sus datos e historial. Fecha, build y detalles de versión no fueron registrados. La cobertura de otros sistemas operativos queda diferida (§9); evaluar el cierre total de A10 según las plataformas que se declaren compatibles.
 
 ### 10.8. A11 parcial — exclusión entre procesos para Reset/restore
 
 `RunAtWithBackups` y `RestoreAtRoot` mantienen un bloqueo no bloqueante del sistema operativo sobre un archivo estable del gameDir durante toda la mutación. No se elimina el archivo de bloqueo al liberar: un segundo proceso podría bloquear otro inode si se borrara. No depende de PID ni requiere recuperar locks obsoletos tras cerrar el proceso. Una TUI competidora recibe un error «instance busy» sin tocar `mods/` ni `config/`. Las confirmaciones de borrado y reemplazo siguen siendo explícitas. Tests prueban exclusión entre dos procesos y rechazo de purge/restore mientras se mantiene el bloqueo; compilación cruzada Windows/macOS, `go test ./...`, `go test -race ./...`, `go vet ./...` y `git diff --check` pasan.
 
-**Validación manual reportada por el usuario:** una segunda TUI recibió el bloqueo al intentar Reset sobre la instancia con el juego activo, sin mutaciones. Fecha, build y detalles de versión no fueron registrados. **No declarar A11 cerrada:** una terminación forzada de mcTUI puede soltar el lock mientras Java continúa; operaciones externas a mcTUI siguen siendo no verificables.
+**Validación manual reportada por el usuario:** una segunda TUI recibió el bloqueo al intentar Reset sobre la instancia con el juego activo, sin mutaciones. Fecha, build y detalles de versión no fueron registrados. **No declarar A11 cerrada:** una terminación forzada de notamclauncher puede soltar el lock mientras Java continúa; operaciones externas a notamclauncher siguen siendo no verificables.
 
 ### 10.9. A08 — ciclo de juego supervisado (DEC-03 resuelta)
 
-**DEC-03, acordada:** mcTUI permanece abierta durante la partida. `q` y Ctrl+C no desacoplan ni matan Java mientras arranca o está activo; al salir el juego se muestra código/error y ruta del log, y Enter/Esc vuelve al menú. Cerrar por señal o fallo del proceso mcTUI no tiene esa garantía: no afirmar exclusión si Java sobrevive. No se ofrece «dejar ejecutando» hasta contar con un supervisor independiente.
+**DEC-03, acordada:** notamclauncher permanece abierta durante la partida. `q` y Ctrl+C no desacoplan ni matan Java mientras arranca o está activo; al salir el juego se muestra código/error y ruta del log, y Enter/Esc vuelve al menú. Cerrar por señal o fallo del proceso notamclauncher no tiene esa garantía: no afirmar exclusión si Java sobrevive. No se ofrece «dejar ejecutando» hasta contar con un supervisor independiente.
 
 La preparación entrega `Prepared` y la ruta de Java validada al Cmd que inicia el juego sin volver a descargar/verificar. El proceso conserva `cmd.Dir`, argumentos, log y el lock del gameDir hasta completar `Wait`; fallo de arranque o salida devuelve un mensaje a Bubble Tea sin abandonar la interfaz. Tests con scripts Java simulados y `httptest` verifican handoff, argumentos/directorios, log, bloqueo durante ejecución, salida normal y no cero. Validación manual reportada en §9: Vanilla 1.21.2 llegó al menú en dos instancias nuevas mediante `go run .`, con salida normal/código 0; la ruta del log se guardó bajo cada gameDir. Java automático y manual Java 27 fueron probados. La prueba de aislamiento confirmó que `test-A` creado en `prueba` no aparece en `test Fase 5` y sigue en la instancia original al volver. Quedan pendientes repetir `test Fase 5` con Java automático, Reset/restore y las demás plataformas; no cerrar A08 por este único corte.
 
@@ -535,9 +535,9 @@ En el corte actual, la creación managed ofrece Vanilla. Fabric managed no debe 
 
 El selector ofrece copiar desde la instalación heredada sin mover sus datos. El usuario elige nombre, versión Vanilla y cualquiera de `mods/`, `config/`, `saves/`, `resourcepacks/`, `shaderpacks/` y `options.txt`; la confirmación muestra origen, destino, contenido, tamaño estimado y advertencia sobre compatibilidad de mods/mundos. Runtime, logs e historial de Reset quedan fuera.
 
-El motor rechaza enlaces y archivos especiales en el contenido seleccionado, adquiere el lock compartido sobre el gameDir heredado y copia con `os.Root`/`os.CopyFS`. Prepara metadata y archivos en `.mctui-copy-*` bajo la raíz de datos, fuera de `instances/`; solo publica la instancia mediante rename después de completar todo. Un error conserva el temporal y muestra su ruta; eliminarlo requiere confirmación explícita. El lock compartido crea/reutiliza `.mctui-operation.lock` en el origen, igual que Play/Reset; los datos seleccionados no se mueven ni modifican.
+El motor rechaza enlaces y archivos especiales en el contenido seleccionado, adquiere el lock compartido sobre el gameDir heredado y copia con `os.Root`/`os.CopyFS`. Prepara metadata y archivos en `.notamclauncher-copy-*` bajo la raíz de datos, fuera de `instances/`; solo publica la instancia mediante rename después de completar todo. Un error conserva el temporal y muestra su ruta; eliminarlo requiere confirmación explícita. El lock compartido crea/reutiliza `.notamclauncher-operation.lock` en el origen, igual que Play/Reset; los datos seleccionados no se mueven ni modifican.
 
-Tests cubren selección, copia independiente, rechazo de enlaces, no publicación ante preflight fallido, limpieza acotada del temporal y escritura de la letra `c` en el nombre. Validación manual reportada: se copió `saves/` a una instancia Vanilla 1.21.10; inicialmente el atajo `c` consumía la primera letra (`copia` quedaba como `opia`), se corrigió y el usuario confirmó manualmente que `c` ya funciona. **Validación manual reportada por el usuario:** legacy permaneció intacta y la copia resultó independiente; junto con la copia de `saves/` y la prueba de la tecla `c`, esto cierra la validación manual de A04 en el entorno probado. Fecha, build y detalles de versión no fueron registrados. La cobertura de otros sistemas operativos queda diferida (§9); launchers externos no coordinan con el lock de mcTUI.
+Tests cubren selección, copia independiente, rechazo de enlaces, no publicación ante preflight fallido, limpieza acotada del temporal y escritura de la letra `c` en el nombre. Validación manual reportada: se copió `saves/` a una instancia Vanilla 1.21.10; inicialmente el atajo `c` consumía la primera letra (`copia` quedaba como `opia`), se corrigió y el usuario confirmó manualmente que `c` ya funciona. **Validación manual reportada por el usuario:** legacy permaneció intacta y la copia resultó independiente; junto con la copia de `saves/` y la prueba de la tecla `c`, esto cierra la validación manual de A04 en el entorno probado. Fecha, build y detalles de versión no fueron registrados. La cobertura de otros sistemas operativos queda diferida (§9); launchers externos no coordinan con el lock de notamclauncher.
 
 ### 10.13. A05 — duplicación selectiva de instancias managed
 
@@ -545,7 +545,7 @@ Tests cubren selección, copia independiente, rechazo de enlaces, no publicació
 
 ### 10.14. A12 — retirar y recuperar instancias
 
-En el selector, `d` sobre una instancia managed ofrece soft delete o borrado permanente; legacy no puede retirarse. Soft delete mueve `instances/<id>/` a `retired/<id>/`, conserva los backups y, si era la activa, selecciona legacy. `t` muestra las retiradas y permite restaurarlas sin cambiar su ID o borrarlas definitivamente. El borrado permanente confirma explícitamente las rutas del directorio de la instancia y de `backups/<id>` antes de eliminar ambos. El traslado y la restauración comprueban colisiones y comparten exclusión; no se retira una instancia con juego activo bajo el lock de mcTUI. Los errores muestran el estado parcial sin afirmar éxito. Pruebas automatizadas de retiro bloqueado, recuperación, selección y borrado de backups pasan en Linux. **Validación manual confirmada por el usuario:** todas las operaciones de A12 funcionaron; fecha, build y detalles de cada intento no registrados. A12 queda cerrada en el entorno probado; ejecución en otros OS diferida. El cierre forzado de mcTUI con Java vivo sigue siendo límite de A11.
+En el selector, `d` sobre una instancia managed ofrece soft delete o borrado permanente; legacy no puede retirarse. Soft delete mueve `instances/<id>/` a `retired/<id>/`, conserva los backups y, si era la activa, selecciona legacy. `t` muestra las retiradas y permite restaurarlas sin cambiar su ID o borrarlas definitivamente. El borrado permanente confirma explícitamente las rutas del directorio de la instancia y de `backups/<id>` antes de eliminar ambos. El traslado y la restauración comprueban colisiones y comparten exclusión; no se retira una instancia con juego activo bajo el lock de notamclauncher. Los errores muestran el estado parcial sin afirmar éxito. Pruebas automatizadas de retiro bloqueado, recuperación, selección y borrado de backups pasan en Linux. **Validación manual confirmada por el usuario:** todas las operaciones de A12 funcionaron; fecha, build y detalles de cada intento no registrados. A12 queda cerrada en el entorno probado; ejecución en otros OS diferida. El cierre forzado de notamclauncher con Java vivo sigue siendo límite de A11.
 
 ### 10.15. Integración coordinada de A06, A07 y A08/A11 (2026-09-26)
 
@@ -556,14 +556,14 @@ En el selector, `d` sobre una instancia managed ofrece soft delete o borrado per
   - **A06:** Cerrada en el entorno probado (DEC-05 resuelta).
   - **A07:** Cerrada en alcance de 5A (`8f32920`, `8da7bf9`); validación física en Windows/macOS diferida sin bloquear 5B.
   - **A08:** Cerrada en código y UI (`9058a72` y conexión de `Kill()` con confirmación explícita en TUI).
-  - **A11:** Cerrada en alcance de 5A con exclusión mutua OS para Reset/Play y terminación desde TUI; límite de orfandad ante muerte externa de mcTUI documentado en §10.8 como techo de diseño conocido.
+  - **A11:** Cerrada en alcance de 5A con exclusión mutua OS para Reset/Play y terminación desde TUI; límite de orfandad ante muerte externa de notamclauncher documentado en §10.8 como techo de diseño conocido.
   - **Fase 5A:** Cerrada para el entorno probado (Linux x86_64) con compilación cruzada limpia para Windows amd64 y macOS arm64. La validación física en otros sistemas queda diferida sin bloquear el avance hacia 5B.
 
 ### 10.16. DEC-04 — mods locales (5B)
 
 Decisión previa a implementación: activar/desactivar mediante renombrado `mod.jar` ↔ `mod.jar.disabled`, sin copiar contenido y sin sobrescribir destinos existentes. Prism reconoce el sufijo `disabled` en `launcher/minecraft/mod/Mod.cpp`; Fabric filtra exclusivamente nombres terminados en `.jar` en `DirectoryModCandidateFinder.isValidFile` (fuentes upstream consultadas durante este corte). Por tanto `.jar.disabled` no es candidato del loader Fabric; Vanilla no carga mods. No se extiende esta verificación a loaders todavía no soportados ni sustituye pruebas físicas por versión.
 
-Registro versionado en `instances/<id>/mods.json` (incluido `instances/legacy/mods.json` para no guardar metadata en la instalación heredada). Archivos desconocidos se muestran como externos; modificar uno explícitamente registra procedencia local/external. Hash y mtime se revalidan bajo el lock común antes de mutar. No borrar config ni resolver/eliminar dependencias. Advertir siempre sobre mundos dependientes y launchers externos que no respetan el lock. Los errores de persistencia posteriores a una operación deben informar el estado real y permitir refrescar; no prometer transacciones multiarchivo ni exclusión frente a programas ajenos a mcTUI.
+Registro versionado en `instances/<id>/mods.json` (incluido `instances/legacy/mods.json` para no guardar metadata en la instalación heredada). Archivos desconocidos se muestran como externos; modificar uno explícitamente registra procedencia local/external. Hash y mtime se revalidan bajo el lock común antes de mutar. No borrar config ni resolver/eliminar dependencias. Advertir siempre sobre mundos dependientes y launchers externos que no respetan el lock. Los errores de persistencia posteriores a una operación deben informar el estado real y permitir refrescar; no prometer transacciones multiarchivo ni exclusión frente a programas ajenos a notamclauncher.
 
 Fuentes: https://raw.githubusercontent.com/FabricMC/fabric-loader/master/src/main/java/net/fabricmc/loader/impl/discovery/DirectoryModCandidateFinder.java y https://raw.githubusercontent.com/PrismLauncher/PrismLauncher/develop/launcher/minecraft/mod/Mod.cpp .
 
@@ -585,7 +585,7 @@ Fuentes: https://raw.githubusercontent.com/FabricMC/fabric-loader/master/src/mai
    - `https://cdn.modrinth.net` (Descarga de binarios `.jar`)
    Cualquier redirección a otros dominios o protocolos inseguros (`http://`) debe abortar con error de seguridad inmediato.
 2. **User-Agent canónico estructurado:** Todas las solicitudes HTTP deben identificarse con:
-   `agmonetti/mcTUI/<version> (https://github.com/agmonetti/mcTUI)`
+   `agmonetti/notamclauncher/<version> (https://github.com/agmonetti/notamclauncher)`
    para cumplir con el contrato de servicio de Modrinth y evitar bloqueos por IP.
 3. **Manejo de rate limits (300 req/min):** Lectura e interpretación de `X-Ratelimit-Limit`, `X-Ratelimit-Remaining` y `X-Ratelimit-Reset`. Ante HTTP 429, se notifica en la TUI el tiempo de espera restante (`Retry-After`) y en tareas secundarias se aplica backoff exponencial acotado.
 4. **Límites de tamaño y memoria:** Máximo **250 MiB** por archivo `.jar` descargado (controlado con `io.LimitReader`) y **10 MiB** para payloads JSON de respuesta de la API.
@@ -654,6 +654,6 @@ Fuentes primarias consultadas en la investigación que originó este plan. Reval
 - **S13:** Formato `.mrpack`: https://support.modrinth.com/en/articles/8802351-modrinth-modpack-format-mrpack
 - **S14:** Fabric Meta: https://github.com/FabricMC/fabric-meta/blob/master/README.md
 - **S15:** NeoForge, referencia para investigación adicional de instalación: https://github.com/neoforged/NeoForge y https://github.com/neoforged/InstallerTools
-- **Referencia de implementación, no especificación de mcTUI:** https://github.com/PrismLauncher/PrismLauncher
+- **Referencia de implementación, no especificación de notamclauncher:** https://github.com/PrismLauncher/PrismLauncher
 
-Nota histórica de la investigación inicial: entonces no se había verificado implementación de fase 5 ni aprobación de CurseForge o login oficial. El estado de implementación posterior se registra en §8–§10; CurseForge y autenticación oficial siguen en 5E. Las fuentes externas describen formatos y servicios, no prueban por sí solas el comportamiento de mcTUI.
+Nota histórica de la investigación inicial: entonces no se había verificado implementación de fase 5 ni aprobación de CurseForge o login oficial. El estado de implementación posterior se registra en §8–§10; CurseForge y autenticación oficial siguen en 5E. Las fuentes externas describen formatos y servicios, no prueban por sí solas el comportamiento de notamclauncher.

@@ -44,7 +44,7 @@ func TestLanguageDefaultsAndPersistence(t *testing.T) {
 	if got := Load().Language; got != "es" {
 		t.Fatalf("persisted language: %q", got)
 	}
-	if got := Load().Theme; got != "mctui" {
+	if got := Load().Theme; got != "notamclauncher" {
 		t.Fatalf("default theme: %q", got)
 	}
 	cfg = Load()
@@ -70,12 +70,12 @@ func TestDataDirChecked(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(home, "data", "mctui")
+	want := filepath.Join(home, "data", "notamclauncher")
 	switch runtime.GOOS {
 	case "windows":
-		want = filepath.Join(home, "Local Data", "mctui")
+		want = filepath.Join(home, "Local Data", "notamclauncher")
 	case "darwin":
-		want = filepath.Join(home, "Library", "Application Support", "mctui")
+		want = filepath.Join(home, "Library", "Application Support", "notamclauncher")
 	}
 	if got != want {
 		t.Fatalf("DataDirChecked() = %q, want %q", got, want)

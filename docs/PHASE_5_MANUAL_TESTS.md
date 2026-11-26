@@ -1,6 +1,6 @@
 # Fase 5 — Pruebas manuales pendientes
 
-Archivo local ignorado por Git. Hacer estas pruebas cuando haya tiempo, en **Arch y Windows**, con instancias de prueba y sin tocar mundos importantes. Anotar en cada caso: sistema, versión de mcTUI, versión de Minecraft/loader, mod o pack usado y qué ocurrió. Un error concreto sirve más que marcar «falló».
+Archivo local ignorado por Git. Hacer estas pruebas cuando haya tiempo, en **Arch y Windows**, con instancias de prueba y sin tocar mundos importantes. Anotar en cada caso: sistema, versión de notamclauncher, versión de Minecraft/loader, mod o pack usado y qué ocurrió. Un error concreto sirve más que marcar «falló».
 
 **Ya confirmado en Arch:** instancias (5A), mods locales (5B), Modrinth (5C) e instalación de modpacks (5D). No hace falta repetirlo solo para cerrar una casilla. **5D sigue abierta:** faltan los recorridos de actualización, exportación y recuperación. En Windows aún no hay pruebas reales registradas.
 
@@ -16,7 +16,7 @@ Archivo local ignorado por Git. Hacer estas pruebas cuando haya tiempo, en **Arc
 
 ## Resultado
 
-| Sistema | Prueba | Versión de mcTUI / Minecraft / loader | Mod o pack | Qué pasó | Estado |
+| Sistema | Prueba | Versión de notamclauncher / Minecraft / loader | Mod o pack | Qué pasó | Estado |
 | --- | --- | --- | --- | --- | --- |
 | Arch | Actualizar / exportar / recuperar pack | — | — | Aún no probado | Pendiente |
 | Windows | Instancias / mods / modpacks y casos cotidianos | — | — | Aún no probado | Pendiente |

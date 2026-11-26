@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"mcTUI/internal/modrinth"
+	"github.com/agmonetti/notamclauncher/internal/modrinth"
 )
 
 type identifyFunc func([]string) (map[string]modrinth.Version, error)

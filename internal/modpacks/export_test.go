@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"mcTUI/internal/instances"
+	"github.com/agmonetti/notamclauncher/internal/instances"
 )
 
 func exportFixture(t *testing.T) (Store, instances.Instance, string, string) {

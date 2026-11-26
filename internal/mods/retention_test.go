@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"mcTUI/internal/modrinth"
+	"github.com/agmonetti/notamclauncher/internal/modrinth"
 )
 
 func TestPrunePersistsHistoryBeforeDeletingBackups(t *testing.T) {

@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-const fetchUserAgent = "agmonetti/mcTUI/1.0.0 (https://github.com/agmonetti/mcTUI)"
+const fetchUserAgent = "agmonetti/notamclauncher/1.0.0 (https://github.com/agmonetti/notamclauncher)"
 const maxFetchRedirects = 5
 
 var fetchHosts = map[string]bool{
@@ -177,7 +177,7 @@ func fetchOne(ctx context.Context, client *http.Client, raw string, expectedSHA1
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return "", fmt.Errorf("create modpack download directory: %w", err)
 	}
-	tmp, err := os.CreateTemp(dir, ".mctui-download-*")
+	tmp, err := os.CreateTemp(dir, ".notamclauncher-download-*")
 	if err != nil {
 		return "", fmt.Errorf("create modpack download temporary file: %w", err)
 	}

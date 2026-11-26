@@ -16,7 +16,7 @@ import (
 	"strings"
 	"testing"
 
-	"mcTUI/internal/modrinth"
+	"github.com/agmonetti/notamclauncher/internal/modrinth"
 )
 
 func TestInstallOptionalConflictsOnlyWhenSelected(t *testing.T) {
@@ -85,7 +85,7 @@ func TestLegacyBackupStaysUnderDataRoot(t *testing.T) {
 		t.Fatalf("legacy history unavailable: %+v %v", entries, err)
 	}
 	if _, err := os.Stat(filepath.Join(root, "data", "instances", "legacy", "backups", "mods_replaced", "history.json")); err != nil {
-		t.Fatalf("legacy backup outside mcTUI data root: %v", err)
+		t.Fatalf("legacy backup outside notamclauncher data root: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(root, "external", "backups")); !os.IsNotExist(err) {
 		t.Fatalf("backup leaked beside legacy game directory: %v", err)
@@ -434,7 +434,7 @@ func TestInterruptedInstallRecoversOnScan(t *testing.T) {
 }
 
 func TestRecoveryAfterProcessExitMidBatch(t *testing.T) {
-	if root := os.Getenv("MCTUI_CRASH_FIXTURE"); root != "" {
+	if root := os.Getenv("NOTAMCLAUNCHER_CRASH_FIXTURE"); root != "" {
 		s := Store{GameDir: filepath.Join(root, "minecraft"), Registry: filepath.Join(root, "mods.json")}
 		dir := filepath.Join(s.GameDir, "mods")
 		var p installPending
@@ -471,7 +471,7 @@ func TestRecoveryAfterProcessExitMidBatch(t *testing.T) {
 		jar(t, filepath.Join(s.GameDir, "mods", ".tmp-"+name+".jar"), map[string]string{"fabric.mod.json": `{"id":"` + name + `","version":"2"}`})
 	}
 	cmd := exec.Command(os.Args[0], "-test.run=^TestRecoveryAfterProcessExitMidBatch$")
-	cmd.Env = append(os.Environ(), "MCTUI_CRASH_FIXTURE="+root)
+	cmd.Env = append(os.Environ(), "NOTAMCLAUNCHER_CRASH_FIXTURE="+root)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("interrupted child: %v %s", err, out)
 	}

@@ -84,7 +84,7 @@ func TestNativesRebuiltOfflineAndFailuresNeverPublished(t *testing.T) {
 	if got, err := os.ReadFile(dest); err != nil || string(got) != "native contents" {
 		t.Fatalf("failure changed published native: %q, %v", got, err)
 	}
-	stages, _ := filepath.Glob(filepath.Join(root, "versions", "test", ".mctui-natives-*"))
+	stages, _ := filepath.Glob(filepath.Join(root, "versions", "test", ".notamclauncher-natives-*"))
 	if len(stages) != 0 {
 		t.Fatalf("staging leaked: %v", stages)
 	}

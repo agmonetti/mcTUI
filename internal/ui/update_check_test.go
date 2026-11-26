@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"mcTUI/internal/i18n"
-	"mcTUI/internal/updater"
+	"github.com/agmonetti/notamclauncher/internal/i18n"
+	"github.com/agmonetti/notamclauncher/internal/updater"
 )
 
 func TestUpdateCheckErrorShowsQuietNotice(t *testing.T) {

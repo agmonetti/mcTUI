@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"mcTUI/internal/operationlock"
+	"github.com/agmonetti/notamclauncher/internal/operationlock"
 )
 
 func makeFolder(t *testing.T, dir, name string) {
@@ -61,7 +61,7 @@ func TestReset(t *testing.T) {
 func TestResetAndRestoreRejectBusyInstance(t *testing.T) {
 	dir := t.TempDir()
 	makeFolder(t, dir, "mods")
-	root := filepath.Join(dir, "mctui-backups")
+	root := filepath.Join(dir, "notamclauncher-backups")
 	release, err := operationlock.Acquire(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -386,7 +386,7 @@ func TestRejectUnsafePaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	makeFolder(t, dir, "mods")
-	if err := os.Symlink(filepath.Join(dir, "saves"), filepath.Join(dir, "mctui-backups")); err != nil {
+	if err := os.Symlink(filepath.Join(dir, "saves"), filepath.Join(dir, "notamclauncher-backups")); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := runAt(dir, Backup); err == nil {

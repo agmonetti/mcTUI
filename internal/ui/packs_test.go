@@ -16,11 +16,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/agmonetti/notamclauncher/internal/i18n"
+	"github.com/agmonetti/notamclauncher/internal/instances"
+	"github.com/agmonetti/notamclauncher/internal/modrinth"
+	"github.com/agmonetti/notamclauncher/internal/packs"
 	tea "github.com/charmbracelet/bubbletea"
-	"mcTUI/internal/i18n"
-	"mcTUI/internal/instances"
-	"mcTUI/internal/modrinth"
-	"mcTUI/internal/packs"
 )
 
 func packFixture(t *testing.T, kind packs.Kind) []byte {

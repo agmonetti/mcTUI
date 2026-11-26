@@ -14,7 +14,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"mcTUI/internal/operationlock"
+	"github.com/agmonetti/notamclauncher/internal/operationlock"
 )
 
 func TestPrepareSharedRuntimeWorksOfflineAndRejectsCorruptCache(t *testing.T) {

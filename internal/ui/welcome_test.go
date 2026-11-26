@@ -6,10 +6,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"mcTUI/internal/auth"
-	"mcTUI/internal/config"
-	"mcTUI/internal/i18n"
-	"mcTUI/internal/updater"
+	"github.com/agmonetti/notamclauncher/internal/auth"
+	"github.com/agmonetti/notamclauncher/internal/config"
+	"github.com/agmonetti/notamclauncher/internal/i18n"
+	"github.com/agmonetti/notamclauncher/internal/updater"
 )
 
 func TestWelcomeScreenFirstRunFlow(t *testing.T) {
@@ -28,7 +28,7 @@ func TestWelcomeScreenFirstRunFlow(t *testing.T) {
 	}
 
 	view := m.View()
-	if !strings.Contains(view, "WELCOME TO mcTUI") {
+	if !strings.Contains(view, "WELCOME TO notamclauncher") {
 		t.Fatalf("missing welcome headline in view: %s", view)
 	}
 	if !strings.Contains(view, "No accounts configured") {
@@ -101,7 +101,7 @@ func TestWelcomeScreenLanguageToggle(t *testing.T) {
 	}
 
 	view := m.View()
-	if !strings.Contains(view, "WELCOME TO mcTUI") {
+	if !strings.Contains(view, "WELCOME TO notamclauncher") {
 		t.Fatalf("expected English welcome text, got %s", view)
 	}
 
@@ -109,7 +109,7 @@ func TestWelcomeScreenLanguageToggle(t *testing.T) {
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
 	m = updated.(Model)
 	esView := m.View()
-	if !strings.Contains(esView, "BIENVENIDO A mcTUI") {
+	if !strings.Contains(esView, "BIENVENIDO A notamclauncher") {
 		t.Fatalf("expected Spanish welcome text after toggle, got %s", esView)
 	}
 
@@ -117,7 +117,7 @@ func TestWelcomeScreenLanguageToggle(t *testing.T) {
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("L")})
 	m = updated.(Model)
 	enView := m.View()
-	if !strings.Contains(enView, "WELCOME TO mcTUI") {
+	if !strings.Contains(enView, "WELCOME TO notamclauncher") {
 		t.Fatalf("expected English welcome text after second toggle, got %s", enView)
 	}
 }

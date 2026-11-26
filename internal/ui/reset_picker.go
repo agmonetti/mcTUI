@@ -9,17 +9,17 @@ import (
 	"slices"
 	"strings"
 
-	"mcTUI/internal/i18n"
-	"mcTUI/internal/instances"
-	"mcTUI/internal/java"
-	"mcTUI/internal/mojang"
+	"github.com/agmonetti/notamclauncher/internal/i18n"
+	"github.com/agmonetti/notamclauncher/internal/instances"
+	"github.com/agmonetti/notamclauncher/internal/java"
+	"github.com/agmonetti/notamclauncher/internal/mojang"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 // Adapted from msTTui's directorypicker: embedded in the dashboard panel,
-// with mcTUI colors and directory-only selection (no separate popup).
+// with notamclauncher colors and directory-only selection (no separate popup).
 func (m *Model) openResetPicker() {
 	m.pickerForJava = false
 	m.pickerForMods = false

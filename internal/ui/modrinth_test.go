@@ -16,11 +16,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/agmonetti/notamclauncher/internal/instances"
+	"github.com/agmonetti/notamclauncher/internal/modrinth"
+	"github.com/agmonetti/notamclauncher/internal/mods"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"mcTUI/internal/instances"
-	"mcTUI/internal/modrinth"
-	"mcTUI/internal/mods"
 )
 
 func TestCatalogReleaseUpdateBehindBeta(t *testing.T) {

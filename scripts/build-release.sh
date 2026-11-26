@@ -14,7 +14,7 @@ files=()
 for target in "${targets[@]}"; do
   os=${target%/*}
   arch=${target#*/}
-  filename="mctui-${os}-${arch}"
+  filename="notamclauncher-${os}-${arch}"
   if [[ "$os" == windows ]]; then
     filename+=.exe
   fi

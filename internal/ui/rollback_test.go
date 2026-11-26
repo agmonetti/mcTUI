@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/agmonetti/notamclauncher/internal/instances"
+	"github.com/agmonetti/notamclauncher/internal/mods"
 	tea "github.com/charmbracelet/bubbletea"
-	"mcTUI/internal/instances"
-	"mcTUI/internal/mods"
 )
 
 func TestRollbackReviewCancelAndRestore(t *testing.T) {

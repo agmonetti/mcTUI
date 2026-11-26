@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"mcTUI/internal/config"
-	"mcTUI/internal/operationlock"
+	"github.com/agmonetti/notamclauncher/internal/config"
+	"github.com/agmonetti/notamclauncher/internal/operationlock"
 )
 
 type Mode string
@@ -67,7 +67,7 @@ const (
 	ConsumeBackup RestoreMode = "consume"
 )
 
-// Inspect checks the same installation that the rest of mcTUI uses.
+// Inspect checks the same installation that the rest of notamclauncher uses.
 // It returns the absolute path and existing resettable folders.
 func Inspect() (string, []string, error) {
 	dir, err := config.MinecraftDirChecked()
@@ -97,7 +97,7 @@ func RunTo(mode Mode, base string) (Result, error) {
 
 // RunAt applies a reset to the game directory captured by the caller.
 func RunAt(dir string, mode Mode, base string) (Result, error) {
-	return RunAtWithBackups(dir, filepath.Join(dir, "mctui-backups"), mode, base)
+	return RunAtWithBackups(dir, filepath.Join(dir, "notamclauncher-backups"), mode, base)
 }
 
 // RunAtWithBackups keeps a managed instance's history outside its game directory.
@@ -125,7 +125,7 @@ func ListBackups() ([]BackupInfo, error) {
 
 // ListBackupsAt lists backups associated with an explicit game directory.
 func ListBackupsAt(dir string) ([]BackupInfo, error) {
-	return ListBackupsAtRoot(dir, filepath.Join(dir, "mctui-backups"))
+	return ListBackupsAtRoot(dir, filepath.Join(dir, "notamclauncher-backups"))
 }
 
 func ListBackupsAtRoot(dir, backupRoot string) ([]BackupInfo, error) {
@@ -143,7 +143,7 @@ func RestorePlan(name string) (BackupInfo, []string, error) {
 
 // RestorePlanAt checks conflicts at the explicit game directory.
 func RestorePlanAt(dir, name string) (BackupInfo, []string, error) {
-	return RestorePlanAtRoot(dir, filepath.Join(dir, "mctui-backups"), name)
+	return RestorePlanAtRoot(dir, filepath.Join(dir, "notamclauncher-backups"), name)
 }
 
 func RestorePlanAtRoot(dir, backupRoot, name string) (BackupInfo, []string, error) {
@@ -151,7 +151,7 @@ func RestorePlanAtRoot(dir, backupRoot, name string) (BackupInfo, []string, erro
 }
 
 func restorePlanAt(dir, name string) (BackupInfo, []string, error) {
-	return restorePlanIn(dir, filepath.Join(dir, "mctui-backups"), name)
+	return restorePlanIn(dir, filepath.Join(dir, "notamclauncher-backups"), name)
 }
 
 func restorePlanIn(dir, backupRoot, name string) (BackupInfo, []string, error) {
@@ -192,7 +192,7 @@ func Restore(name string, mode RestoreMode, replaceFolders []string) (Result, er
 
 // RestoreAt restores only to the game directory captured by the caller.
 func RestoreAt(dir, name string, mode RestoreMode, replaceFolders []string) (Result, error) {
-	return RestoreAtRoot(dir, filepath.Join(dir, "mctui-backups"), name, mode, replaceFolders)
+	return RestoreAtRoot(dir, filepath.Join(dir, "notamclauncher-backups"), name, mode, replaceFolders)
 }
 
 func RestoreAtRoot(dir, backupRoot, name string, mode RestoreMode, replaceFolders []string) (result Result, err error) {
@@ -241,7 +241,7 @@ func inspectAt(dir string) ([]string, error) {
 			found = append(found, name)
 		}
 	}
-	if _, err := checkedDir(filepath.Join(dir, "mctui-backups"), true); err != nil {
+	if _, err := checkedDir(filepath.Join(dir, "notamclauncher-backups"), true); err != nil {
 		return nil, err
 	}
 	return found, nil
@@ -252,7 +252,7 @@ func runAt(dir string, mode Mode) (Result, error) {
 }
 
 func runAtBase(dir string, mode Mode, base string) (Result, error) {
-	return runAtBaseIn(dir, filepath.Join(dir, "mctui-backups"), mode, base)
+	return runAtBaseIn(dir, filepath.Join(dir, "notamclauncher-backups"), mode, base)
 }
 
 func runAtBaseIn(dir, backupRoot string, mode Mode, base string) (Result, error) {
@@ -404,7 +404,7 @@ func mkdirBackupRoot(base string) error {
 }
 
 func validateBackupBase(dir, base string) error {
-	return validateBackupBaseIn(dir, filepath.Join(dir, "mctui-backups"), base)
+	return validateBackupBaseIn(dir, filepath.Join(dir, "notamclauncher-backups"), base)
 }
 
 func validateBackupBaseIn(dir, backupRoot, base string) error {
@@ -446,7 +446,7 @@ func validateBackupBaseIn(dir, backupRoot, base string) error {
 }
 
 func backupBases(dir string) ([]string, error) {
-	return backupBasesIn(dir, filepath.Join(dir, "mctui-backups"))
+	return backupBasesIn(dir, filepath.Join(dir, "notamclauncher-backups"))
 }
 
 func backupBasesIn(dir, backupRoot string) ([]string, error) {
@@ -485,7 +485,7 @@ func backupBasesIn(dir, backupRoot string) ([]string, error) {
 }
 
 func rememberBackupBase(dir, base string) error {
-	return rememberBackupBaseIn(dir, filepath.Join(dir, "mctui-backups"), base)
+	return rememberBackupBaseIn(dir, filepath.Join(dir, "notamclauncher-backups"), base)
 }
 
 func rememberBackupBaseIn(dir, backupRoot, base string) error {
@@ -520,7 +520,7 @@ func rememberBackupBaseIn(dir, backupRoot, base string) error {
 }
 
 func listBackupsAt(dir string) ([]BackupInfo, error) {
-	return listBackupsIn(dir, filepath.Join(dir, "mctui-backups"))
+	return listBackupsIn(dir, filepath.Join(dir, "notamclauncher-backups"))
 }
 
 func listBackupsIn(dir, backupRoot string) ([]BackupInfo, error) {
@@ -559,7 +559,7 @@ func listBackupsIn(dir, backupRoot string) ([]BackupInfo, error) {
 }
 
 func backupInfoAt(dir, name string) (BackupInfo, error) {
-	return backupInfoIn(dir, filepath.Join(dir, "mctui-backups"), name)
+	return backupInfoIn(dir, filepath.Join(dir, "notamclauncher-backups"), name)
 }
 
 func backupInfoIn(dir, backupRoot, name string) (BackupInfo, error) {
@@ -606,7 +606,7 @@ func backupInfoIn(dir, backupRoot, name string) (BackupInfo, error) {
 }
 
 func restoreAt(dir, name string, mode RestoreMode, replaceFolders []string) (Result, error) {
-	return restoreIn(dir, filepath.Join(dir, "mctui-backups"), name, mode, replaceFolders)
+	return restoreIn(dir, filepath.Join(dir, "notamclauncher-backups"), name, mode, replaceFolders)
 }
 
 func restoreIn(dir, backupRoot, name string, mode RestoreMode, replaceFolders []string) (Result, error) {
@@ -653,7 +653,7 @@ func restoreIn(dir, backupRoot, name string, mode RestoreMode, replaceFolders []
 }
 
 func restoreFolder(dir, source, dest string, mode RestoreMode, replace bool) (FolderStatus, error) {
-	return restoreFolderIn(dir, filepath.Join(dir, "mctui-backups"), source, dest, mode, replace)
+	return restoreFolderIn(dir, filepath.Join(dir, "notamclauncher-backups"), source, dest, mode, replace)
 }
 
 func restoreFolderIn(dir, backupRoot, source, dest string, mode RestoreMode, replace bool) (FolderStatus, error) {
@@ -684,7 +684,7 @@ func restoreFolderIn(dir, backupRoot, source, dest string, mode RestoreMode, rep
 			return Failed, err
 		}
 	}
-	stage, err := os.MkdirTemp(dir, ".mctui-restore-")
+	stage, err := os.MkdirTemp(dir, ".notamclauncher-restore-")
 	if err != nil {
 		return Failed, err
 	}

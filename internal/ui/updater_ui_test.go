@@ -8,15 +8,15 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"mcTUI/internal/config"
-	"mcTUI/internal/updater"
+	"github.com/agmonetti/notamclauncher/internal/config"
+	"github.com/agmonetti/notamclauncher/internal/updater"
 )
 
 func TestUpdateUIFlow(t *testing.T) {
 	cfg := config.Data{
 		Username: "UpdaterTester",
 		Language: "en",
-		Theme:    "mctui",
+		Theme:    "notamclauncher",
 	}
 	rel := updater.Release{
 		TagName: "v2.1.0",
@@ -24,7 +24,7 @@ func TestUpdateUIFlow(t *testing.T) {
 		Body:    "- Added new feature\n- Security patch",
 		Assets: []updater.Asset{
 			{Name: "checksums.txt", Size: 100},
-			{Name: "mctui-linux-amd64", Size: 1000000},
+			{Name: "notamclauncher-linux-amd64", Size: 1000000},
 		},
 	}
 
@@ -45,8 +45,8 @@ func TestUpdateUIFlow(t *testing.T) {
 
 	// 3. Verify updater panel content
 	updateView := m.View()
-	if !strings.Contains(updateView, "MCTUI UPDATER") {
-		t.Errorf("expected MCTUI UPDATER header in update view:\n%s", updateView)
+	if !strings.Contains(updateView, "NOTAMCLAUNCHER UPDATER") {
+		t.Errorf("expected NOTAMCLAUNCHER UPDATER header in update view:\n%s", updateView)
 	}
 	if !strings.Contains(updateView, strings.Repeat("─", 46)) {
 		t.Errorf("expected 46-character fixed divider in update view:\n%s", updateView)
@@ -69,7 +69,7 @@ func TestUpdateUIFlow(t *testing.T) {
 		t.Errorf("expected done stage after finish, got %s", m.updateStage)
 	}
 	doneView := m.View()
-	if !strings.Contains(doneView, "SHA-256") || !strings.Contains(doneView, "v2.1.0") || !strings.Contains(doneView, "mcTUI") {
+	if !strings.Contains(doneView, "SHA-256") || !strings.Contains(doneView, "v2.1.0") || !strings.Contains(doneView, "notamclauncher") {
 		t.Errorf("expected success message in done view:\n%s", doneView)
 	}
 
@@ -102,7 +102,7 @@ func TestUpdateScrollReleaseNotes(t *testing.T) {
 	cfg := config.Data{
 		Username: "UpdaterTester",
 		Language: "en",
-		Theme:    "mctui",
+		Theme:    "notamclauncher",
 	}
 	body := "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\nLine 8\nLine 9\nLine 10"
 	rel := updater.Release{

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"mcTUI/internal/instances"
+	"github.com/agmonetti/notamclauncher/internal/instances"
 )
 
 func copyFixtures(t *testing.T) (string, instances.Instance, instances.Instance, string, string) {

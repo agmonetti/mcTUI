@@ -176,7 +176,7 @@ func Resolve(ctx context.Context, targetVersion, mcDir, librariesPath string, wg
 	if err != nil {
 		return Profile{}, err
 	}
-	f, err := os.CreateTemp(filepath.Dir(cachePath), ".mctui-fabric-*")
+	f, err := os.CreateTemp(filepath.Dir(cachePath), ".notamclauncher-fabric-*")
 	if err != nil {
 		return Profile{}, err
 	}

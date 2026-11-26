@@ -1,8 +1,8 @@
-<h1 align="center">mcTUI</h1>
+<h1 align="center">notamclauncher</h1>
 
 <p align="center">
-  <img src="assets/welcome.png" alt="mcTUI welcome screen" width="48%">
-  <img src="assets/main.png" alt="mcTUI terminal interface" width="48%">
+  <img src="assets/welcome.png" alt="notamclauncher welcome screen" width="48%">
+  <img src="assets/main.png" alt="notamclauncher terminal interface" width="48%">
 </p>
 
 <p align="center">
@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="https://agmonetti.github.io/mcTuiDocs/">Documentation</a> |
-  <a href="https://github.com/agmonetti/mcTUI/releases/latest">Latest release</a>
+  <a href="https://github.com/agmonetti/notamclauncher/releases/latest">Latest release</a>
 </p>
 
 
@@ -39,18 +39,20 @@
 
 ## Installation
 
-Download the executable for your operating system from the [latest release](https://github.com/agmonetti/mcTUI/releases/latest). On Linux and macOS, make it executable before running it. On Windows, run the downloaded `.exe` from PowerShell or File Explorer.
+Download the executable for your operating system from the [latest release](https://github.com/agmonetti/notamclauncher/releases/latest). On Linux and macOS, make it executable before running it. On Windows, run the downloaded `.exe` from PowerShell or File Explorer.
 
 To build from source, install Go 1.26.11 or newer, then run:
 
 ```bash
-git clone https://github.com/agmonetti/mcTUI.git
-cd mcTUI
-go build -o mctui .
-./mctui
+git clone https://github.com/agmonetti/notamclauncher.git
+cd notamclauncher
+go build -o notamclauncher .
+./notamclauncher
 ```
 
-On Windows, use `go build -o mctui.exe .` and run `./mctui.exe` in PowerShell instead.
+On Windows, use `go build -o notamclauncher.exe .` and run `./notamclauncher.exe` in PowerShell instead.
+
+The launcher uses new directories for settings, accounts, themes, managed instances, and backups. It does not migrate data from older builds. The standard `.minecraft` location is unchanged; do not run an older build against it at the same time.
 
 ## Documentation
 
@@ -63,4 +65,4 @@ For CI checks, supported build targets, and the tag-based release process, see
 
 ## Disclaimer
 
-mcTUI is an independent project and is not affiliated with Mojang or Microsoft. Playing on official online-mode servers requires authenticating with a valid Microsoft account that owns Minecraft: Java Edition. Offline mode is supported for local, singleplayer, and LAN play.
+notamclauncher is an independent project and is not affiliated with Mojang or Microsoft. Playing on official online-mode servers requires authenticating with a valid Microsoft account that owns Minecraft: Java Edition. Offline mode is supported for local, singleplayer, and LAN play.

@@ -6,11 +6,12 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"mcTUI/internal/config"
-	"mcTUI/internal/i18n"
-	"mcTUI/internal/instances"
-	"mcTUI/internal/resetconfigs"
-	"mcTUI/internal/theme"
+
+	"github.com/agmonetti/notamclauncher/internal/config"
+	"github.com/agmonetti/notamclauncher/internal/i18n"
+	"github.com/agmonetti/notamclauncher/internal/instances"
+	"github.com/agmonetti/notamclauncher/internal/resetconfigs"
+	"github.com/agmonetti/notamclauncher/internal/theme"
 )
 
 func TestVerifyInstallationDetailsUseReadableLines(t *testing.T) {
@@ -68,6 +69,16 @@ func TestMainMenuNavigationAndTransitions(t *testing.T) {
 		instance:      in,
 		width:         120,
 		height:        35,
+	}
+
+	var session strings.Builder
+	compact := m
+	compact.width = 90
+	compact.renderActiveSession(&session)
+	sessionView := session.String()
+	gameData := sessionView[strings.LastIndex(sessionView, "\n")+1:]
+	if lipgloss.Width(gameData) > compact.centerWidth() {
+		t.Fatalf("game path overflows the session panel: %s", gameData)
 	}
 
 	// Up when cursorMenu is 0 should remain at 0
@@ -233,7 +244,7 @@ func TestConfigSubmenuOptionsAndNavigation(t *testing.T) {
 		"Resets Configs",
 		"Java: Automatic",
 		"Language: English",
-		"Theme: mcTUI (Default)",
+		"Theme: notamclauncher (Default)",
 		"Up to date",
 	}
 	for _, opt := range expectedConfigs {
@@ -390,9 +401,9 @@ func TestConfigSubmenuActions(t *testing.T) {
 	if m.state != configScreen || CurrentTheme().ID == origTheme {
 		t.Fatalf("expected theme changed from %q, got %q", origTheme, CurrentTheme().ID)
 	}
-	// Restore theme to mctui
+	// Restore theme to notamclauncher
 	cfg = config.Load()
-	cfg.Theme = "mctui"
+	cfg.Theme = "notamclauncher"
 	config.Save(cfg)
 	ApplyTheme(theme.Default())
 }

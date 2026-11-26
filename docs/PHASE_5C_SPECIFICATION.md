@@ -48,7 +48,7 @@ internal/
     └── modrinth.go            # Búsqueda, detalle, revisión, updates y estados Bubble Tea
 ```
 
-### Principios rectores (filosofía mcTUI):
+### Principios rectores (filosofía notamclauncher):
 - **Aislamiento absoluto:** Todo mod instalado o actualizado se aplica exclusivamente sobre la instancia activa (`gameDir`).
 - **Verificación criptográfica estricta:** Ningún JAR entra a `mods/` sin comprobar su hash SHA-512 contra el valor oficial de Modrinth.
 - **Sin sorpresas en disco:** La TUI muestra siempre el plan completo de instalación (mod principal + dependencias obligatorias + opcionales) antes de descargar un solo byte.
@@ -64,9 +64,9 @@ internal/
 - **Regla de hosts:** Cualquier redirección HTTP o URL fuera de estos dos dominios exactos HTTPS debe ser **rechazada inmediatamente con error**. No se permiten protocolos inseguros (`http://`), URLs de red local o dominios externos en esta fase.
 
 ### 2.2. Cabecera `User-Agent` canónica obligatoria
-Modrinth exige en su documentación oficial que todo cliente se identifique claramente. El formato adoptado para mcTUI es:
+Modrinth exige en su documentación oficial que todo cliente se identifique claramente. El formato adoptado para notamclauncher es:
 ```http
-User-Agent: agmonetti/mcTUI/1.0.0 (https://github.com/agmonetti/mcTUI)
+User-Agent: agmonetti/notamclauncher/1.0.0 (https://github.com/agmonetti/notamclauncher)
 ```
 Si se detecta un `User-Agent` vacío o genérico, el cliente de Go debe abortar antes de emitir la llamada para evitar bloqueos por IP.
 
@@ -92,7 +92,7 @@ Si se detecta un `User-Agent` vacío o genérico, el cliente de Go debe abortar 
 
 ## 3. Identificación por hash y content-addressing
 
-En lugar de depender exclusivamente de nombres de archivo o slugs (que son mutables), mcTUI adopta el modelo de **content-addressing** probado por Prism Launcher.
+En lugar de depender exclusivamente de nombres de archivo o slugs (que son mutables), notamclauncher adopta el modelo de **content-addressing** probado por Prism Launcher.
 
 ### 3.1. Hashing local al escanear o importar
 `mods.Store.Scan` calcula SHA-512 en streaming junto al SHA-256 para archivos locales/5B y externos; los JARs descargados de Modrinth se verifican con SHA-512. No atribuir procedencia Modrinth por nombre, slug ni por una coincidencia sin verificar el hash actual.
@@ -154,7 +154,7 @@ Cada versión de Modrinth incluye una lista de `dependencies`:
 
 ### 5.1. Taxonomía de dependencias y reglas de resolución
 
-| Tipo | Comportamiento en mcTUI |
+| Tipo | Comportamiento en notamclauncher |
 | --- | --- |
 | **`required`** | **Obligatoria.** El resolutor busca recursivamente una versión compatible con la instancia. Si no existe versión compatible, **se detiene la instalación completa** y se explica el motivo. Nunca instalar un conjunto incompleto. |
 | **`optional`** | **Opcional recomendada.** El usuario decide si instalarla. Al seleccionarla se incluyen también sus dependencias `required` transitivas, aunque estén representadas en `OptionalDeps`; el plan, la selección efectiva y el total de bytes deben coincidir. Sin seleccionarla no se instala su rama salvo que otro mod la requiera. |
@@ -217,7 +217,7 @@ La descarga de mods sigue el mismo rigor de seguridad implementado en 5A para la
 ## 7. Política de actualizaciones, canales y rollback (C08–C11, DEC-06)
 
 ### 7.1. Chequeo masivo en una sola petición (`POST /v2/version_files/update`)
-En lugar de iterar haciendo una petición HTTP por cada mod, mcTUI adopta el patrón batch de Prism:
+En lugar de iterar haciendo una petición HTTP por cada mod, notamclauncher adopta el patrón batch de Prism:
 ```json
 POST https://api.modrinth.com/v2/version_files/update
 {
@@ -237,7 +237,7 @@ Modrinth devuelve en una sola respuesta el mapeo de cada hash con su última ver
 Cuando una actualización reemplaza un archivo `.jar` existente:
 1. **Directorio de reemplazos (instancia managed):** El `.jar` anterior se mueve a:
    `instances/<id>/backups/mods_replaced/<timestamp>_<nombre_archivo_anterior>.jar`.
-   Para legacy, `Store.backupDir()` deriva el respaldo de `filepath.Dir(Registry)`, es decir `instances/legacy/backups/mods_replaced` bajo la raíz de datos de mcTUI, no junto a `.minecraft`. Una prueba comprueba esa ruta y que `History` lee allí; la interrupción real aún no se ha validado.
+   Para legacy, `Store.backupDir()` deriva el respaldo de `filepath.Dir(Registry)`, es decir `instances/legacy/backups/mods_replaced` bajo la raíz de datos de notamclauncher, no junto a `.minecraft`. Una prueba comprueba esa ruta y que `History` lee allí; la interrupción real aún no se ha validado.
 2. **Registro de rollback:** Se persiste en `instances/<id>/backups/mods_replaced/history.json`:
    - Fecha y hora del reemplazo.
    - Nombre del mod y `project_id`.

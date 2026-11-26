@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"mcTUI/internal/ui"
+	"github.com/agmonetti/notamclauncher/internal/ui"
 )
 
 func TestHandleProgramExitRestartsWhenRequested(t *testing.T) {

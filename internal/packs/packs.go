@@ -15,7 +15,7 @@ import (
 	"strings"
 	"unicode"
 
-	"mcTUI/internal/operationlock"
+	"github.com/agmonetti/notamclauncher/internal/operationlock"
 )
 
 // Kind identifies the Minecraft pack directory.
@@ -586,7 +586,7 @@ func (s Store) List(kind Kind) ([]Pack, error) {
 	packs := make([]Pack, 0, len(entries))
 	for _, entry := range entries {
 		name := entry.Name()
-		if strings.HasPrefix(name, ".mctui-pack-") {
+		if strings.HasPrefix(name, ".notamclauncher-pack-") {
 			continue // unpublished temporary files are not packs
 		}
 		pack := Pack{File: name, Name: name, Directory: entry.IsDir()}
@@ -646,7 +646,7 @@ func (s Store) lockedDir(kind Kind) (string, func() error, error) {
 // publishZIP copies into a private file in the instance and atomically creates
 // the destination via a hard link. No rename can replace an existing pack.
 func publishZIP(source, destination, dir string, kind Kind) error {
-	f, err := os.CreateTemp(dir, ".mctui-pack-*.zip")
+	f, err := os.CreateTemp(dir, ".notamclauncher-pack-*.zip")
 	if err != nil {
 		return err
 	}

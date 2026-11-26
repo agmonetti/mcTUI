@@ -49,7 +49,7 @@ func TestInstallRelease(t *testing.T) {
 
 	// We create a temporary dummy executable to simulate os.Executable
 	tmpDir := t.TempDir()
-	dummyExec := filepath.Join(tmpDir, "dummy-mctui")
+	dummyExec := filepath.Join(tmpDir, "dummy-notamclauncher")
 	if err := os.WriteFile(dummyExec, []byte("old-binary"), 0755); err != nil {
 		t.Fatal(err)
 	}

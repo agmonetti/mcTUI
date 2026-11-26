@@ -1,4 +1,4 @@
-module mcTUI
+module github.com/agmonetti/notamclauncher
 
 go 1.26.11
 
