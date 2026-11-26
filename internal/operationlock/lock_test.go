@@ -8,11 +8,11 @@ import (
 )
 
 func TestExclusiveAcrossProcesses(t *testing.T) {
-	dir := os.Getenv("NOTAMCLAUNCHER_LOCK_DIR")
+	dir := os.Getenv("NOT_A_MCLAUNCHER_LOCK_DIR")
 	if dir == "" {
 		dir = t.TempDir()
 	}
-	if os.Getenv("NOTAMCLAUNCHER_LOCK_HELPER") == "1" {
+	if os.Getenv("NOT_A_MCLAUNCHER_LOCK_HELPER") == "1" {
 		release, err := Acquire(dir)
 		if err != nil {
 			os.Exit(2)
@@ -24,7 +24,7 @@ func TestExclusiveAcrossProcesses(t *testing.T) {
 	}
 	child := func() error {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestExclusiveAcrossProcesses$")
-		cmd.Env = append(os.Environ(), "NOTAMCLAUNCHER_LOCK_HELPER=1", "NOTAMCLAUNCHER_LOCK_DIR="+dir)
+		cmd.Env = append(os.Environ(), "NOT_A_MCLAUNCHER_LOCK_HELPER=1", "NOT_A_MCLAUNCHER_LOCK_DIR="+dir)
 		return cmd.Run()
 	}
 	release, err := Acquire(dir)
@@ -40,7 +40,7 @@ func TestExclusiveAcrossProcesses(t *testing.T) {
 	if err := child(); err != nil {
 		t.Fatalf("released lock remained busy: %v", err)
 	}
-	if _, err := os.Lstat(filepath.Join(dir, ".notamclauncher-operation.lock")); err != nil {
+	if _, err := os.Lstat(filepath.Join(dir, ".not-a-mclauncher-operation.lock")); err != nil {
 		t.Fatalf("stable lock path missing: %v", err)
 	}
 }
@@ -67,7 +67,7 @@ func TestLockSurvivesDirectoryRename(t *testing.T) {
 }
 
 func TestProcessExitReleasesLock(t *testing.T) {
-	if dir := os.Getenv("NOTAMCLAUNCHER_CRASH_LOCK_DIR"); dir != "" {
+	if dir := os.Getenv("NOT_A_MCLAUNCHER_CRASH_LOCK_DIR"); dir != "" {
 		if _, err := Acquire(dir); err != nil {
 			os.Exit(2)
 		}
@@ -75,7 +75,7 @@ func TestProcessExitReleasesLock(t *testing.T) {
 	}
 	dir := t.TempDir()
 	cmd := exec.Command(os.Args[0], "-test.run=^TestProcessExitReleasesLock$")
-	cmd.Env = append(os.Environ(), "NOTAMCLAUNCHER_CRASH_LOCK_DIR="+dir)
+	cmd.Env = append(os.Environ(), "NOT_A_MCLAUNCHER_CRASH_LOCK_DIR="+dir)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("child could not acquire the lock: %v\n%s", err, output)
 	}

@@ -16,8 +16,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/agmonetti/notamclauncher/internal/instances"
-	"github.com/agmonetti/notamclauncher/internal/launcher"
+	"github.com/agmonetti/not-a-mclauncher/internal/instances"
+	"github.com/agmonetti/not-a-mclauncher/internal/launcher"
 )
 
 // Store manages modpacks under the same data root as managed instances.
@@ -117,7 +117,7 @@ func (s Store) Import(ctx context.Context, archive Archive, source Source, name 
 	if info, e := os.Lstat(instancesDir); e != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return in, fmt.Errorf("unsafe instances directory: %w", e)
 	}
-	stage, err := os.MkdirTemp(s.Root, ".notamclauncher-modpack-*")
+	stage, err := os.MkdirTemp(s.Root, ".not-a-mclauncher-modpack-*")
 	if err != nil {
 		return in, err
 	}

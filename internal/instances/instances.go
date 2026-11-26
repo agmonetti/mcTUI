@@ -12,7 +12,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/agmonetti/notamclauncher/internal/config"
+	"github.com/agmonetti/not-a-mclauncher/internal/config"
 )
 
 const LegacyID = "legacy"
@@ -69,7 +69,7 @@ func RuntimeDir(root string, in Instance) (string, error) {
 func BackupDir(root string, in Instance) (string, error) {
 	if in.ID == LegacyID && in.Kind == "legacy" {
 		gameDir, err := config.MinecraftDirChecked()
-		return filepath.Join(gameDir, "notamclauncher-backups"), err
+		return filepath.Join(gameDir, "not-a-mclauncher-backups"), err
 	}
 	if in.Kind != "managed" || !validID(in.ID) || !filepath.IsAbs(root) {
 		return "", fmt.Errorf("invalid managed backup path")

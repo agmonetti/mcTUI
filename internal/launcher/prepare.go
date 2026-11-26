@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/agmonetti/notamclauncher/internal/fabric"
-	"github.com/agmonetti/notamclauncher/internal/mojang"
+	"github.com/agmonetti/not-a-mclauncher/internal/fabric"
+	"github.com/agmonetti/not-a-mclauncher/internal/mojang"
 )
 
 // Prepared contains the launch artifacts verified for one runtime and version.

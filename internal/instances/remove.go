@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/agmonetti/notamclauncher/internal/operationlock"
+	"github.com/agmonetti/not-a-mclauncher/internal/operationlock"
 )
 
 // RetiredList returns managed instances removed from the picker but still recoverable.

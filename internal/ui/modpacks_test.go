@@ -19,10 +19,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/mattn/go-runewidth"
 
-	"github.com/agmonetti/notamclauncher/internal/i18n"
-	"github.com/agmonetti/notamclauncher/internal/instances"
-	"github.com/agmonetti/notamclauncher/internal/modpacks"
-	"github.com/agmonetti/notamclauncher/internal/modrinth"
+	"github.com/agmonetti/not-a-mclauncher/internal/i18n"
+	"github.com/agmonetti/not-a-mclauncher/internal/instances"
+	"github.com/agmonetti/not-a-mclauncher/internal/modpacks"
+	"github.com/agmonetti/not-a-mclauncher/internal/modrinth"
 )
 
 func TestModpacksUINavigationAndImport(t *testing.T) {
@@ -219,7 +219,7 @@ func TestModpackInstallCancellationKeepsReviewAndCleansTemporaryStage(t *testing
 	if m.mp.step != "review" || m.mp.err != nil || !strings.Contains(m.renderModpacks(), "Test pack") {
 		t.Fatalf("cancelled install did not restore review: %s", m.renderModpacks())
 	}
-	if stages, err := filepath.Glob(filepath.Join(root, ".notamclauncher-modpack-*")); err != nil || len(stages) != 0 {
+	if stages, err := filepath.Glob(filepath.Join(root, ".not-a-mclauncher-modpack-*")); err != nil || len(stages) != 0 {
 		t.Fatalf("cancelled install left staging directories: %v, %v", stages, err)
 	}
 	list, err := instances.List(root)
@@ -280,7 +280,7 @@ func TestModpackRecoveryReportsCorruptJournalWithoutDeletingIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	journal := filepath.Join(root, "instances", in.ID, ".notamclauncher-pack-update.json")
+	journal := filepath.Join(root, "instances", in.ID, ".not-a-mclauncher-pack-update.json")
 	if err := os.WriteFile(journal, []byte("{invalid"), 0600); err != nil {
 		t.Fatal(err)
 	}

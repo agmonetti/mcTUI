@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/agmonetti/notamclauncher/internal/instances"
+	"github.com/agmonetti/not-a-mclauncher/internal/instances"
 )
 
 func updateSHA(data string) string {
@@ -272,7 +272,7 @@ func TestRecoverBeforeManifestCommitRestoresOriginalAndLocalExtras(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	stage, err := os.MkdirTemp(dir, ".notamclauncher-pack-stage-")
+	stage, err := os.MkdirTemp(dir, ".not-a-mclauncher-pack-stage-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -339,7 +339,7 @@ func TestRecoverInterruptedUpdateAndRejectCorruptBackup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stage, err := os.MkdirTemp(dir, ".notamclauncher-pack-stage-")
+	stage, err := os.MkdirTemp(dir, ".not-a-mclauncher-pack-stage-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -451,7 +451,7 @@ func TestRecoverRejectsJournalTargetingUnownedLocalExtra(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stage, err := os.MkdirTemp(dir, ".notamclauncher-pack-stage-")
+	stage, err := os.MkdirTemp(dir, ".not-a-mclauncher-pack-stage-")
 	if err != nil {
 		t.Fatal(err)
 	}

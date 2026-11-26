@@ -43,7 +43,7 @@ func testHashes(data []byte) Hashes {
 
 func tempFiles(t *testing.T, dir string) []string {
 	t.Helper()
-	files, err := filepath.Glob(filepath.Join(dir, ".notamclauncher-download-*"))
+	files, err := filepath.Glob(filepath.Join(dir, ".not-a-mclauncher-download-*"))
 	if err != nil {
 		t.Fatal(err)
 	}

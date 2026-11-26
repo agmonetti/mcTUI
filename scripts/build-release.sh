@@ -14,7 +14,7 @@ files=()
 for target in "${targets[@]}"; do
   os=${target%/*}
   arch=${target#*/}
-  filename="notamclauncher-${os}-${arch}"
+  filename="not-a-mclauncher-${os}-${arch}"
   if [[ "$os" == windows ]]; then
     filename+=.exe
   fi

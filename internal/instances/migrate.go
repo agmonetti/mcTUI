@@ -11,7 +11,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/agmonetti/notamclauncher/internal/operationlock"
+	"github.com/agmonetti/not-a-mclauncher/internal/operationlock"
 )
 
 var copyableLegacyItems = []string{"mods", "config", "saves", "resourcepacks", "shaderpacks", "options.txt"}
@@ -166,7 +166,7 @@ func copyInstance(root, source string, template Instance, selected []string) (re
 	}
 	in := template
 	in.SchemaVersion, in.ID, in.Kind, in.Name = 1, hex.EncodeToString(randomID[:]), "managed", strings.TrimSpace(template.Name)
-	stage, err := os.MkdirTemp(root, ".notamclauncher-copy-*")
+	stage, err := os.MkdirTemp(root, ".not-a-mclauncher-copy-*")
 	if err != nil {
 		return CopyResult{}, err
 	}
@@ -212,7 +212,7 @@ func copyInstance(root, source string, template Instance, selected []string) (re
 // DiscardCopyStage removes only a migration staging directory directly under
 // root, after the caller has explicitly confirmed cleanup.
 func DiscardCopyStage(root, stage string) error {
-	if !filepath.IsAbs(root) || filepath.Clean(root) != root || filepath.Clean(stage) != stage || filepath.Dir(stage) != root || !strings.HasPrefix(filepath.Base(stage), ".notamclauncher-copy-") {
+	if !filepath.IsAbs(root) || filepath.Clean(root) != root || filepath.Clean(stage) != stage || filepath.Dir(stage) != root || !strings.HasPrefix(filepath.Base(stage), ".not-a-mclauncher-copy-") {
 		return fmt.Errorf("invalid migration staging path")
 	}
 	if err := checkManagedDirectory(root, false); err != nil {

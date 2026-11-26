@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const UserAgent = "agmonetti/notamclauncher/1.0.0 (https://github.com/agmonetti/notamclauncher)"
+const UserAgent = "agmonetti/not-a-mclauncher/1.0.0 (https://github.com/agmonetti/not-a-mclauncher)"
 const maxJSON = 10 << 20
 const maxJAR = 250 << 20
 const apiURL = "https://api.modrinth.com/v2"

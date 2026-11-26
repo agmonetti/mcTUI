@@ -98,10 +98,10 @@ func ValidPath(p string) error {
 			return fmt.Errorf("Windows device name in pack path %q", p)
 		}
 		folded := cases.Fold().String(part)
-		if strings.HasPrefix(folded, ".notamclauncher-") || folded == "notamclauncher-backups" {
+		if strings.HasPrefix(folded, ".not-a-mclauncher-") || folded == "not-a-mclauncher-backups" {
 			return fmt.Errorf("protected game directory path %q", p)
 		}
-		if i == 0 && (folded == "instance.json" || folded == "mods.json" || folded == "pack.json" || folded == "notamclauncher_latest.log") {
+		if i == 0 && (folded == "instance.json" || folded == "mods.json" || folded == "pack.json" || folded == "not-a-mclauncher_latest.log") {
 			return fmt.Errorf("protected metadata path %q", p)
 		}
 	}

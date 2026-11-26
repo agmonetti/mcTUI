@@ -9,19 +9,19 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/agmonetti/notamclauncher/internal/auth"
-	"github.com/agmonetti/notamclauncher/internal/config"
-	"github.com/agmonetti/notamclauncher/internal/fabric"
-	"github.com/agmonetti/notamclauncher/internal/i18n"
-	"github.com/agmonetti/notamclauncher/internal/instances"
-	"github.com/agmonetti/notamclauncher/internal/launcher"
-	"github.com/agmonetti/notamclauncher/internal/modpacks"
-	"github.com/agmonetti/notamclauncher/internal/mojang"
-	"github.com/agmonetti/notamclauncher/internal/resetconfigs"
-	"github.com/agmonetti/notamclauncher/internal/roadmap"
-	"github.com/agmonetti/notamclauncher/internal/theme"
-	"github.com/agmonetti/notamclauncher/internal/updater"
-	"github.com/agmonetti/notamclauncher/internal/worlds"
+	"github.com/agmonetti/not-a-mclauncher/internal/auth"
+	"github.com/agmonetti/not-a-mclauncher/internal/config"
+	"github.com/agmonetti/not-a-mclauncher/internal/fabric"
+	"github.com/agmonetti/not-a-mclauncher/internal/i18n"
+	"github.com/agmonetti/not-a-mclauncher/internal/instances"
+	"github.com/agmonetti/not-a-mclauncher/internal/launcher"
+	"github.com/agmonetti/not-a-mclauncher/internal/modpacks"
+	"github.com/agmonetti/not-a-mclauncher/internal/mojang"
+	"github.com/agmonetti/not-a-mclauncher/internal/resetconfigs"
+	"github.com/agmonetti/not-a-mclauncher/internal/roadmap"
+	"github.com/agmonetti/not-a-mclauncher/internal/theme"
+	"github.com/agmonetti/not-a-mclauncher/internal/updater"
+	"github.com/agmonetti/not-a-mclauncher/internal/worlds"
 	"time"
 )
 
@@ -818,7 +818,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					if m.instance.ID == "" {
 						m.resetDir, m.resetErr = config.MinecraftDirChecked()
-						m.resetBackupRoot = filepath.Join(m.resetDir, "notamclauncher-backups")
+						m.resetBackupRoot = filepath.Join(m.resetDir, "not-a-mclauncher-backups")
 					} else {
 						m.resetDir, m.resetErr = instances.GameDir(m.dataRoot, m.instance)
 						if m.resetErr == nil {

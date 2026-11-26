@@ -1,5 +1,5 @@
 // Package ui implements the Bubble Tea model, update, and view for the
-// notamclauncher interface.
+// not-a-mclauncher interface.
 package ui
 
 import (
@@ -11,8 +11,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/agmonetti/notamclauncher/internal/i18n"
-	"github.com/agmonetti/notamclauncher/internal/theme"
+	"github.com/agmonetti/not-a-mclauncher/internal/i18n"
+	"github.com/agmonetti/not-a-mclauncher/internal/theme"
 )
 
 // Current active theme and palette colors
@@ -160,7 +160,7 @@ func getAsciiArt() string {
 	top := lipgloss.NewStyle().
 		Foreground(colorAccent).
 		Bold(true).
-		Render("  notamclauncher")
+		Render("  not-a-mclauncher")
 
 	sub := lipgloss.NewStyle().
 		Foreground(colorGray).

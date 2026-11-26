@@ -1,4 +1,4 @@
-module github.com/agmonetti/notamclauncher
+module github.com/agmonetti/not-a-mclauncher
 
 go 1.26.11
 

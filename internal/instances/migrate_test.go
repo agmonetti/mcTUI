@@ -173,7 +173,7 @@ func TestCopySourceRejectsLinksAndDoesNotPublish(t *testing.T) {
 
 func TestDiscardCopyStageOnlyRemovesValidatedTemporaryDirectory(t *testing.T) {
 	root := t.TempDir()
-	stage := filepath.Join(root, ".notamclauncher-copy-test")
+	stage := filepath.Join(root, ".not-a-mclauncher-copy-test")
 	if err := os.Mkdir(stage, 0700); err != nil {
 		t.Fatal(err)
 	}

@@ -7,11 +7,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/agmonetti/notamclauncher/internal/config"
-	"github.com/agmonetti/notamclauncher/internal/i18n"
-	"github.com/agmonetti/notamclauncher/internal/instances"
-	"github.com/agmonetti/notamclauncher/internal/resetconfigs"
-	"github.com/agmonetti/notamclauncher/internal/theme"
+	"github.com/agmonetti/not-a-mclauncher/internal/config"
+	"github.com/agmonetti/not-a-mclauncher/internal/i18n"
+	"github.com/agmonetti/not-a-mclauncher/internal/instances"
+	"github.com/agmonetti/not-a-mclauncher/internal/resetconfigs"
+	"github.com/agmonetti/not-a-mclauncher/internal/theme"
 )
 
 func TestVerifyInstallationDetailsUseReadableLines(t *testing.T) {
@@ -244,7 +244,7 @@ func TestConfigSubmenuOptionsAndNavigation(t *testing.T) {
 		"Resets Configs",
 		"Java: Automatic",
 		"Language: English",
-		"Theme: notamclauncher (Default)",
+		"Theme: not-a-mclauncher",
 		"Up to date",
 	}
 	for _, opt := range expectedConfigs {
@@ -401,9 +401,9 @@ func TestConfigSubmenuActions(t *testing.T) {
 	if m.state != configScreen || CurrentTheme().ID == origTheme {
 		t.Fatalf("expected theme changed from %q, got %q", origTheme, CurrentTheme().ID)
 	}
-	// Restore theme to notamclauncher
+	// Restore theme to not-a-mclauncher
 	cfg = config.Load()
-	cfg.Theme = "notamclauncher"
+	cfg.Theme = "not-a-mclauncher"
 	config.Save(cfg)
 	ApplyTheme(theme.Default())
 }

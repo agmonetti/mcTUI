@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/agmonetti/notamclauncher/internal/instances"
+	"github.com/agmonetti/not-a-mclauncher/internal/instances"
 )
 
 func copyFixtures(t *testing.T) (string, instances.Instance, instances.Instance, string, string) {

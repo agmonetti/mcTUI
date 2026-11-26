@@ -223,7 +223,7 @@ func globDirs(pattern string) []string {
 // DownloadURL returns a direct link to Eclipse Adoptium's release page,
 // pre-filtered for a JRE matching requiredMajor and the current OS. Used
 // to point users at a compatible Java download when none was found
-// locally — notamclauncher never downloads or installs a JRE itself.
+// locally — not-a-mclauncher never downloads or installs a JRE itself.
 func DownloadURL(requiredMajor int) string {
 	osName := "linux"
 	switch runtime.GOOS {

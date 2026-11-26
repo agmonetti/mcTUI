@@ -14,7 +14,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/agmonetti/notamclauncher/internal/operationlock"
+	"github.com/agmonetti/not-a-mclauncher/internal/operationlock"
 )
 
 func TestPrepareSharedRuntimeWorksOfflineAndRejectsCorruptCache(t *testing.T) {

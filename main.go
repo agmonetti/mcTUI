@@ -7,11 +7,11 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/agmonetti/notamclauncher/internal/config"
-	"github.com/agmonetti/notamclauncher/internal/i18n"
-	"github.com/agmonetti/notamclauncher/internal/mojang"
-	"github.com/agmonetti/notamclauncher/internal/ui"
-	"github.com/agmonetti/notamclauncher/internal/updater"
+	"github.com/agmonetti/not-a-mclauncher/internal/config"
+	"github.com/agmonetti/not-a-mclauncher/internal/i18n"
+	"github.com/agmonetti/not-a-mclauncher/internal/mojang"
+	"github.com/agmonetti/not-a-mclauncher/internal/ui"
+	"github.com/agmonetti/not-a-mclauncher/internal/updater"
 )
 
 // Version is set at build time via -ldflags:

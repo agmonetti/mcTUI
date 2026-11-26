@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/agmonetti/notamclauncher/internal/operationlock"
+	"github.com/agmonetti/not-a-mclauncher/internal/operationlock"
 )
 
 func TestGameLifecycle(t *testing.T) {

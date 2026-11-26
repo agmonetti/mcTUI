@@ -119,7 +119,7 @@ func TestInspectVanillaAndEmptyFile(t *testing.T) {
 }
 
 func TestValidPathRejectsTraversalAndWindowsAliases(t *testing.T) {
-	for _, p := range []string{"", "/etc/passwd", `C:\drive`, `C:/drive`, `\\host\share`, "../evil", "a/../b", "a/./b", "a//b", "a/", "AUX.txt", "COM1.jar", "lpt9.cfg", "CON.aux", "a. ", "a/b ", "a\nb", "a\x00b", "a:b", "a?b", ".notamclauncher-operation.lock", "config/.notamclauncher-hidden", "notamclauncher-backups/x", "Pack.json", "notamclauncher_latest.log"} {
+	for _, p := range []string{"", "/etc/passwd", `C:\drive`, `C:/drive`, `\\host\share`, "../evil", "a/../b", "a/./b", "a//b", "a/", "AUX.txt", "COM1.jar", "lpt9.cfg", "CON.aux", "a. ", "a/b ", "a\nb", "a\x00b", "a:b", "a?b", ".not-a-mclauncher-operation.lock", "config/.not-a-mclauncher-hidden", "not-a-mclauncher-backups/x", "Pack.json", "not-a-mclauncher_latest.log"} {
 		if err := ValidPath(p); err == nil {
 			t.Errorf("accepted unsafe path %q", p)
 		}

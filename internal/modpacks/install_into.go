@@ -9,8 +9,8 @@ import (
 	"reflect"
 	"sort"
 
-	"github.com/agmonetti/notamclauncher/internal/instances"
-	"github.com/agmonetti/notamclauncher/internal/operationlock"
+	"github.com/agmonetti/not-a-mclauncher/internal/instances"
+	"github.com/agmonetti/not-a-mclauncher/internal/operationlock"
 )
 
 // installDestination returns a metadata directory separate from the game data.
@@ -247,7 +247,7 @@ func (s Store) InstallInto(ctx context.Context, in instances.Instance, archive A
 	if err = absentPack(dir); err != nil {
 		return err
 	}
-	stage, err := os.MkdirTemp(dir, ".notamclauncher-pack-stage-")
+	stage, err := os.MkdirTemp(dir, ".not-a-mclauncher-pack-stage-")
 	if err != nil {
 		return err
 	}

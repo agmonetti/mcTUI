@@ -1,5 +1,5 @@
 // Package roadmap fetches and manages the dynamic roadmap data
-// for notamclauncher, with offline fallback and internationalization.
+// for not-a-mclauncher, with offline fallback and internationalization.
 package roadmap
 
 import (
@@ -12,11 +12,11 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/agmonetti/notamclauncher/internal/i18n"
+	"github.com/agmonetti/not-a-mclauncher/internal/i18n"
 )
 
 // RemoteURL is the endpoint hosting the official roadmap.json file.
-const RemoteURL = "https://raw.githubusercontent.com/agmonetti/notamclauncher/main/roadmap.json"
+const RemoteURL = "https://raw.githubusercontent.com/agmonetti/not-a-mclauncher/main/roadmap.json"
 
 // Item represents a single feature or planned milestone in the roadmap.
 type Item struct {

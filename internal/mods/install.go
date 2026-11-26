@@ -9,7 +9,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/agmonetti/notamclauncher/internal/modrinth"
+	"github.com/agmonetti/not-a-mclauncher/internal/modrinth"
 )
 
 // Install stages and verifies every selected file before publishing anything. A changed local JAR requires explicit consent.

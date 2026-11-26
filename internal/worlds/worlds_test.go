@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/agmonetti/notamclauncher/internal/i18n"
+	"github.com/agmonetti/not-a-mclauncher/internal/i18n"
 )
 
 func TestFormatRelativeTimeUsesSelectedLanguage(t *testing.T) {

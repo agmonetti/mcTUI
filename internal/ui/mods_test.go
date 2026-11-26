@@ -8,12 +8,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/agmonetti/notamclauncher/internal/i18n"
-	"github.com/agmonetti/notamclauncher/internal/instances"
-	"github.com/agmonetti/notamclauncher/internal/modrinth"
-	"github.com/agmonetti/notamclauncher/internal/mods"
-	"github.com/agmonetti/notamclauncher/internal/operationlock"
-	"github.com/agmonetti/notamclauncher/internal/packs"
+	"github.com/agmonetti/not-a-mclauncher/internal/i18n"
+	"github.com/agmonetti/not-a-mclauncher/internal/instances"
+	"github.com/agmonetti/not-a-mclauncher/internal/modrinth"
+	"github.com/agmonetti/not-a-mclauncher/internal/mods"
+	"github.com/agmonetti/not-a-mclauncher/internal/operationlock"
+	"github.com/agmonetti/not-a-mclauncher/internal/packs"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
