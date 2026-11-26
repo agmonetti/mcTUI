@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/agmonetti/notamclauncher/internal/modrinth"
+	"github.com/agmonetti/not-a-mclauncher/internal/modrinth"
 )
 
 func TestPrunePersistsHistoryBeforeDeletingBackups(t *testing.T) {

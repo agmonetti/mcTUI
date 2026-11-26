@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/agmonetti/notamclauncher/internal/instances"
-	"github.com/agmonetti/notamclauncher/internal/modrinth"
+	"github.com/agmonetti/not-a-mclauncher/internal/instances"
+	"github.com/agmonetti/not-a-mclauncher/internal/modrinth"
 )
 
 func TestCatalogResolveFallsBackToDependencyCompatibleRelease(t *testing.T) {

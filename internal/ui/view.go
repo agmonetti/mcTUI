@@ -9,13 +9,13 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
 
-	"github.com/agmonetti/notamclauncher/internal/i18n"
-	"github.com/agmonetti/notamclauncher/internal/instances"
-	"github.com/agmonetti/notamclauncher/internal/mojang"
-	"github.com/agmonetti/notamclauncher/internal/resetconfigs"
-	"github.com/agmonetti/notamclauncher/internal/theme"
-	"github.com/agmonetti/notamclauncher/internal/updater"
-	"github.com/agmonetti/notamclauncher/internal/worlds"
+	"github.com/agmonetti/not-a-mclauncher/internal/i18n"
+	"github.com/agmonetti/not-a-mclauncher/internal/instances"
+	"github.com/agmonetti/not-a-mclauncher/internal/mojang"
+	"github.com/agmonetti/not-a-mclauncher/internal/resetconfigs"
+	"github.com/agmonetti/not-a-mclauncher/internal/theme"
+	"github.com/agmonetti/not-a-mclauncher/internal/updater"
+	"github.com/agmonetti/not-a-mclauncher/internal/worlds"
 )
 
 func (m Model) View() string {
@@ -38,7 +38,7 @@ func (m Model) View() string {
 		if m.state == resetPickerScreen {
 			content = m.pickerPanelContent()
 		}
-		header := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("  notamclauncher") + "\n" +
+		header := lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Render("  not-a-mclauncher") + "\n" +
 			lipgloss.NewStyle().Foreground(colorBlue).Render("  "+i18n.T("menu.options")+"  ► "+i18n.T("menu.reset")) + "\n\n"
 		return lipgloss.Place(m.width, m.height, lipgloss.Left, lipgloss.Top, header+content)
 	}

@@ -2,13 +2,13 @@
 
 ## Propuesta funcional
 
-`Resets Configs` es una funcionalidad de notamclauncher destinada a recuperar una instalación de Minecraft que dejó de iniciar correctamente por conflictos entre mods, loaders, configuraciones o archivos generados por distintas versiones.
+`Resets Configs` es una funcionalidad de not-a-mclauncher destinada a recuperar una instalación de Minecraft que dejó de iniciar correctamente por conflictos entre mods, loaders, configuraciones o archivos generados por distintas versiones.
 
 El objetivo es ofrecer una limpieza segura desde la TUI, sin necesidad de abrir manualmente el explorador de archivos ni conocer la estructura interna de `.minecraft`.
 
 La operación debe ser conservadora: no debe borrar mundos guardados, versiones descargadas, librerías, assets ni shaders.
 
-> **Requisito obligatorio:** notamclauncher y la funcionalidad `Resets Configs` operan exclusivamente sobre una instalación legítima de Minecraft: Java Edition comprada y descargada previamente en el equipo a través del launcher oficial. No funcionan ni tienen soporte para copias no autorizadas o carpetas sin una instalación oficial preexistente.
+> **Requisito obligatorio:** not-a-mclauncher y la funcionalidad `Resets Configs` operan exclusivamente sobre una instalación legítima de Minecraft: Java Edition comprada y descargada previamente en el equipo a través del launcher oficial. No funcionan ni tienen soporte para copias no autorizadas o carpetas sin una instalación oficial preexistente.
 
 ---
 
@@ -28,7 +28,7 @@ Actualmente, la solución habitual consiste en limpiar manualmente partes de `.m
 1. Es fácil borrar archivos importantes por accidente.
 2. Es difícil saber qué archivos pertenecen a los mods y cuáles son necesarios para conservar la instalación.
 
-`Resets Configs` encapsula ese procedimiento dentro de notamclauncher.
+`Resets Configs` encapsula ese procedimiento dentro de not-a-mclauncher.
 
 ---
 
@@ -38,7 +38,7 @@ Permitir que el usuario vuelva rápidamente a una configuración limpia de mods,
 
 La operación debe:
 
-- Ser accesible desde el menú principal de notamclauncher.
+- Ser accesible desde el menú principal de not-a-mclauncher.
 - Mostrar claramente qué elementos serán afectados.
 - Requerir una confirmación explícita.
 - Ofrecer la posibilidad de crear un respaldo antes de modificar archivos.
@@ -49,7 +49,7 @@ La operación debe:
 
 ## Alcance de la primera versión
 
-La primera versión de `Resets Configs` debe trabajar sobre la carpeta de Minecraft detectada por notamclauncher:
+La primera versión de `Resets Configs` debe trabajar sobre la carpeta de Minecraft detectada por not-a-mclauncher:
 
 ```text
 ~/.minecraft/
@@ -69,11 +69,11 @@ Linux / macOS: ~/.minecraft/
 
 La resolución de estas rutas debe centralizarse en `internal/config`. `Resets Configs` no debe construir rutas suponiendo que el sistema utiliza `/`, `~` o una carpeta concreta del usuario.
 
-### Estado actual de notamclauncher
+### Estado actual de not-a-mclauncher
 
 `internal/config.MinecraftDir()` utiliza `%APPDATA%\.minecraft` en Windows y `~/.minecraft` en Linux y macOS.
 
-Para la primera versión se mantiene deliberadamente la ruta unificada `~/.minecraft` en macOS para no romper ni desacoplar instalaciones, mundos y perfiles existentes creados por notamclauncher. Cualquier cambio a la ruta oficial de macOS (`~/Library/Application Support/minecraft`) debe ser, en todo caso, una migración global independiente con detección de instalaciones previas.
+Para la primera versión se mantiene deliberadamente la ruta unificada `~/.minecraft` en macOS para no romper ni desacoplar instalaciones, mundos y perfiles existentes creados por not-a-mclauncher. Cualquier cambio a la ruta oficial de macOS (`~/Library/Application Support/minecraft`) debe ser, en todo caso, una migración global independiente con detección de instalaciones previas.
 
 Sin embargo, `MinecraftDir()` actualmente ignora el error de `os.UserHomeDir()`. El motor de reset debe verificar que la ruta devuelta sea absoluta y válida antes de cualquier operación destructiva o de movimiento, abortando inmediatamente si no se puede resolver la carpeta de usuario de manera segura.
 
@@ -114,7 +114,7 @@ Could not reset mods/: the folder is being used by another process.
 Close Minecraft and try again.
 ```
 
-No se debe solicitar automáticamente elevación de privilegios ni ejecutar notamclauncher como administrador. La operación debe funcionar con los permisos normales del usuario siempre que `.minecraft` esté dentro de su perfil.
+No se debe solicitar automáticamente elevación de privilegios ni ejecutar not-a-mclauncher como administrador. La operación debe funcionar con los permisos normales del usuario siempre que `.minecraft` esté dentro de su perfil.
 
 ### Linux
 
@@ -126,11 +126,11 @@ La ruta por defecto es:
 
 La operación debe respetar permisos y propietarios existentes tanto como sea posible. Si una carpeta no puede moverse por permisos insuficientes, debe informarse sin modificar las carpetas protegidas.
 
-En distribuciones donde Minecraft se ejecuta mediante un launcher empaquetado, Flatpak, Snap o una instalación personalizada, la ubicación real puede no ser la ruta estándar. La primera versión debe utilizar la ruta ya resuelta por notamclauncher y no intentar descubrir instalaciones alternativas automáticamente.
+En distribuciones donde Minecraft se ejecuta mediante un launcher empaquetado, Flatpak, Snap o una instalación personalizada, la ubicación real puede no ser la ruta estándar. La primera versión debe utilizar la ruta ya resuelta por not-a-mclauncher y no intentar descubrir instalaciones alternativas automáticamente.
 
 ### macOS
 
-notamclauncher utiliza la ruta estándar Unix en el perfil del usuario:
+not-a-mclauncher utiliza la ruta estándar Unix en el perfil del usuario:
 
 ```text
 ~/.minecraft/
@@ -197,7 +197,7 @@ Contiene los mundos de un jugador. Es el dato más importante para proteger.
 
 Contiene las versiones descargadas y los archivos necesarios para iniciar Minecraft.
 
-También puede contener el perfil cacheado de Fabric que genera notamclauncher:
+También puede contener el perfil cacheado de Fabric que genera not-a-mclauncher:
 
 ```text
 versions/<version>/fabric-profile.json
@@ -237,7 +237,7 @@ Reset everything except worlds and installations
 
 ## Estrategia de respaldo
 
-El backup debe ser opcional. Es muy probable que el usuario quiera una limpieza rápida y no necesite conservar mods o configuraciones viejas, por lo que notamclauncher no debe imponer un respaldo que ocupe espacio y requiera una limpieza posterior.
+El backup debe ser opcional. Es muy probable que el usuario quiera una limpieza rápida y no necesite conservar mods o configuraciones viejas, por lo que not-a-mclauncher no debe imponer un respaldo que ocupe espacio y requiera una limpieza posterior.
 
 La funcionalidad debe ofrecer dos modos:
 
@@ -250,7 +250,7 @@ Elimina de forma permanente el contenido seleccionado de:
 .minecraft/config/
 ```
 
-Este modo debe estar acompañado por una advertencia explícita, porque no permite restaurar la configuración anterior desde notamclauncher.
+Este modo debe estar acompañado por una advertencia explícita, porque no permite restaurar la configuración anterior desde not-a-mclauncher.
 
 Ejemplo de confirmación:
 
@@ -269,14 +269,14 @@ Worlds, versions, libraries, assets and shaders will be preserved.
 Mueve las carpetas seleccionadas a una carpeta de respaldo, por ejemplo:
 
 ```text
-.minecraft/notamclauncher-backups/reset-2026-09-24-153000/
+.minecraft/not-a-mclauncher-backups/reset-2026-09-24-153000/
 ├── mods/
 └── config/
 ```
 
 El nombre debe incluir una marca temporal para evitar sobrescribir respaldos anteriores.
 
-Este modo conserva los archivos para inspeccionarlos y restaurarlos manualmente. Evita la pérdida accidental de configuraciones personalizadas y facilita el diagnóstico cuando el problema continúa. La restauración desde notamclauncher queda fuera de la primera versión: la UI no debe presentar el respaldo como una función de deshacer.
+Este modo conserva los archivos para inspeccionarlos y restaurarlos manualmente. Evita la pérdida accidental de configuraciones personalizadas y facilita el diagnóstico cuando el problema continúa. La restauración desde not-a-mclauncher queda fuera de la primera versión: la UI no debe presentar el respaldo como una función de deshacer.
 
 El destino debe ser nuevo y exclusivo de cada operación. Si el nombre generado ya existe, se debe elegir otro o cancelar; nunca sobrescribir ni mezclar archivos con un respaldo anterior.
 
@@ -335,7 +335,7 @@ También debería mostrar la ruta concreta que se utilizará.
 
 ### 3. Detección previa
 
-Antes de pedir confirmación, notamclauncher debe verificar:
+Antes de pedir confirmación, not-a-mclauncher debe verificar:
 
 - Que la carpeta `.minecraft` exista.
 - Que `mods/` o `config/` existan.
@@ -391,7 +391,7 @@ Preserved:
   - shaders
 
 Backup:
-  ~/.minecraft/notamclauncher-backups/reset-2026-09-24-153000/
+  ~/.minecraft/not-a-mclauncher-backups/reset-2026-09-24-153000/
 ```
 
 Ejemplo de resultado sin backup:
@@ -428,9 +428,9 @@ No debe utilizar una limpieza recursiva sobre toda la carpeta `.minecraft`.
 
 ### No seguir enlaces simbólicos ni junctions de forma peligrosa
 
-Antes de operar, comprobar con `os.Lstat()` las rutas de `.minecraft`, `mods/`, `config/`, el directorio base de respaldos (`notamclauncher-backups/`) y el subdirectorio de destino.
+Antes de operar, comprobar con `os.Lstat()` las rutas de `.minecraft`, `mods/`, `config/`, el directorio base de respaldos (`not-a-mclauncher-backups/`) y el subdirectorio de destino.
 
-Si alguna de estas rutas intermedias o finales es un enlace simbólico o una junction inesperada, se debe rechazar la operación y explicarlo. Esto evita que un enlace en `notamclauncher-backups` desvíe archivos hacia `saves/` o fuera de la instalación.
+Si alguna de estas rutas intermedias o finales es un enlace simbólico o una junction inesperada, se debe rechazar la operación y explicarlo. Esto evita que un enlace en `not-a-mclauncher-backups` desvíe archivos hacia `saves/` o fuera de la instalación.
 
 En la primera versión se mueven o eliminan las carpetas objetivo completas; no se recorren sus archivos internos para decidir qué resetear. Volver a validar inmediatamente antes de la operación reduce el riesgo de que las rutas hayan cambiado desde la pantalla informativa.
 
@@ -442,7 +442,7 @@ Modificar `mods/` o `config/` mientras el juego está escribiendo archivos podr�
 
 ### Operación reversible o destructiva
 
-Cuando se elige backup, mover carpetas dentro de `.minecraft` con `os.Rename()` evita copiar y borrar. Si el movimiento falla, notamclauncher debe informar el error y conservar el origen; no debe intentar copiar entre volúmenes en la primera versión.
+Cuando se elige backup, mover carpetas dentro de `.minecraft` con `os.Rename()` evita copiar y borrar. Si el movimiento falla, not-a-mclauncher debe informar el error y conservar el origen; no debe intentar copiar entre volúmenes en la primera versión.
 
 Cuando se elige el reset sin backup, la eliminación permanente debe ejecutarse únicamente sobre las rutas objetivo permitidas y después de una confirmación específica para ese modo. No debe reutilizarse una confirmación genérica de movimiento.
 
@@ -460,7 +460,7 @@ Si una carpeta se mueve o elimina correctamente y la otra falla, o si una carpet
 
 ---
 
-## Encaje técnico en notamclauncher
+## Encaje técnico en not-a-mclauncher
 
 La funcionalidad puede integrarse sin modificar el sistema de lanzamiento principal.
 
@@ -556,7 +556,7 @@ La primera versión no debería:
 - Borrar `shaderpacks/`.
 - Reinstalar Minecraft.
 - Descargar nuevamente todos los archivos.
-- Modificar el perfil seleccionado en notamclauncher.
+- Modificar el perfil seleccionado en not-a-mclauncher.
 - Cambiar automáticamente de Fabric a Vanilla.
 - Detectar qué mod específico causó el crash.
 - Administrar versiones individuales de cada mod.
@@ -585,7 +585,7 @@ El gestor de mods futuro debería considerar:
 Una arquitectura futura más robusta sería:
 
 ```text
-notamclauncher/
+not-a-mclauncher/
 ├── instances/
 │   ├── vanilla-1.20.4/
 │   ├── fabric-1.20.4/
@@ -603,7 +603,7 @@ Sin embargo, implementar instancias aisladas desde el inicio ampliaría bastante
 
 - Validar que `internal/config.MinecraftDir()` devuelva una ruta absoluta y no vacía, controlando posibles errores de `os.UserHomeDir()`. Mantener la ruta unificada `~/.minecraft` en macOS y Linux.
 - Crear `internal/resetconfigs` para detectar y procesar `mods/` y `config/`.
-- Validar las rutas objetivo y ancestros de backup (`notamclauncher-backups`), rechazando enlaces simbólicos o junctions inesperadas.
+- Validar las rutas objetivo y ancestros de backup (`not-a-mclauncher-backups`), rechazando enlaces simbólicos o junctions inesperadas.
 - Crear un destino de backup exclusivo con timestamp dentro de `.minecraft` cuando corresponda.
 - Mover carpetas con `os.Rename()` o eliminarlas según la elección del usuario; no copiar entre volúmenes.
 - Verificar el resultado reportando estados parciales (`deleted`, `partially_deleted`, `moved`, `failed`).
@@ -615,7 +615,7 @@ Sin embargo, implementar instancias aisladas desde el inicio ampliaría bastante
 - Mostrar la ruta concreta, las carpetas afectadas y la advertencia de cerrar Minecraft.
 - Permitir elegir el modo en cada ejecución y cancelar antes de operar.
 - Exigir una confirmación explícita y distinta para la eliminación permanente.
-- Mostrar éxito, ausencia de carpetas o fallos parciales sin prometer restauración desde notamclauncher.
+- Mostrar éxito, ausencia de carpetas o fallos parciales sin prometer restauración desde not-a-mclauncher.
 
 ### Fase 3: protección adicional
 
@@ -623,7 +623,7 @@ Sin embargo, implementar instancias aisladas desde el inicio ampliaría bastante
 
 #### Evaluación de la fase 3 (2026-09-24)
 
-La detección **positiva** es viable, pero no hay un mecanismo único en la biblioteca estándar de Go para enumerar procesos y leer sus argumentos en Windows, Linux y macOS. Buscar solo `java`/`javaw` daría falsos positivos; para asociar un proceso con esta instalación habría que comprobar un argumento `--gameDir` cuya ruta coincida con `config.MinecraftDirChecked()` (el launcher de notamclauncher ya lo pasa). Otros launchers pueden omitir ese argumento, y los permisos o una carrera entre inspección y reset pueden impedir una respuesta concluyente.
+La detección **positiva** es viable, pero no hay un mecanismo único en la biblioteca estándar de Go para enumerar procesos y leer sus argumentos en Windows, Linux y macOS. Buscar solo `java`/`javaw` daría falsos positivos; para asociar un proceso con esta instalación habría que comprobar un argumento `--gameDir` cuya ruta coincida con `config.MinecraftDirChecked()` (el launcher de not-a-mclauncher ya lo pasa). Otros launchers pueden omitir ese argumento, y los permisos o una carrera entre inspección y reset pueden impedir una respuesta concluyente.
 
 | Plataforma | Fuente candidata | Límite para validar |
 | --- | --- | --- |
@@ -644,10 +644,10 @@ Referencias: [Win32_Process](https://learn.microsoft.com/en-us/windows/win32/cim
 - [x] En cada restauración, preguntar si se conserva el respaldo original o si se consume al restaurar; exigir una selección explícita y no eliminar respaldos sin confirmación.
 - [x] No ofrecer una acción de borrar todos los respaldos. Cualquier eliminación de archivos locales requiere una decisión explícita y confirmada para ese caso.
 - [x] Al conservar el backup original, copiar su contenido; si contiene enlaces simbólicos, rechazar esa copia para evitar seguir enlaces fuera de `.minecraft`.
-- [x] Permitir elegir un directorio existente para el backup mediante el selector integrado en el panel central; la ruta predeterminada sigue siendo `.minecraft/notamclauncher-backups`. Registrar directorios externos en `.minecraft/notamclauncher-backups/locations.json` para que aparezcan en el historial y se puedan restaurar. Rechazar enlaces y destinos dentro de `mods/` o `config/`; los movimientos entre volúmenes no se copian y se informan como error.
+- [x] Permitir elegir un directorio existente para el backup mediante el selector integrado en el panel central; la ruta predeterminada sigue siendo `.minecraft/not-a-mclauncher-backups`. Registrar directorios externos en `.minecraft/not-a-mclauncher-backups/locations.json` para que aparezcan en el historial y se puedan restaurar. Rechazar enlaces y destinos dentro de `mods/` o `config/`; los movimientos entre volúmenes no se copian y se informan como error.
 - [x] Conservar el dashboard durante el flujo de reset; separar información y acciones visualmente, indicar líneas ocultas y destacar estados de éxito y ausencia de carpetas.
 
-**Regla de decisión:** notamclauncher no debe elegir por el usuario cuando una acción afecte archivos o directorios locales. Debe explicar qué se conservará, moverá o reemplazará, y pedir confirmación antes de ejecutar la operación destructiva. No se borran ni reemplazan carpetas activas o respaldos de forma implícita.
+**Regla de decisión:** not-a-mclauncher no debe elegir por el usuario cuando una acción afecte archivos o directorios locales. Debe explicar qué se conservará, moverá o reemplazará, y pedir confirmación antes de ejecutar la operación destructiva. No se borran ni reemplazan carpetas activas o respaldos de forma implícita.
 
 ### Fase 5: gestor de mods
 
@@ -672,7 +672,7 @@ La primera versión puede considerarse terminada cuando:
 - La operación se puede cancelar antes de ejecutarse.
 - Se informa correctamente cuando no hay nada que resetear.
 - Se informa correctamente ante errores parciales, indicando el estado y las rutas de cada carpeta afectada.
-- Las rutas objetivo enlazadas o junctions inesperadas (incluyendo `notamclauncher-backups/`) se rechazan antes de mover o eliminar.
+- Las rutas objetivo enlazadas o junctions inesperadas (incluyendo `not-a-mclauncher-backups/`) se rechazan antes de mover o eliminar.
 - La TUI advierte que se debe cerrar Minecraft antes del reset y advierte sobre el riesgo de cargar mundos que dependan de mods eliminados. Los archivos bloqueados o en uso se informan sin anunciar éxito completo.
 - Una instalación conocida (Vanilla o Fabric) vuelve a iniciar correctamente tras el reset en pruebas de validación.
 - La operación funciona con rutas y separadores propios de Windows.
@@ -700,4 +700,4 @@ libraries/
 shaderpacks/
 ```
 
-Es una funcionalidad acotada, de alto valor para el usuario real de notamclauncher y compatible con la arquitectura actual. Además, establece una base limpia para el futuro gestor de mods sin obligar todavía a rediseñar todo el sistema como un administrador de instancias.
+Es una funcionalidad acotada, de alto valor para el usuario real de not-a-mclauncher y compatible con la arquitectura actual. Además, establece una base limpia para el futuro gestor de mods sin obligar todavía a rediseñar todo el sistema como un administrador de instancias.

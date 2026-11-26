@@ -11,8 +11,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/agmonetti/notamclauncher/internal/auth"
-	"github.com/agmonetti/notamclauncher/internal/i18n"
+	"github.com/agmonetti/not-a-mclauncher/internal/auth"
+	"github.com/agmonetti/not-a-mclauncher/internal/i18n"
 )
 
 type deviceCodeInitMsg struct {

@@ -1,4 +1,4 @@
-// Package updater checks GitHub Releases for newer versions of notamclauncher,
+// Package updater checks GitHub Releases for newer versions of not-a-mclauncher,
 // verifies SHA-256 integrity, and applies updates directly from the TUI.
 package updater
 
@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-const defaultAPIURL = "https://api.github.com/repos/agmonetti/notamclauncher/releases/latest"
+const defaultAPIURL = "https://api.github.com/repos/agmonetti/not-a-mclauncher/releases/latest"
 
 // Asset represents a release asset published on GitHub.
 type Asset struct {
@@ -26,7 +26,7 @@ type Asset struct {
 	BrowserDownloadURL string `json:"browser_download_url"`
 }
 
-// Release holds the subset of GitHub's release API response that notamclauncher needs.
+// Release holds the subset of GitHub's release API response that not-a-mclauncher needs.
 type Release struct {
 	TagName     string  `json:"tag_name"`
 	Name        string  `json:"name"`
@@ -111,7 +111,7 @@ func fetchReleaseJSON(apiURL string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "notamclauncher-Updater")
+	req.Header.Set("User-Agent", "not-a-mclauncher-Updater")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 
 	resp, err := client.Do(req)

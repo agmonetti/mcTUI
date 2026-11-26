@@ -19,9 +19,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/agmonetti/notamclauncher/internal/java"
-	"github.com/agmonetti/notamclauncher/internal/mojang"
-	"github.com/agmonetti/notamclauncher/internal/operationlock"
+	"github.com/agmonetti/not-a-mclauncher/internal/java"
+	"github.com/agmonetti/not-a-mclauncher/internal/mojang"
+	"github.com/agmonetti/not-a-mclauncher/internal/operationlock"
 )
 
 // maxConcurrentDownloads caps simultaneous downloads for libraries and
@@ -150,7 +150,7 @@ func StartPreparedWithAuth(gameDir, runtimeDir, javaBinary, targetVersion string
 	if err != nil {
 		return nil, err
 	}
-	logPath := filepath.Join(gameDir, "notamclauncher_latest.log")
+	logPath := filepath.Join(gameDir, "not-a-mclauncher_latest.log")
 	logFile, err := os.Create(logPath)
 	if err != nil {
 		_ = release()

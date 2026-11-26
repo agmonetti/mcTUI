@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/agmonetti/notamclauncher/internal/instances"
+	"github.com/agmonetti/not-a-mclauncher/internal/instances"
 )
 
 func exportFixture(t *testing.T) (Store, instances.Instance, string, string) {

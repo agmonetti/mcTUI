@@ -57,7 +57,7 @@ type manifestEntry struct {
 }
 
 // VersionData is the subset of a version's metadata (from its per-version
-// JSON) that notamclauncher needs: the asset index, required Java version, client
+// JSON) that not-a-mclauncher needs: the asset index, required Java version, client
 // download info, and library list.
 type VersionData struct {
 	AssetIndex struct {
@@ -152,7 +152,7 @@ func fetchVersionData(ctx context.Context, manifestURL, targetVersion, mcDir str
 		if err := os.MkdirAll(filepath.Dir(versionCachePath(mcDir, targetVersion)), 0755); err != nil {
 			return data, err
 		}
-		stage, err := os.MkdirTemp(filepath.Dir(versionCachePath(mcDir, targetVersion)), ".notamclauncher-version-*")
+		stage, err := os.MkdirTemp(filepath.Dir(versionCachePath(mcDir, targetVersion)), ".not-a-mclauncher-version-*")
 		if err != nil {
 			return data, err
 		}
@@ -291,7 +291,7 @@ func download(ctx context.Context, wg *sync.WaitGroup, maxBytes int64) func(url,
 		if maxBytes > 0 && r.ContentLength > maxBytes {
 			return fmt.Errorf("download %s exceeds %d bytes", destination, maxBytes)
 		}
-		f, err := os.CreateTemp(filepath.Dir(destination), ".notamclauncher-download-*")
+		f, err := os.CreateTemp(filepath.Dir(destination), ".not-a-mclauncher-download-*")
 		if err != nil {
 			return err
 		}

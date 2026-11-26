@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/agmonetti/notamclauncher/internal/instances"
+	"github.com/agmonetti/not-a-mclauncher/internal/instances"
 )
 
 func plainInstallInstance(t *testing.T, root string) (instances.Instance, string) {
@@ -228,7 +228,7 @@ func TestRecoverInterruptedPlainInstanceInstall(t *testing.T) {
 	in, game := plainInstallInstance(t, root)
 	installFile(t, game, "config/old.txt", "my config")
 	dir := filepath.Dir(game)
-	stage, err := os.MkdirTemp(dir, ".notamclauncher-pack-stage-")
+	stage, err := os.MkdirTemp(dir, ".not-a-mclauncher-pack-stage-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,7 +361,7 @@ func TestRecoverInterruptedLegacyInstall(t *testing.T) {
 	if err := os.Mkdir(dir, 0700); err != nil {
 		t.Fatal(err)
 	}
-	stage, err := os.MkdirTemp(dir, ".notamclauncher-pack-stage-")
+	stage, err := os.MkdirTemp(dir, ".not-a-mclauncher-pack-stage-")
 	if err != nil {
 		t.Fatal(err)
 	}

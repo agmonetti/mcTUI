@@ -15,7 +15,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/agmonetti/notamclauncher/internal/launcher"
+	"github.com/agmonetti/not-a-mclauncher/internal/launcher"
 )
 
 func TestDownloadShowsVerifiedStageProgress(t *testing.T) {
@@ -143,19 +143,19 @@ func TestFailedDownloadNeverStartsGame(t *testing.T) {
 }
 
 func TestGameRunningScreenFitsNarrowTerminal(t *testing.T) {
-	path := "/home/player/.local/share/notamclauncher/instances/instance-id/minecraft"
+	path := "/home/player/.local/share/not-a-mclauncher/instances/instance-id/minecraft"
 	m := Model{
 		state:   gameRunningScreen,
 		width:   70,
 		height:  20,
 		launch:  LaunchConfig{GameDir: path},
-		gameLog: path + "/notamclauncher_latest.log",
+		gameLog: path + "/not-a-mclauncher_latest.log",
 	}
 	view := m.View()
 	if width, height := lipgloss.Width(view), lipgloss.Height(view); width > m.width || height > m.height {
 		t.Fatalf("running-game view exceeds terminal: %dx%d in %dx%d", width, height, m.width, m.height)
 	}
-	if !strings.Contains(view, "/home/player") || !strings.Contains(view, "notamclauncher_latest.log") {
+	if !strings.Contains(view, "/home/player") || !strings.Contains(view, "not-a-mclauncher_latest.log") {
 		t.Fatalf("running-game view omitted instance or log information: %q", view)
 	}
 }

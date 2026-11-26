@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/agmonetti/notamclauncher/internal/modrinth"
+	"github.com/agmonetti/not-a-mclauncher/internal/modrinth"
 )
 
 type identifyFunc func([]string) (map[string]modrinth.Version, error)

@@ -1,15 +1,15 @@
 // Package theme provides color theme definitions, built-in presets,
-// and user theme loading for notamclauncher.
+// and user theme loading for not-a-mclauncher.
 package theme
 
 import (
 	"strings"
 )
 
-// DefaultThemeID is the ID of the default theme ("notamclauncher").
-const DefaultThemeID = "notamclauncher"
+// DefaultThemeID is the ID of the default theme ("not-a-mclauncher").
+const DefaultThemeID = "not-a-mclauncher"
 
-// Theme defines the complete color palette and metadata for the notamclauncher interface.
+// Theme defines the complete color palette and metadata for the not-a-mclauncher interface.
 type Theme struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`

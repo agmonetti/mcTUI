@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/agmonetti/notamclauncher/internal/i18n"
-	"github.com/agmonetti/notamclauncher/internal/updater"
+	"github.com/agmonetti/not-a-mclauncher/internal/i18n"
+	"github.com/agmonetti/not-a-mclauncher/internal/updater"
 )
 
 func TestUpdateCheckErrorShowsQuietNotice(t *testing.T) {

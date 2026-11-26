@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/agmonetti/notamclauncher/internal/modrinth"
+	"github.com/agmonetti/not-a-mclauncher/internal/modrinth"
 )
 
 // Identify links local JARs only when Modrinth confirms their current SHA-512.

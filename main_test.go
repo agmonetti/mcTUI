@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/agmonetti/notamclauncher/internal/ui"
+	"github.com/agmonetti/not-a-mclauncher/internal/ui"
 )
 
 func TestHandleProgramExitRestartsWhenRequested(t *testing.T) {

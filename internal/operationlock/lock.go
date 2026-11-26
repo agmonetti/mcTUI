@@ -29,7 +29,7 @@ func Acquire(gameDir string) (func() error, error) {
 	if !filepath.IsAbs(gameDir) || filepath.Clean(gameDir) != gameDir {
 		return nil, fmt.Errorf("unsafe game directory: %q", gameDir)
 	}
-	path := filepath.Join(gameDir, ".notamclauncher-operation.lock")
+	path := filepath.Join(gameDir, ".not-a-mclauncher-operation.lock")
 	if info, err := os.Lstat(path); err == nil {
 		if !info.Mode().IsRegular() {
 			return nil, fmt.Errorf("unsafe operation lock: %s", path)

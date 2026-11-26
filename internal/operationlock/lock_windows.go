@@ -21,7 +21,7 @@ func acquireWindowsMutex(file *os.File) (func() error, error) {
 	if err := windows.GetFileInformationByHandle(windows.Handle(file.Fd()), &info); err != nil {
 		return nil, err
 	}
-	name, err := windows.UTF16PtrFromString(fmt.Sprintf(`Global\notamclauncher-operation-%08x-%08x%08x`,
+	name, err := windows.UTF16PtrFromString(fmt.Sprintf(`Global\not-a-mclauncher-operation-%08x-%08x%08x`,
 		info.VolumeSerialNumber, info.FileIndexHigh, info.FileIndexLow))
 	if err != nil {
 		return nil, err

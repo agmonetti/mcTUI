@@ -9,20 +9,20 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/agmonetti/notamclauncher/internal/auth"
-	"github.com/agmonetti/notamclauncher/internal/config"
-	"github.com/agmonetti/notamclauncher/internal/i18n"
-	"github.com/agmonetti/notamclauncher/internal/instances"
-	"github.com/agmonetti/notamclauncher/internal/java"
-	"github.com/agmonetti/notamclauncher/internal/launcher"
-	"github.com/agmonetti/notamclauncher/internal/modrinth"
-	"github.com/agmonetti/notamclauncher/internal/mods"
-	"github.com/agmonetti/notamclauncher/internal/packs"
-	"github.com/agmonetti/notamclauncher/internal/resetconfigs"
-	"github.com/agmonetti/notamclauncher/internal/roadmap"
-	"github.com/agmonetti/notamclauncher/internal/theme"
-	"github.com/agmonetti/notamclauncher/internal/updater"
-	"github.com/agmonetti/notamclauncher/internal/worlds"
+	"github.com/agmonetti/not-a-mclauncher/internal/auth"
+	"github.com/agmonetti/not-a-mclauncher/internal/config"
+	"github.com/agmonetti/not-a-mclauncher/internal/i18n"
+	"github.com/agmonetti/not-a-mclauncher/internal/instances"
+	"github.com/agmonetti/not-a-mclauncher/internal/java"
+	"github.com/agmonetti/not-a-mclauncher/internal/launcher"
+	"github.com/agmonetti/not-a-mclauncher/internal/modrinth"
+	"github.com/agmonetti/not-a-mclauncher/internal/mods"
+	"github.com/agmonetti/not-a-mclauncher/internal/packs"
+	"github.com/agmonetti/not-a-mclauncher/internal/resetconfigs"
+	"github.com/agmonetti/not-a-mclauncher/internal/roadmap"
+	"github.com/agmonetti/not-a-mclauncher/internal/theme"
+	"github.com/agmonetti/not-a-mclauncher/internal/updater"
+	"github.com/agmonetti/not-a-mclauncher/internal/worlds"
 )
 
 type screenState int
@@ -163,7 +163,7 @@ type WorldCopyDoneMsg struct {
 	Err    error
 }
 
-// Model is the root Bubble Tea model for notamclauncher.
+// Model is the root Bubble Tea model for not-a-mclauncher.
 type LaunchConfig struct {
 	GameDir, RuntimeDir          string
 	Username, Version, Modloader string

@@ -8,8 +8,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/agmonetti/notamclauncher/internal/i18n"
-	"github.com/agmonetti/notamclauncher/internal/instances"
+	"github.com/agmonetti/not-a-mclauncher/internal/i18n"
+	"github.com/agmonetti/not-a-mclauncher/internal/instances"
 )
 
 func (m Model) updateRemovalKey(key string) (tea.Model, tea.Cmd) {

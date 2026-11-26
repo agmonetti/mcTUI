@@ -4,8 +4,8 @@ package theme
 func BuiltinThemes() []Theme {
 	return []Theme{
 		{
-			ID:          "notamclauncher",
-			Name:        "notamclauncher (Default)",
+			ID:          "not-a-mclauncher",
+			Name:        "not-a-mclauncher",
 			Description: "Classic dark steel & gold palette",
 			IsDark:      true,
 			Border:      "#30363d",
@@ -114,7 +114,7 @@ func BuiltinThemes() []Theme {
 	}
 }
 
-// Default returns the default notamclauncher theme.
+// Default returns the default not-a-mclauncher theme.
 func Default() Theme {
 	return BuiltinThemes()[0]
 }

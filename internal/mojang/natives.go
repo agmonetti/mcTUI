@@ -59,7 +59,7 @@ func DownloadAndExtractNatives(ctx context.Context, data VersionData, mcDir, ver
 	if err := os.MkdirAll(filepath.Dir(destDir), 0755); err != nil {
 		return "", err
 	}
-	stage, err := os.MkdirTemp(filepath.Dir(destDir), ".notamclauncher-natives-*")
+	stage, err := os.MkdirTemp(filepath.Dir(destDir), ".not-a-mclauncher-natives-*")
 	if err != nil {
 		return "", err
 	}

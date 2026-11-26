@@ -17,10 +17,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/agmonetti/notamclauncher/internal/i18n"
-	"github.com/agmonetti/notamclauncher/internal/instances"
-	"github.com/agmonetti/notamclauncher/internal/modpacks"
-	"github.com/agmonetti/notamclauncher/internal/modrinth"
+	"github.com/agmonetti/not-a-mclauncher/internal/i18n"
+	"github.com/agmonetti/not-a-mclauncher/internal/instances"
+	"github.com/agmonetti/not-a-mclauncher/internal/modpacks"
+	"github.com/agmonetti/not-a-mclauncher/internal/modrinth"
 )
 
 type modpackHomeOption struct {

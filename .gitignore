@@ -1,6 +1,6 @@
 # Binarios compilados
-/notamclauncher
-/notamclauncher-*
+/not-a-mclauncher
+/not-a-mclauncher-*
 *.exe
 /dist/
 

@@ -1,6 +1,6 @@
-# Investigación: Implementación de i18n (Internacionalización) en notamclauncher
+# Investigación: Implementación de i18n (Internacionalización) en not-a-mclauncher
 
-Implementar i18n para alternar y persistir diferentes idiomas en notamclauncher es un objetivo excelente para mejorar la accesibilidad, pero requiere cambios sistemáticos en toda la interfaz. A continuación, se detalla qué conllevaría esta implementación, sus riesgos y la estrategia recomendada.
+Implementar i18n para alternar y persistir diferentes idiomas en not-a-mclauncher es un objetivo excelente para mejorar la accesibilidad, pero requiere cambios sistemáticos en toda la interfaz. A continuación, se detalla qué conllevaría esta implementación, sus riesgos y la estrategia recomendada.
 
 ## 1. Modificaciones Estructurales Requeridas
 
@@ -21,7 +21,7 @@ Implementar i18n para alternar y persistir diferentes idiomas en notamclauncher 
 
 ## 2. Estrategias Técnicas Disponibles
 
-Para un proyecto Go como notamclauncher (que se compila en un único ejecutable), hay varias formas de manejar los diccionarios de traducción:
+Para un proyecto Go como not-a-mclauncher (que se compila en un único ejecutable), hay varias formas de manejar los diccionarios de traducción:
 
 1. **`go:embed` + JSON (Recomendado)**:
    - Se crean archivos como `locales/en.json` y `locales/es.json`.
@@ -38,7 +38,7 @@ Para un proyecto Go como notamclauncher (que se compila en un único ejecutable)
 
 ### A. Rotura de Layout (Diseño y Anchos)
 - **Problema de Longitud**: Las palabras en español y otros idiomas suelen ser más largas que en inglés. Por ejemplo, "Settings" vs "Configuración".
-- En `view.go`, notamclauncher hace uso de anchos explícitos para renderizar paneles (ej. `Width(28)` o `Width(64)`) y de separadores fijos (`strings.Repeat("─", 24)`).
+- En `view.go`, not-a-mclauncher hace uso de anchos explícitos para renderizar paneles (ej. `Width(28)` o `Width(64)`) y de separadores fijos (`strings.Repeat("─", 24)`).
 - **Riesgo**: Si un texto traducido excede ese ancho, `lipgloss` hará un salto de línea (wrap), lo que romperá el diseño de las cajas de la terminal. Habrá que repasar y dinamizar algunos márgenes.
 
 ### B. Interacción del Usuario y Atajos (Teclas)
@@ -51,7 +51,7 @@ Para un proyecto Go como notamclauncher (que se compila en un único ejecutable)
 - **Decisión de UX**: ¿Se internacionalizan también los atajos de teclado? (ej. cambiar a `s/S` para "Sí" en español) o ¿se mantiene `y/n` de forma universal? Cambiarlo requiere que la lógica del `Update()` en Bubble Tea dependa del idioma actual, lo cual añade complejidad. Rta: No, esos atajos de teclado son globales, no son dependientes de la region, es un idioma global.
 
 ### C. Contenido Externo: El Roadmap
-- En `internal/roadmap/roadmap.go`, las novedades ("Future Changes") se obtienen dinámicamente de un archivo en bruto en GitHub: `https://raw.githubusercontent.com/agmonetti/notamclauncher/main/roadmap.json`.
+- En `internal/roadmap/roadmap.go`, las novedades ("Future Changes") se obtienen dinámicamente de un archivo en bruto en GitHub: `https://raw.githubusercontent.com/agmonetti/not-a-mclauncher/main/roadmap.json`.
 - Al estar en un servidor externo y no en el binario, si queremos traducir esto habría que:
   1. Hospedar múltiples archivos (`roadmap_en.json`, `roadmap_es.json`) en el repo.
   2. Modificar la URL de descarga según el `Language` del usuario en runtime.
@@ -71,7 +71,7 @@ A continuación, se detalla la arquitectura exacta a nivel de código para logra
 Se deberá crear un nuevo paquete interno (`internal/i18n`) para aislar la lógica de traducción y alojar los diccionarios.
 
 ```text
-notamclauncher/
+not-a-mclauncher/
 ├── internal/
 │   ├── i18n/
 │   │   ├── i18n.go            <-- Lógica de parseo e interpolación

@@ -17,7 +17,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/agmonetti/notamclauncher/internal/operationlock"
+	"github.com/agmonetti/not-a-mclauncher/internal/operationlock"
 )
 
 const (

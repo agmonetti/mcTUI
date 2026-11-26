@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/agmonetti/notamclauncher/internal/modrinth"
+	"github.com/agmonetti/not-a-mclauncher/internal/modrinth"
 )
 
 // StageURL downloads a .mrpack for inspection before the user approves an

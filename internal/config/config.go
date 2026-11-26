@@ -10,11 +10,11 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/agmonetti/notamclauncher/internal/i18n"
+	"github.com/agmonetti/not-a-mclauncher/internal/i18n"
 )
 
 // Data is the persisted user configuration, stored as JSON under
-// AppDataDir("notamclauncher", "config.json").
+// AppDataDir("not-a-mclauncher", "config.json").
 type Data struct {
 	Username   string `json:"username"`
 	Version    string `json:"version"`
@@ -34,7 +34,7 @@ func defaults() Data {
 		Modloader:  "Vanilla",
 		MemoryMB:   2048,
 		Language:   i18n.DetectSystemLanguage(),
-		Theme:      "notamclauncher",
+		Theme:      "not-a-mclauncher",
 		ModChannel: "release",
 	}
 }
@@ -42,7 +42,7 @@ func defaults() Data {
 // AppDataDir returns the base directory used for app-specific data,
 // following OS conventions (Roaming AppData on Windows, ~/.config
 // elsewhere). subdirs are appended to that base, e.g.
-// AppDataDir("notamclauncher", "config.json").
+// AppDataDir("not-a-mclauncher", "config.json").
 func AppDataDir(subdirs ...string) string {
 	var base string
 	if runtime.GOOS == "windows" {
@@ -76,9 +76,9 @@ func DataDirChecked() (string, error) {
 		if !filepath.IsAbs(base) {
 			return "", fmt.Errorf("LOCALAPPDATA must be absolute: %q", base)
 		}
-		return filepath.Join(base, "notamclauncher"), nil
+		return filepath.Join(base, "not-a-mclauncher"), nil
 	case "darwin":
-		return filepath.Join(home, "Library", "Application Support", "notamclauncher"), nil
+		return filepath.Join(home, "Library", "Application Support", "not-a-mclauncher"), nil
 	default:
 		base := os.Getenv("XDG_DATA_HOME")
 		if base == "" {
@@ -87,7 +87,7 @@ func DataDirChecked() (string, error) {
 		if !filepath.IsAbs(base) {
 			return "", fmt.Errorf("XDG_DATA_HOME must be absolute: %q", base)
 		}
-		return filepath.Join(base, "notamclauncher"), nil
+		return filepath.Join(base, "not-a-mclauncher"), nil
 	}
 }
 
@@ -118,7 +118,7 @@ func MinecraftDirChecked() (string, error) {
 
 // path returns the location of the config file.
 func path() string {
-	return AppDataDir("notamclauncher", "config.json")
+	return AppDataDir("not-a-mclauncher", "config.json")
 }
 
 // Load reads the config file, falling back to defaults() for missing
